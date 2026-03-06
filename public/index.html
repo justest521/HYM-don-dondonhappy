@@ -841,7 +841,18 @@ function App(){
       return Object.assign({},r,{title: finalTitle});
     });
     // 排序：新到舊
-    fixed.sort(function(a,b){ return b.ts - a.ts; });
+    fixed.sort(function(a,b){
+      // 先從標題 [MM/DD] 抓日期排序，抓不到才用 ts
+      var getD = function(r){
+        var m = (r.title||"").match(/^\[(\d{1,2})\/(\d{1,2})\]/);
+        if(m){
+          var yr = new Date(r.ts).getFullYear();
+          return new Date(yr, parseInt(m[1])-1, parseInt(m[2])).getTime();
+        }
+        return r.ts;
+      };
+      return getD(b)-getD(a);
+    });
     // 只有真的有變化才更新
     var sortChanged = fixed.some(function(r,i){ return r.id !== reports[i].id; });
     if(needUpdate || sortChanged) setReports(fixed);
@@ -872,16 +883,22 @@ function App(){
   };
 
 
-  // ── 從報告內文第一行取標題（作者寫的就是標題）──
+  // ── 從報告內文取標題：跳過作者名/日期行，找第一個有意義的標題行 ──
   const extractTitle = (aiText, reportText, ts) => {
-    // 直接取報告第一行有內容的文字 = 作者標題
     if(reportText){
       var lines = reportText.trim().split("\n").map(function(l){
         return l.trim().replace(/^[#*>\-=`]+\s*/,"").replace(/\*\*/g,"").trim();
-      }).filter(function(l){ return l.length>2; });
-      if(lines.length>0){
-        var t = lines[0];
-        return t.length>55 ? t.slice(0,55)+"…" : t;
+      }).filter(function(l){ return l.length>4; });
+
+      for(var i=0;i<Math.min(lines.length,8);i++){
+        var l = lines[i];
+        // 跳過：作者名行（無標點、無空格且短）、純日期行、純英文名字行
+        var isAuthor = l.length<30 && !/[，。？！：「」【】、]/.test(l) && !/\s{2,}/.test(l) && /^[A-Za-z一-鿿\s]+$/.test(l) && i>0;
+        var isDate   = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4}|\d{1,2}[\/\-])/i.test(l);
+        var isShort  = l.length<6;
+        if(!isAuthor && !isDate && !isShort){
+          return l.length>55 ? l.slice(0,55)+"…" : l;
+        }
       }
     }
     return null;
@@ -1992,7 +2009,10 @@ function App(){
                     </div>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {reports.slice().sort(function(a,b){return b.ts-a.ts;}).filter(function(r){return reportCat==="全部"||(r.category||"其他")===reportCat;}).map(r=>(
+                    {reports.slice().sort(function(a,b){
+      var getD=function(r){var m=(r.title||"").match(/^\[(\d{1,2})\/(\d{1,2})\]/);if(m){var yr=new Date(r.ts).getFullYear();return new Date(yr,parseInt(m[1])-1,parseInt(m[2])).getTime();}return r.ts;};
+      return getD(b)-getD(a);
+    }).filter(function(r){return reportCat==="全部"||(r.category||"其他")===reportCat;}).map(r=>(
                       <div key={r.id}
                         style={{background:selectedReport?.id===r.id?"#0b0b0e":"#0f0f14",
                           border:`1px solid ${selectedReport?.id===r.id?"#d9770630":"#ffffff08"}`,
