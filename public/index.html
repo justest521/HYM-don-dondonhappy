@@ -813,7 +813,7 @@ function App(){
                       gridTemplateColumns:"90px 70px 60px 70px 65px 90px 100px 70px 70px 65px 1fr",
                       padding:"11px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
                       background:f.unusual?"#ba68c806":"transparent",transition:"background .12s"}}>
-                      <span style={{fontSize:12,color:"#ffffff35"}}>{String(f.time).slice(-8)}</span>
+                      <span style={{fontSize:12,color:"#ffffff35"}}>{(t=>{try{const d=new Date(t);return isNaN(d)?t:d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}catch(e){return t}})(f.time)}</span>
                       <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{f.sym}</span>
                       <Pill color={typeColor(f.type)}>{f.type}</Pill>
                       <span style={{fontSize:14,color:"#ffffff70"}}>${f.strike}</span>
@@ -854,7 +854,7 @@ function App(){
                       gridTemplateColumns:"90px 70px 70px 90px 110px 80px 70px 80px",
                       padding:"11px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
                       background:d.notional>1e6?"#ab47bc06":"transparent",transition:"background .12s"}}>
-                      <span style={{fontSize:12,color:"#ffffff35"}}>{String(d.time).slice(-8)}</span>
+                      <span style={{fontSize:12,color:"#ffffff35"}}>{(t=>{try{const d=new Date(t);return isNaN(d)?t:d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false})}catch(e){return t}})(d.time)}</span>
                       <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{d.sym}</span>
                       <Pill color={d.type==="BLOCK"?"#ffa726":"#ab47bc"}>{d.type==="BLOCK"?"大宗":"暗池"}</Pill>
                       <span style={{fontSize:14,color:"#ffffff70"}}>${d.price}</span>
