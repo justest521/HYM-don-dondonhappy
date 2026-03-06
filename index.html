@@ -795,70 +795,91 @@ function App(){
   // ── AI 結果解析成卡片 ──
   const renderAiCards = (text) => {
     if(!text) return null;
-    // 分割成區塊：以 ## 或數字. 開頭的行作為區塊標題
     var lines = text.split("\n");
     var sections = [];
     var current = null;
     lines.forEach(function(line){
       var trimmed = line.trim();
-      // 偵測標題行
       var isHeader = /^#{1,3}\s/.test(trimmed) || /^[1-5][.、]\s/.test(trimmed) || /^【.+】/.test(trimmed);
       if(isHeader){
-        if(current) sections.push(current);
-        var title = trimmed.replace(/^#{1,3}\s+/,"").replace(/^[1-5][.、]\s+/,"").replace(/\*\*/g,"");
-        var icon = "📋";
-        if(/交叉|比對|信號|機構/.test(title)) icon="🔍";
-        else if(/策略|推薦|建議/.test(title)) icon="⚡";
-        else if(/時間|操作|條件/.test(title)) icon="🕐";
-        else if(/提醒/.test(title)) icon="🔔";
-        else if(/驗證|準確|印證/.test(title)) icon="✅";
-        else if(/風險/.test(title)) icon="⚠️";
-        var color = "#ffffff15";
-        if(/交叉|比對/.test(title)) color="#29b6f620";
-        else if(/策略|推薦/.test(title)) color="#00e5a018";
-        else if(/時間|操作/.test(title)) color="#ffa72618";
-        else if(/提醒/.test(title)) color="#ffa72618";
-        else if(/驗證|準確/.test(title)) color="#ab47bc18";
-        else if(/風險/.test(title)) color="#ff4d6d18";
-        current = {title:title, icon:icon, color:color, lines:[]};
+        if(current && current.lines.length) sections.push(current);
+        var title = trimmed.replace(/^#{1,3}\s+/,"").replace(/^[1-5][.、]\s+/,"").replace(/\*\*/g,"").trim();
+        var icon="📋", color="#1a1a22", border="#ffffff15", accent="#ffffff60";
+        if(/交叉|比對|信號|機構/.test(title)){icon="🔍";color="#0d1f35";border="#29b6f640";accent="#29b6f6";}
+        else if(/策略|推薦/.test(title)){icon="⚡";color="#0a2018";border="#00e5a040";accent="#00e5a0";}
+        else if(/時間|操作|條件/.test(title)){icon="🕐";color="#1e1505";border="#ffa72640";accent="#ffa726";}
+        else if(/提醒/.test(title)){icon="🔔";color="#1e1505";border="#ffa72640";accent="#ffa726";}
+        else if(/驗證|準確|印證/.test(title)){icon="✅";color="#18102a";border="#ab47bc40";accent="#ab47bc";}
+        else if(/風險/.test(title)){icon="⚠️";color="#200d0d";border="#ff4d6d40";accent="#ff4d6d";}
+        current={title,icon,color,border,accent,lines:[]};
       } else if(trimmed){
-        if(!current) current={title:"分析摘要",icon:"📋",color:"#ffffff10",lines:[]};
+        if(!current) current={title:"分析摘要",icon:"📋",color:"#1a1a22",border:"#ffffff15",accent:"#ffffff60",lines:[]};
         current.lines.push(trimmed);
       }
     });
     if(current && current.lines.length) sections.push(current);
-    if(!sections.length) return React.createElement("div",{style:{fontSize:14,color:"#ffffffcc",lineHeight:2,whiteSpace:"pre-wrap"}},text);
+    if(!sections.length) return React.createElement("div",{style:{fontSize:18,color:"#f0f0f0",lineHeight:2,whiteSpace:"pre-wrap"}},text);
 
-    return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:12}},
-      sections.map(function(sec, si){
+    return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+      sections.map(function(sec,si){
         return React.createElement("div",{key:si,style:{
-          background:sec.color, border:"1px solid #ffffff10",
-          borderRadius:10, padding:"14px 16px"
+          background:sec.color,
+          border:"1px solid "+sec.border,
+          borderRadius:12,
+          padding:"18px 20px",
+          boxShadow:"0 2px 12px #00000030",
+          position:"relative",
+          overflow:"hidden"
         }},
-          React.createElement("div",{style:{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10,display:"flex",alignItems:"center",gap:6}},
-            React.createElement("span",{style:{fontSize:16}},sec.icon),
-            sec.title
+          // accent left bar
+          React.createElement("div",{style:{
+            position:"absolute",left:0,top:0,bottom:0,width:3,
+            background:sec.accent,borderRadius:"12px 0 0 12px"
+          }}),
+          // header
+          React.createElement("div",{style:{
+            display:"flex",alignItems:"center",gap:8,
+            marginBottom:12,paddingBottom:10,
+            borderBottom:"1px solid "+sec.border
+          }},
+            React.createElement("span",{style:{fontSize:20}},sec.icon),
+            React.createElement("span",{style:{
+              fontSize:15,fontWeight:700,color:sec.accent,
+              letterSpacing:0.5,textTransform:"uppercase"
+            }},sec.title)
           ),
-          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
-            sec.lines.map(function(line, li){
-              var clean = line.replace(/\*\*/g,"").replace(/^[-•]\s*/,"");
-              var isBullet = /^[-•*]/.test(line) || /^\*\*/.test(line);
-              var isHighlight = /\[提醒\]|建議操作|行使價|到期日/.test(clean);
+          // content lines
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+            sec.lines.map(function(line,li){
+              var clean = line.replace(/\*\*/g,"").replace(/^[-•*]\s*/,"").trim();
+              if(!clean) return null;
+              var isBullet = /^[-•*]/.test(line);
+              var isHighlight = /行使價|到期日|\[提醒\]|建議操作|準確度|評分/.test(clean);
+              var isScore = /[0-9]{1,3}分|準確度/.test(clean);
+
+              if(isHighlight){
+                return React.createElement("div",{key:li,style:{
+                  background: isScore?"#ffa72618":"#ffffff0a",
+                  border:"1px solid "+sec.border,
+                  borderLeft:"3px solid "+sec.accent,
+                  borderRadius:8, padding:"10px 14px",
+                  fontSize:18, color:"#ffffff",
+                  lineHeight:1.8, fontWeight:500
+                }}, clean);
+              }
               return React.createElement("div",{key:li,style:{
-                fontSize:13, color: isHighlight?"#ffa726":"#ffffffaa",
-                lineHeight:1.8, paddingLeft: isBullet?8:0,
-                borderLeft: isHighlight?"2px solid #ffa72650":"none",
-                paddingTop: isHighlight?2:0, paddingBottom: isHighlight?2:0,
-                background: isHighlight?"#ffa72608":"transparent",
-                borderRadius: isHighlight?4:0
-              }}, clean);
+                display:"flex",gap:8,alignItems:"flex-start",
+                fontSize:18,color:"#e8e8e8",lineHeight:1.8
+              }},
+                isBullet && React.createElement("span",{style:{color:sec.accent,marginTop:4,flexShrink:0,fontSize:12}},"▸"),
+                React.createElement("span",null, clean)
+              );
             })
           )
         );
       })
     );
   };
-
   const analyzeReport = async(reportText, existingReport)=>{
     setAiLoading(true); setAiResult(null);
     try{
@@ -1613,7 +1634,7 @@ function App(){
                 <textarea value={reportInput} onChange={e=>setReportInput(e.target.value)}
                   placeholder="貼上你的研究報告內容、市場分析、個股觀點..."
                   style={{width:"100%",height:160,background:"#0b0b0e",border:"1px solid #ffffff12",
-                    borderRadius:7,padding:"10px 12px",fontSize:14,color:"#fff",resize:"vertical",
+                    borderRadius:7,padding:"10px 12px",fontSize:17,color:"#f5f5f5",resize:"vertical",
                     lineHeight:1.7,boxSizing:"border-box"}}/>
                 <div style={{display:"flex",gap:10,marginTop:12}}>
                   <div onClick={()=>reportInput.trim()&&analyzeReport(reportInput,null)}
@@ -1718,8 +1739,8 @@ function App(){
                         </div>
                         {selectedReport?.id===r.id&&(
                           <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #ffffff08"}}>
-                            <div style={{fontSize:13,color:"#ffffff50",lineHeight:1.8,marginBottom:r.aiAnalysis?14:0,
-                              maxHeight:120,overflow:"auto",whiteSpace:"pre-wrap"}}>{r.content}</div>
+                            <div style={{fontSize:16,color:"#ffffff70",lineHeight:1.9,marginBottom:r.aiAnalysis?14:0,
+                              maxHeight:150,overflow:"auto",whiteSpace:"pre-wrap"}}>{r.content}</div>
                             {r.aiAnalysis&&(
                               <>
                                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
