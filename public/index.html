@@ -314,7 +314,7 @@ async function uwFetch(key, endpoint) {
   }
 }
 
-async function fetchUWFlow(key,limit=30){
+async function fetchUWFlow(key,limit=50){
   const j = await uwFetch(key, `/api/option-trades/flow-alerts?limit=${limit}`);
   if (!j) return null;
   const rows=j?.data??j?.results??[];
@@ -336,7 +336,7 @@ async function fetchUWFlow(key,limit=30){
   }));
 }
 
-async function fetchUWDark(key,limit=20){
+async function fetchUWDark(key,limit=50){
   const j = await uwFetch(key, `/api/darkpool/recent?limit=${limit}`);
   if (!j) return null;
   const rows=j?.data??j?.results??[];
@@ -356,7 +356,7 @@ async function fetchUWDark(key,limit=20){
 /* ══════════════════════════════════════════════════════════════════════════════
    Mock 備用
 ══════════════════════════════════════════════════════════════════════════════ */
-function mockFlow(n=22){
+function mockFlow(n=50){
   const types=["CALL","PUT"];
   return Array.from({length:n},(_,i)=>{
     const type=types[ri(0,2)];
@@ -371,7 +371,7 @@ function mockFlow(n=22){
       sweep:Math.random()>.5,exchange:["CBOE","ISE","PHLX","NYSE"][ri(0,4)]};
   });
 }
-function mockDark(n=18){
+function mockDark(n=50){
   return Array.from({length:n},(_,i)=>{
     const price=rnd(50,900),shares=ri(5000,500000);
     return {id:i,
@@ -617,11 +617,19 @@ function App(){
   useEffect(()=>{loadPrices();},[]);
   useEffect(()=>{const id=setInterval(loadPrices,60000);return()=>clearInterval(id);},[loadPrices]);
 
+  // 自動抓 flow/dark 裡出現的新股票價格
+  useEffect(()=>{
+    const syms=[...new Set([...flow.map(f=>f.sym),...dark.map(d=>d.sym)])]
+      .filter(s=>s&&s!=="—"&&!/^(SPX|SPXW|VIX|NDX|RUT)/.test(s)&&!prices[s]);
+    if(!syms.length)return;
+    fetchAllPrices(syms).then(p=>setPrices(prev=>({...prev,...p})));
+  },[flow,dark]);
+
   /* ── Unusual Whales ─────────────────────────────────────────────────────── */
   const loadUW=useCallback(async(key)=>{
     if(!key||key.length<8)return;
     setUwLoading(true);
-    const [fd,dd]=await Promise.all([fetchUWFlow(key,30),fetchUWDark(key,20)]);
+    const [fd,dd]=await Promise.all([fetchUWFlow(key,50),fetchUWDark(key,50)]);
     if(fd){setFlow(fd);setUwOk(true);}else setUwOk(false);
     if(dd) setDark(dd);
     setUwLoading(false);
@@ -1045,23 +1053,31 @@ function App(){
               </div>
 
               <div style={{background:"#131317",border:"1px solid #ffffff0c",borderRadius:10,overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"90px 70px 60px 70px 65px 90px 100px 70px 70px 65px 1fr",
+                <div style={{display:"grid",gridTemplateColumns:"90px 80px 60px 70px 65px 140px 100px 70px 70px 65px 1fr",
                   padding:"10px 16px",borderBottom:"1px solid #ffffff08",fontSize:12,color:"#ffffff30",letterSpacing:1}}>
                   <span>時間</span><span>標的</span><span>類型</span><span>行使價</span><span>到期</span>
                   <span>溢價</span><span>量/未平倉</span><span>隱波</span><span>情緒</span><span>交易所</span><span>標記</span>
                 </div>
-                <div style={{maxHeight:400,overflow:"auto"}}>
+                <div style={{maxHeight:"calc(100vh - 290px)",overflow:"auto"}}>
                   {filteredFlow.map(f=>(
                     <div key={f.id} className="tr" style={{display:"grid",
-                      gridTemplateColumns:"90px 70px 60px 70px 65px 90px 100px 70px 70px 65px 1fr",
+                      gridTemplateColumns:"90px 80px 60px 70px 65px 140px 100px 70px 70px 65px 1fr",
                       padding:"11px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
                       background:f.unusual?"#ba68c806":"transparent",transition:"background .12s"}}>
                       <span style={{fontSize:12,color:"#ffffff35"}}>{String(f.time).slice(-8)}</span>
-                      <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{f.sym}</span>
+                      <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                        <span style={{fontSize:15,fontWeight:700,color:"#fff",lineHeight:1.2}}>{f.sym}</span>
+                        <span style={{fontSize:11,color:priceOf(f.sym).color,fontFamily:"monospace"}}>{priceOf(f.sym).price}</span>
+                      </div>
                       <Pill color={typeColor(f.type)}>{f.type}</Pill>
                       <span style={{fontSize:14,color:"#ffffff70"}}>${f.strike}</span>
                       <span style={{fontSize:12,color:"#ffffff50"}}>{String(f.exp).slice(0,7)}</span>
-                      <span style={{fontSize:14,fontWeight:600,color:f.prem>500000?"#ffa726":"#ffffff80"}}>{fmtM(f.prem)}</span>
+                      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                        <span style={{fontSize:13,fontWeight:600,color:f.prem>500000?"#ffa726":"#ffffff80"}}>{fmtM(f.prem)}</span>
+                        <div style={{height:3,borderRadius:2,background:"#ffffff10",overflow:"hidden"}}>
+                          <div style={{height:"100%",borderRadius:2,width:`${Math.min(100,f.prem/Math.max(1,...filteredFlow.map(x=>x.prem))*100)}%`,background:f.type==="CALL"?"#00e5a060":"#ff4d6d60",transition:"width .3s"}}/>
+                        </div>
+                      </div>
                       <span style={{fontSize:12,color:"#ffffff50"}}>{Number(f.size).toLocaleString()}/{Number(f.oi)>999?(Number(f.oi)/1000).toFixed(0)+"K":f.oi}</span>
                       <span style={{fontSize:13,color:"#ffffff60"}}>{(Number(f.iv)*100).toFixed(0)}%</span>
                       <Pill color={sentColor(f.sent)}>{sentZh(f.sent)}</Pill>
@@ -1083,25 +1099,33 @@ function App(){
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
                 <KCard label="暗池總成交額" value={fmtM(dark.reduce((a,d)=>a+d.notional,0))} sub="最近成交" color="#ab47bc" badge={uwKey?"UW":"模擬"}/>
                 <KCard label="大宗交易"     value={dark.filter(d=>d.type==="BLOCK").length} sub="≥1萬股" color="#ffa726"/>
-                <KCard label="最大單筆"     value={fmtM(Math.max(...dark.map(d=>d.notional)))} sub="單筆最高" color="#ff4d6d"/>
+                <KCard label="最大單筆"     value={fmtM(Math.max(0,...dark.map(d=>d.notional)))} sub="單筆最高" color="#ff4d6d"/>
                 <KCard label="買方比例"     value={`${(dark.filter(d=>d.side==="BUY").length/Math.max(1,dark.length)*100).toFixed(0)}%`} sub="暗池成交量" color="#00e5a0"/>
               </div>
               <div style={{background:"#131317",border:"1px solid #ffffff0c",borderRadius:10,overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"90px 70px 70px 90px 110px 80px 70px 80px",
+                <div style={{display:"grid",gridTemplateColumns:"90px 80px 70px 90px 140px 80px 70px 80px",
                   padding:"10px 16px",borderBottom:"1px solid #ffffff08",fontSize:12,color:"#ffffff30",letterSpacing:1}}>
                   <span>時間</span><span>標的</span><span>類型</span><span>成交價</span><span>成交額</span><span>股數</span><span>方向</span><span>場所</span>
                 </div>
-                <div style={{maxHeight:520,overflow:"auto"}}>
+                <div style={{maxHeight:"calc(100vh - 220px)",overflow:"auto"}}>
                   {dark.map(d=>(
                     <div key={d.id} className="tr" style={{display:"grid",
-                      gridTemplateColumns:"90px 70px 70px 90px 110px 80px 70px 80px",
+                      gridTemplateColumns:"90px 80px 70px 90px 140px 80px 70px 80px",
                       padding:"11px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
                       background:d.notional>1e6?"#ab47bc06":"transparent",transition:"background .12s"}}>
                       <span style={{fontSize:12,color:"#ffffff35"}}>{String(d.time).slice(-8)}</span>
-                      <span style={{fontSize:16,fontWeight:700,color:"#fff"}}>{d.sym}</span>
+                      <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                        <span style={{fontSize:15,fontWeight:700,color:"#fff",lineHeight:1.2}}>{d.sym}</span>
+                        <span style={{fontSize:11,color:priceOf(d.sym).color,fontFamily:"monospace"}}>{priceOf(d.sym).price}</span>
+                      </div>
                       <Pill color={d.type==="BLOCK"?"#ffa726":"#ab47bc"}>{d.type==="BLOCK"?"大宗":"暗池"}</Pill>
                       <span style={{fontSize:14,color:"#ffffff70"}}>${d.price}</span>
-                      <span style={{fontSize:15,fontWeight:600,color:d.notional>1e6?"#ab47bc":"#ffffff80"}}>{fmtM(d.notional)}</span>
+                      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                        <span style={{fontSize:13,fontWeight:600,color:d.notional>1e6?"#ab47bc":"#ffffff80"}}>{fmtM(d.notional)}</span>
+                        <div style={{height:3,borderRadius:2,background:"#ffffff10",overflow:"hidden"}}>
+                          <div style={{height:"100%",borderRadius:2,width:`${Math.min(100,d.notional/Math.max(1,...dark.map(x=>x.notional))*100)}%`,background:d.side==="BUY"?"#00e5a060":"#ff4d6d60",transition:"width .3s"}}/>
+                        </div>
+                      </div>
                       <span style={{fontSize:13,color:"#ffffff50"}}>{Number(d.shares).toLocaleString()}</span>
                       <Pill color={d.side==="BUY"?"#00e5a0":"#ff4d6d"}>{d.side==="BUY"?"買":"賣"}</Pill>
                       <Tag>{d.venue}</Tag>
@@ -1208,7 +1232,7 @@ function App(){
                   padding:"10px 16px",borderBottom:"1px solid #ffffff08",fontSize:12,color:"#ffffff30",letterSpacing:1}}>
                   <span>時間</span><span>標的</span><span>訊號</span><span>價格</span><span>策略</span><span></span><span>狀態</span>
                 </div>
-                <div style={{maxHeight:520,overflow:"auto"}}>
+                <div style={{maxHeight:"calc(100vh - 220px)",overflow:"auto"}}>
                   {sigs.map((s,i)=>(
                     <div key={`${s.id}-${tick}`} className="sig tr" style={{display:"grid",
                       gridTemplateColumns:"110px 75px 65px 100px 160px 1fr 100px",
