@@ -831,11 +831,12 @@ function App(){
         if(cLines.length) newTitle = cLines[0].length>45 ? cLines[0].slice(0,45)+"…" : cLines[0];
       }
       // 加日期前綴
-      // 優先用文章內的作者日期
+      var betterTitle = extractTitle(r.aiAnalysis||"", r.content||"", new Date(r.ts));
       var aDate = extractArticleDate(r.content||"");
       var prefixD = aDate || new Date(r.ts);
       var prefix = "["+(prefixD.getMonth()+1).toString().padStart(2,"0")+"/"+(prefixD.getDate()).toString().padStart(2,"0")+"] ";
-      return Object.assign({},r,{title: newTitle ? prefix+newTitle : r.title});
+      var finalTitle = betterTitle ? prefix+betterTitle : (newTitle ? prefix+newTitle : r.title);
+      return Object.assign({},r,{title: finalTitle});
     });
     // 排序：新到舊
     fixed.sort(function(a,b){ return b.ts - a.ts; });
@@ -866,6 +867,22 @@ function App(){
     if(iv<30 && type==="PUT")                   return {label:"低IV賣PUT", color:"#ef9a9a", tip:"低IV賣出現金擔保PUT，收取時間價值"};
     if(daysToExp<=7)                            return {label:"週選賭注", color:"#ffd54f", tip:"極短期期權 → 高風險方向性賭注"};
     return {label: type==="CALL"?"看多佈局":"看空佈局", color: type==="CALL"?"#00e5a080":"#ff4d6d80", tip:""};
+  };
+
+
+  // ── 從報告內文第一行取標題（作者寫的就是標題）──
+  const extractTitle = (aiText, reportText, ts) => {
+    // 直接取報告第一行有內容的文字 = 作者標題
+    if(reportText){
+      var lines = reportText.trim().split("\n").map(function(l){
+        return l.trim().replace(/^[#*>\-=`]+\s*/,"").replace(/\*\*/g,"").trim();
+      }).filter(function(l){ return l.length>2; });
+      if(lines.length>0){
+        var t = lines[0];
+        return t.length>55 ? t.slice(0,55)+"…" : t;
+      }
+    }
+    return null;
   };
 
   // ── 從文章內容萃取作者日期 ──
@@ -1146,16 +1163,11 @@ function App(){
     else if(/期權|option|call|put|iv|delta|gamma/.test(rt2)) cat2="期權";
     var manualTitle = reportTitle.trim();
     if(!manualTitle){
-      var fl = reportInput.trim().split("\n").map(function(l){
-        return l.trim().replace(/^[#*>\-=_~`]+\s*/,"").replace(/\*\*/g,"").replace(/^\[.+\]\s*/,"").trim();
-      }).filter(function(l){ return l.length>6; });
-      if(fl.length>0){
-        var fl0 = fl[0];
-        var articleDate2 = extractArticleDate(reportInput.trim());
-        var prefixDate2 = articleDate2 || now;
-        var datePrefix2 = (prefixDate2.getMonth()+1).toString().padStart(2,"0")+"/"+(prefixDate2.getDate()).toString().padStart(2,"0");
-        manualTitle = "["+datePrefix2+"] "+(fl0.length>42 ? fl0.slice(0,42)+"…" : fl0);
-      }
+      var extracted2 = extractTitle(aiResult, reportInput.trim(), now);
+      var articleDate2 = extractArticleDate(reportInput.trim());
+      var prefixDate2 = articleDate2 || now;
+      var datePrefix2 = (prefixDate2.getMonth()+1).toString().padStart(2,"0")+"/"+(prefixDate2.getDate()).toString().padStart(2,"0");
+      if(extracted2) manualTitle = "["+datePrefix2+"] "+extracted2;
       if(!manualTitle) manualTitle = "研究報告 "+timeStr;
     }
     const r={
