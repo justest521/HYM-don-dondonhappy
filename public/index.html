@@ -1548,7 +1548,7 @@ ${recentDark||"暫無數據"}
                             <div style={{fontSize:13,color:"#ffffff50",lineHeight:1.8,marginBottom:r.aiAnalysis?14:0,
                               maxHeight:120,overflow:"auto",whiteSpace:"pre-wrap"}}>{r.content}</div>
                             {r.aiAnalysis&&(
-                              <>
+                              <React.Fragment>
                                 <div style={{fontSize:12,color:"#00e5a0",marginBottom:8}}>⚡ AI 分析</div>
                                 <div style={{fontSize:13,color:"#ffffffcc",lineHeight:1.9,whiteSpace:"pre-wrap"}}>{r.aiAnalysis}</div>
                                 <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
@@ -1563,7 +1563,7 @@ ${recentDark||"暫無數據"}
                                     );
                                   })}
                                 </div>
-                              </>
+                              </React.Fragment>
                             )}
                           </div>
                         )}
