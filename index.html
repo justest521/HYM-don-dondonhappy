@@ -16,7 +16,7 @@
 [
   {
     "num": "01",
-    "c": "#ffa726",
+    "c": "#d97706",
     "t": "期權是什麼",
     "items": [
       [
@@ -31,7 +31,7 @@
   },
   {
     "num": "02",
-    "c": "#00e5a0",
+    "c": "#10b981",
     "t": "CALL vs PUT",
     "items": [
       [
@@ -50,7 +50,7 @@
   },
   {
     "num": "03",
-    "c": "#29b6f6",
+    "c": "#3b82f6",
     "t": "Greeks 希臘字母",
     "items": [
       [
@@ -73,7 +73,7 @@
   },
   {
     "num": "04",
-    "c": "#ab47bc",
+    "c": "#7c3aed",
     "t": "單腿基本策略",
     "items": [
       [
@@ -96,7 +96,7 @@
   },
   {
     "num": "05",
-    "c": "#ff4d6d",
+    "c": "#ef4444",
     "t": "價差 Spread 策略",
     "items": [
       [
@@ -123,7 +123,7 @@
   },
   {
     "num": "06",
-    "c": "#ffa726",
+    "c": "#d97706",
     "t": "隱含波動率 IV",
     "items": [
       [
@@ -138,7 +138,7 @@
   },
   {
     "num": "07",
-    "c": "#00e5a0",
+    "c": "#10b981",
     "t": "期權流實戰解讀",
     "items": [
       [
@@ -153,7 +153,7 @@
   },
   {
     "num": "08",
-    "c": "#ff4d6d",
+    "c": "#ef4444",
     "t": "風險管理",
     "items": [
       [
@@ -168,7 +168,7 @@
   },
   {
     "num": "09",
-    "c": "#ffa726",
+    "c": "#d97706",
     "t": "每日交易清單",
     "items": [
       [
@@ -383,7 +383,7 @@ function mockDark(n=50){
 }
 function mockSignals(n=14){
   const types=["買入","賣出","建倉","平倉","警示"];
-  const cols={"買入":"#00e5a0","賣出":"#ff4d6d","建倉":"#ffa726","平倉":"#888","警示":"#ba68c8"};
+  const cols={"買入":"#10b981","賣出":"#ef4444","建倉":"#d97706","平倉":"#888","警示":"#8b5cf6"};
   return Array.from({length:n},(_,i)=>{
     const t=types[ri(0,types.length)];
     return {id:i,
@@ -412,7 +412,7 @@ function mockEquity(n=90){
 /* ══════════════════════════════════════════════════════════════════════════════
    微元件
 ══════════════════════════════════════════════════════════════════════════════ */
-function Spark({data=[],color="#ffa726",w=100,h=36}){
+function Spark({data=[],color="#d97706",w=100,h=36}){
   if(data.length<2)return null;
   const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||1;
   const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-((v-mn)/rng)*h}`);
@@ -431,21 +431,21 @@ function Spark({data=[],color="#ffa726",w=100,h=36}){
   );
 }
 
-function KCard({label,value,sub,spark,color="#ffa726",badge,dim=false}){
+function KCard({label,value,sub,spark,color="#d97706",badge,dim=false}){
   return(
-    <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:"16px 18px",
+    <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:"16px 18px",
       display:"flex",flexDirection:"column",gap:5,position:"relative",overflow:"hidden",opacity:dim?.5:1}}>
       <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${color}70,transparent)`}}/>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-        <span style={{fontSize:13,letterSpacing:1,color:"#7880a0",fontFamily:"'IBM Plex Mono',monospace"}}>{label}</span>
+        <span style={{fontSize:13,letterSpacing:1,color:"#555555",fontFamily:"'IBM Plex Mono',monospace"}}>{label}</span>
         {badge&&<span style={{fontSize:11,padding:"2px 8px",borderRadius:20,
-          background:badge==="即時"?"#00e5a018":badge==="UW"?"#ba68c818":"#ffffff0e",
-          color:badge==="即時"?"#00e5a0":badge==="UW"?"#ba68c8":"#ffffff50",
+          background:badge==="即時"?"#10b98112":badge==="UW"?"#8b5cf615":"#ffffff0e",
+          color:badge==="即時"?"#10b981":badge==="UW"?"#8b5cf6":"#ffffff50",
           border:`1px solid ${badge==="即時"?"#00e5a035":badge==="UW"?"#ba68c835":"#ffffff12"}`}}>{badge}</span>}
       </div>
-      <div style={{fontSize:28,fontWeight:700,color:"#f0f0f5",letterSpacing:-0.5,fontFamily:"'IBM Plex Mono',monospace",lineHeight:1.1}}>{value}</div>
+      <div style={{fontSize:28,fontWeight:700,color:"#ffffff",letterSpacing:-0.5,fontFamily:"'IBM Plex Mono',monospace",lineHeight:1.1}}>{value}</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginTop:2}}>
-        <span style={{fontSize:14,color:sub?.startsWith("+")||sub?.startsWith("▲")?"#00e5a0":sub?.startsWith("-")||sub?.startsWith("▼")?"#ff4d6d":"#ffffff45"}}>{sub}</span>
+        <span style={{fontSize:14,color:sub?.startsWith("+")||sub?.startsWith("▲")?"#10b981":sub?.startsWith("-")||sub?.startsWith("▼")?"#ef4444":"#ffffff45"}}>{sub}</span>
         {spark&&<Spark data={spark} color={color}/>}
       </div>
       {/* ════════════════ 登入 Modal ════════════════ */}
@@ -457,24 +457,24 @@ function KCard({label,value,sub,spark,color="#ffa726",badge,dim=false}){
 function Toggle({on,onChange}){
   return(
     <div onClick={()=>onChange(!on)} style={{width:40,height:22,borderRadius:11,cursor:"pointer",position:"relative",
-      background:on?"#ffa72635":"#ffffff12",border:`1px solid ${on?"#ffa72660":"#ffffff1f"}`,transition:"all .2s"}}>
+      background:on?"#ffa72635":"#ffffff12",border:`1px solid ${on?"#d9770660":"#ffffff1f"}`,transition:"all .2s"}}>
       <div style={{position:"absolute",top:3,left:on?18:3,width:14,height:14,borderRadius:"50%",
-        background:on?"#ffa726":"#ffffff40",transition:"all .2s"}}/>
+        background:on?"#d97706":"#ffffff40",transition:"all .2s"}}/>
       {/* ════════════════ 登入 Modal ════════════════ */}
 
     </div>
   );
 }
-function Pill({children,color="#ffa726"}){
+function Pill({children,color="#d97706"}){
   return <span style={{fontSize:12,fontWeight:700,padding:"2px 8px",borderRadius:20,
     color,background:`${color}18`,border:`1px solid ${color}35`}}>{children}</span>;
 }
 function Tag({children,color="#ffffff40"}){
-  return <span style={{fontSize:13,padding:"3px 8px",borderRadius:4,background:"#252638",color,border:"1px solid #282a40"}}>{children}</span>;
+  return <span style={{fontSize:13,padding:"3px 8px",borderRadius:4,background:"#222222",color,border:"1px solid #282a40"}}>{children}</span>;
 }
 function Dot({ok}){
   return <div style={{width:7,height:7,borderRadius:"50%",flexShrink:0,
-    background:ok?"#00e5a0":"#ff4d6d",boxShadow:`0 0 5px ${ok?"#00e5a0":"#ff4d6d"}`}}/>;
+    background:ok?"#10b981":"#ef4444",boxShadow:`0 0 5px ${ok?"#10b981":"#ef4444"}`}}/>;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -491,8 +491,8 @@ function EqChart({data}){
   return(
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{fontFamily:"'IBM Plex Mono',monospace"}}>
       <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#ffa726" stopOpacity=".22"/>
-        <stop offset="100%" stopColor="#ffa726" stopOpacity="0"/>
+        <stop offset="0%" stopColor="#d97706" stopOpacity=".22"/>
+        <stop offset="100%" stopColor="#d97706" stopOpacity="0"/>
       </linearGradient></defs>
       {ticks.map((t,i)=>(
         <g key={i}>
@@ -501,8 +501,8 @@ function EqChart({data}){
         </g>
       ))}
       <polygon points={fill.join(" ")} fill="url(#eqg)"/>
-      <polyline points={pts.join(" ")} fill="none" stroke="#ffa726" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx={pts[pts.length-1].split(",")[0]} cy={pts[pts.length-1].split(",")[1]} r="4" fill="#ffa726" style={{filter:"drop-shadow(0 0 5px #ffa726)"}}/>
+      <polyline points={pts.join(" ")} fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={pts[pts.length-1].split(",")[0]} cy={pts[pts.length-1].split(",")[1]} r="4" fill="#d97706" style={{filter:"drop-shadow(0 0 5px #ffa726)"}}/>
     </svg>
   );
 }
@@ -547,9 +547,9 @@ const NAV_ITEMS=[
   {id:"risk",      icon:"◬",label:"風控"},
   {id:"research",  icon:"📋",label:"研究"},
 ];
-const sentColor=s=>s==="BULLISH"?"#00e5a0":s==="BEARISH"?"#ff4d6d":"#888";
+const sentColor=s=>s==="BULLISH"?"#10b981":s==="BEARISH"?"#ef4444":"#888";
 const sentZh   =s=>s==="BULLISH"?"看漲":s==="BEARISH"?"看跌":"中性";
-const typeColor=t=>t==="CALL"?"#00e5a0":"#ff4d6d";
+const typeColor=t=>t==="CALL"?"#10b981":"#ef4444";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    App
@@ -764,7 +764,7 @@ function App(){
     const p=prices[sym];
     if(!p?.price)return{price:"—",pct:"—",color:"#888"};
     const chg=p.price-p.prev,cp=chg/(p.prev||1)*100;
-    return{price:"$"+p.price.toFixed(2),pct:(chg>=0?"+":"")+cp.toFixed(2)+"%",color:chg>=0?"#00e5a0":"#ff4d6d"};
+    return{price:"$"+p.price.toFixed(2),pct:(chg>=0?"+":"")+cp.toFixed(2)+"%",color:chg>=0?"#10b981":"#ef4444"};
   };
 
   // 儲存報告
@@ -854,14 +854,14 @@ function App(){
     var sweep = f.sweep;
     var daysToExp = Math.max(0, Math.round((new Date(f.exp)-Date.now())/86400000));
 
-    if(sweep && type==="CALL" && daysToExp<=14) return {label:"急攻多單", color:"#00e5a0", tip:"掃單+短期CALL → 機構快速建倉看漲"};
-    if(sweep && type==="PUT"  && daysToExp<=14) return {label:"急攻空單", color:"#ff4d6d", tip:"掃單+短期PUT → 機構快速建倉看跌"};
-    if(unusual && type==="CALL" && iv>60)       return {label:"高IV買權", color:"#ffa726", tip:"異常高IV CALL → 可能財報前保護性買入或賭漲"};
-    if(unusual && type==="PUT"  && iv>60)       return {label:"高IV保護", color:"#ba68c8", tip:"異常高IV PUT → 機構對沖/防守性保護倉"};
-    if(type==="CALL" && daysToExp>=30 && daysToExp<=90 && sent==="bullish") return {label:"波段做多", color:"#00e5a0", tip:"中期CALL+看多情緒 → 波段持有策略"};
-    if(type==="PUT"  && daysToExp>=30 && daysToExp<=90 && sent==="bearish") return {label:"波段做空", color:"#ff4d6d", tip:"中期PUT+看空情緒 → 波段空頭策略"};
-    if(type==="CALL" && daysToExp>90)           return {label:"長多佈局", color:"#29b6f6", tip:"長期CALL → 長線看多或LEAPS策略"};
-    if(type==="PUT"  && daysToExp>90)           return {label:"長空對沖", color:"#ab47bc", tip:"長期PUT → 長線對沖或方向性空頭"};
+    if(sweep && type==="CALL" && daysToExp<=14) return {label:"急攻多單", color:"#10b981", tip:"掃單+短期CALL → 機構快速建倉看漲"};
+    if(sweep && type==="PUT"  && daysToExp<=14) return {label:"急攻空單", color:"#ef4444", tip:"掃單+短期PUT → 機構快速建倉看跌"};
+    if(unusual && type==="CALL" && iv>60)       return {label:"高IV買權", color:"#d97706", tip:"異常高IV CALL → 可能財報前保護性買入或賭漲"};
+    if(unusual && type==="PUT"  && iv>60)       return {label:"高IV保護", color:"#8b5cf6", tip:"異常高IV PUT → 機構對沖/防守性保護倉"};
+    if(type==="CALL" && daysToExp>=30 && daysToExp<=90 && sent==="bullish") return {label:"波段做多", color:"#10b981", tip:"中期CALL+看多情緒 → 波段持有策略"};
+    if(type==="PUT"  && daysToExp>=30 && daysToExp<=90 && sent==="bearish") return {label:"波段做空", color:"#ef4444", tip:"中期PUT+看空情緒 → 波段空頭策略"};
+    if(type==="CALL" && daysToExp>90)           return {label:"長多佈局", color:"#3b82f6", tip:"長期CALL → 長線看多或LEAPS策略"};
+    if(type==="PUT"  && daysToExp>90)           return {label:"長空對沖", color:"#7c3aed", tip:"長期PUT → 長線對沖或方向性空頭"};
     if(iv<30 && type==="CALL")                  return {label:"低IV收租", color:"#80cbc4", tip:"低IV賣出covered call或牛市價差"};
     if(iv<30 && type==="PUT")                   return {label:"低IV賣PUT", color:"#ef9a9a", tip:"低IV賣出現金擔保PUT，收取時間價值"};
     if(daysToExp<=7)                            return {label:"週選賭注", color:"#ffd54f", tip:"極短期期權 → 高風險方向性賭注"};
@@ -912,30 +912,30 @@ function App(){
       if(isHeader){
         if(current && current.lines.length) sections.push(current);
         var title = trimmed.replace(/^#{1,3}\s+/,"").replace(/^[1-5][.、]\s+/,"").replace(/\*\*/g,"").trim();
-        var icon="📋", color="#1a1a22", border="#ffffff15", accent="#ffffff60";
-        if(/交叉|比對|信號|機構/.test(title)){icon="🔍";color="#0d1f35";border="#29b6f640";accent="#29b6f6";}
-        else if(/策略|推薦/.test(title)){icon="⚡";color="#0a2018";border="#00e5a040";accent="#00e5a0";}
-        else if(/時間|操作|條件/.test(title)){icon="🕐";color="#1e1a05";border="#ffa72640";accent="#ffa726";}
-        else if(/提醒/.test(title)){icon="🔔";color="#1e1a05";border="#ffa72640";accent="#ffa726";}
-        else if(/驗證|準確|印證/.test(title)){icon="✅";color="#18102a";border="#ab47bc40";accent="#ab47bc";}
-        else if(/風險/.test(title)){icon="⚠️";color="#200d0d";border="#ff4d6d40";accent="#ff4d6d";}
+        var icon="📋", color="#161616", border="#ffffff15", accent="#ffffff60";
+        if(/交叉|比對|信號|機構/.test(title)){icon="🔍";color="#0d1520";border="#29b6f640";accent="#3b82f6";}
+        else if(/策略|推薦/.test(title)){icon="⚡";color="#0a1a12";border="#00e5a040";accent="#10b981";}
+        else if(/時間|操作|條件/.test(title)){icon="🕐";color="#1a1505";border="#d9770640";accent="#d97706";}
+        else if(/提醒/.test(title)){icon="🔔";color="#1a1505";border="#d9770640";accent="#d97706";}
+        else if(/驗證|準確|印證/.test(title)){icon="✅";color="#140d22";border="#ab47bc40";accent="#7c3aed";}
+        else if(/風險/.test(title)){icon="⚠️";color="#1a0808";border="#ff4d6d40";accent="#ef4444";}
         current={title,icon,color,border,accent,lines:[]};
       } else if(trimmed){
-        if(!current) current={title:"分析摘要",icon:"📋",color:"#1a1a22",border:"#ffffff15",accent:"#ffffff60",lines:[]};
+        if(!current) current={title:"分析摘要",icon:"📋",color:"#161616",border:"#ffffff15",accent:"#ffffff60",lines:[]};
         current.lines.push(trimmed);
       }
     });
     if(current && current.lines.length) sections.push(current);
-    if(!sections.length) return React.createElement("div",{style:{fontSize:18,color:"#e8e9f0",lineHeight:2,whiteSpace:"pre-wrap"}},text);
+    if(!sections.length) return React.createElement("div",{style:{fontSize:18,color:"#f0f0f0",lineHeight:2,whiteSpace:"pre-wrap"}},text);
 
     return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:14}},
       sections.map(function(sec,si){
         return React.createElement("div",{key:si,style:{
           background:sec.color,
           border:"1px solid "+sec.border,
-          borderRadius:12,
+          borderRadius:6,
           padding:"18px 20px",
-          boxShadow:"0 2px 12px #00000040",
+          boxShadow:"0 1px 4px #00000060",
           position:"relative",
           overflow:"hidden"
         }},
@@ -967,11 +967,11 @@ function App(){
 
               if(isHighlight){
                 return React.createElement("div",{key:li,style:{
-                  background: isScore?"#ffa72618":"#ffffff0a",
+                  background: isScore?"#d9770612":"#ffffff0a",
                   border:"1px solid "+sec.border,
                   borderLeft:"3px solid "+sec.accent,
-                  borderRadius:8, padding:"10px 14px",
-                  fontSize:18, color:"#f0f0f5",
+                  borderRadius:4, padding:"10px 14px",
+                  fontSize:18, color:"#ffffff",
                   lineHeight:1.8, fontWeight:500
                 }}, clean);
               }
@@ -1181,19 +1181,22 @@ function App(){
 
   /* ── 渲染 ───────────────────────────────────────────────────────────────── */
   return(
-    <div style={{display:"flex",height:"100vh",background:"#13141a",
-      fontFamily:"'IBM Plex Mono','Noto Sans TC',monospace",color:"#e8e9f0",overflow:"hidden"}}>
+    <div style={{display:"flex",height:"100vh",background:"#0a0a0a",
+      fontFamily:"'Inter','Noto Sans TC',-apple-system,sans-serif",color:"#f0f0f0",overflow:"hidden"}}>
       <style>{`
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Syne:wght@800;900&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
-  ::-webkit-scrollbar{width:4px;height:4px}
-  ::-webkit-scrollbar-thumb{background:#3a3c54;border-radius:2px}
-  ::-webkit-scrollbar-track{background:#1e1f2a}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .anim{animation:fadeIn .18s ease}
+  ::-webkit-scrollbar{width:3px;height:3px}
+  ::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+  ::-webkit-scrollbar-track{background:transparent}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .anim{animation:fadeIn .15s ease}
+  .tr:hover{background:#ffffff06!important}
+  .chip:hover{opacity:.8}
   input,textarea{outline:none}
-  input::placeholder,textarea::placeholder{color:#aaaaaa}
+  input::placeholder,textarea::placeholder{color:#444}
+  button,input,textarea,select{font-family:inherit}
 `}</style>
 
       {/* ════════════════ 側欄 ════════════════ */}
@@ -1203,19 +1206,19 @@ function App(){
         {/* Logo */}
         <div style={{padding:"0 14px 18px"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:36,height:36,borderRadius:9,
+            <div style={{width:36,height:36,borderRadius:5,
               background:"linear-gradient(135deg,#ffa726,#ff6d00)",
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:900,color:"#000"}}>D</div>
             <div>
-              <div style={{fontFamily:"'Syne',sans-serif",fontSize:14,fontWeight:900,letterSpacing:-.5,color:"#f0f0f5"}}>DONDONHAPPY</div>
-              <div style={{fontSize:10,color:"#6a7090",letterSpacing:1.5}}>期權 · 量化 · 暗池</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:14,fontWeight:900,letterSpacing:-.5,color:"#ffffff"}}>DONDONHAPPY</div>
+              <div style={{fontSize:10,color:"#444444",letterSpacing:1.5}}>期權 · 量化 · 暗池</div>
             </div>
           </div>
         </div>
 
         {/* 連線狀態 */}
         <div style={{margin:"0 12px 14px",padding:"10px 12px",background:"#0d0d12",
-          border:"1px solid #252738",borderRadius:8,display:"flex",flexDirection:"column",gap:8}}>
+          border:"1px solid #252738",borderRadius:4,display:"flex",flexDirection:"column",gap:8}}>
           {/* Yahoo Finance */}
           <div style={{display:"flex",alignItems:"center",gap:7}}>
             <Dot ok={yfOk===true}/>
@@ -1223,22 +1226,22 @@ function App(){
               {yfOk===true?"Yahoo 報價 ✓":yfOk===false?"Yahoo 報價 失敗":yfLoading?"Yahoo 連線中…":"Yahoo 報價 待機"}
             </span>
             <div onClick={loadPrices} style={{fontSize:12,padding:"3px 8px",borderRadius:4,cursor:"pointer",
-              background:"#1e1f2a",border:"1px solid #ffffff12",color:"#7880a0"}}>↻</div>
+              background:"#1a1a1a",border:"1px solid #ffffff12",color:"#555555"}}>↻</div>
           </div>
           {/* 失敗提示 */}
           {yfOk===false&&(
-            <div style={{fontSize:10,color:"#ff4d6d60",lineHeight:1.5,padding:"5px 6px",
+            <div style={{fontSize:10,color:"#ef444450",lineHeight:1.5,padding:"5px 6px",
               background:"#ff4d6d08",borderRadius:5,border:"1px solid #ff4d6d15"}}>
               ⚠ 代理連線失敗<br/>
               <span style={{color:"#7a809a"}}>
                 · Claude 預覽沙盒會封鎖外部請求<br/>
                 · 部署到 GitHub Pages 後通常正常<br/>
-                · 可改用 <span style={{color:"#ffa72670"}}>index.html</span> 版本測試
+                · 可改用 <span style={{color:"#d9770660"}}>index.html</span> 版本測試
               </span>
             </div>
           )}
           {yfOk===null&&!yfLoading&&(
-            <div style={{fontSize:10,color:"#ffa72650",padding:"3px 6px"}}>
+            <div style={{fontSize:10,color:"#d9770650",padding:"3px 6px"}}>
               ℹ 正在嘗試 7 個代理來源…
             </div>
           )}
@@ -1250,7 +1253,7 @@ function App(){
             </span>
           </div>
           {uwOk===false&&(
-            <div style={{fontSize:10,color:"#ff4d6d60",padding:"3px 6px 3px",lineHeight:1.5,
+            <div style={{fontSize:10,color:"#ef444450",padding:"3px 6px 3px",lineHeight:1.5,
               background:"#ff4d6d08",borderRadius:5,border:"1px solid #ff4d6d15"}}>
               ⚠ 請確認金鑰格式：UUID 或 uw_ 開頭<br/>
               <span style={{color:"#7a809a"}}>前往 unusualwhales.com 取得金鑰</span>
@@ -1258,7 +1261,7 @@ function App(){
           )}
         </div>
 
-        <div style={{height:1,background:"#252638",margin:"0 0 10px"}}/>
+        <div style={{height:1,background:"#222222",margin:"0 0 10px"}}/>
 
         {/* 導覽 */}
         {NAV_ITEMS.map(n=>(
@@ -1267,12 +1270,12 @@ function App(){
             background:tab===n.id?"#ffa72612":"transparent",
             borderLeft:tab===n.id?"2px solid #ffa726":"2px solid transparent",
             transition:"all .15s"}}>
-            <span style={{fontSize:16,color:tab===n.id?"#ffa726":"#ffffff28",width:20,textAlign:"center"}}>{n.icon}</span>
+            <span style={{fontSize:16,color:tab===n.id?"#d97706":"#ffffff28",width:20,textAlign:"center"}}>{n.icon}</span>
             <span style={{fontSize:14,color:tab===n.id?"#fff":"#ffffff50"}}>{n.label}</span>
             {n.id==="flow"&&<div style={{marginLeft:"auto",fontSize:11,padding:"1px 6px",borderRadius:3,
-              background:"#00e5a015",color:"#00e5a0",border:"1px solid #00e5a030"}}>{flow.filter(f=>f.unusual).length}</div>}
+              background:"#00e5a015",color:"#10b981",border:"1px solid #00e5a030"}}>{flow.filter(f=>f.unusual).length}</div>}
             {n.id==="signals"&&<div style={{marginLeft:"auto",fontSize:11,padding:"1px 6px",borderRadius:3,
-              background:"#ffa72615",color:"#ffa726",border:"1px solid #ffa72630"}}>{sigs.filter(s=>!s.filled).length}</div>}
+              background:"#d9770612",color:"#d97706",border:"1px solid #ffa72630"}}>{sigs.filter(s=>!s.filled).length}</div>}
           </div>
         ))}
 
@@ -1283,23 +1286,23 @@ function App(){
               <span style={{fontSize:11,color:"#00e5a080",letterSpacing:1}}>● 已登入</span>
               <div onClick={()=>{setUwKey("");setUwOk(null);setLoginOpen(true);setLoginPwd("");}}
                 style={{fontSize:11,padding:"2px 8px",borderRadius:4,cursor:"pointer",
-                  background:"#252638",border:"1px solid #ffffff12",color:"#7880a0"}}>登出</div>
+                  background:"#222222",border:"1px solid #ffffff12",color:"#555555"}}>登出</div>
             </div>
           ):(
             <div onClick={()=>setLoginOpen(true)}
               style={{width:"100%",padding:"8px",marginBottom:8,borderRadius:6,cursor:"pointer",textAlign:"center",
-                background:"#ffa72618",border:"1px solid #ffa72640",fontSize:13,color:"#ffa726",fontWeight:600}}>
+                background:"#d9770612",border:"1px solid #ffa72640",fontSize:13,color:"#d97706",fontWeight:600}}>
               🔐 登入取得 UW 數據
             </div>
           )}
           <div style={{display:"flex",gap:8,marginTop:8}}>
             <div>
               <div style={{fontSize:10,color:"#7a809a",letterSpacing:1}}>策略</div>
-              <div style={{fontSize:20,fontWeight:700,color:"#ffa726"}}>{strats.filter(s=>s.on).length}<span style={{fontSize:12,color:"#7a809a"}}>/{strats.length}</span></div>
+              <div style={{fontSize:20,fontWeight:700,color:"#d97706"}}>{strats.filter(s=>s.on).length}<span style={{fontSize:12,color:"#7a809a"}}>/{strats.length}</span></div>
             </div>
             <div style={{marginLeft:"auto"}}>
               <div style={{fontSize:10,color:"#7a809a",letterSpacing:1}}>持倉</div>
-              <div style={{fontSize:20,fontWeight:700,color:"#f0f0f5"}}>{positions.length}</div>
+              <div style={{fontSize:20,fontWeight:700,color:"#ffffff"}}>{positions.length}</div>
             </div>
           </div>
         </div>
@@ -1312,28 +1315,28 @@ function App(){
         <div style={{height:52,borderBottom:"1px solid #222334",display:"flex",alignItems:"center",
           justifyContent:"space-between",padding:"0 22px",background:"#080810",flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:14,color:"#7880a0",letterSpacing:.5}}>{NAV_ITEMS.find(n=>n.id===tab)?.label}</span>
+            <span style={{fontSize:14,color:"#555555",letterSpacing:.5}}>{NAV_ITEMS.find(n=>n.id===tab)?.label}</span>
             <span style={{color:"#525870"}}>·</span>
-            <div style={{width:6,height:6,borderRadius:"50%",background:"#00e5a0",animation:"pulse 2s infinite"}}/>
+            <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",animation:"pulse 2s infinite"}}/>
             <span style={{fontSize:12,color:"#ffffff22"}}>#{tick.toString().padStart(4,"0")}</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:18}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:12,color:"#00e5a0",minWidth:52}}>買 {sentBull.toFixed(0)}%</span>
+              <span style={{fontSize:12,color:"#10b981",minWidth:52}}>買 {sentBull.toFixed(0)}%</span>
               <div style={{width:90,height:5,background:"#ff4d6d35",borderRadius:3}}>
-                <div style={{width:`${sentBull}%`,height:"100%",background:"#00e5a0",borderRadius:3,transition:"width .6s"}}/>
+                <div style={{width:`${sentBull}%`,height:"100%",background:"#10b981",borderRadius:3,transition:"width .6s"}}/>
               </div>
-              <span style={{fontSize:12,color:"#ff4d6d",minWidth:52,textAlign:"right"}}>賣 {(100-sentBull).toFixed(0)}%</span>
+              <span style={{fontSize:12,color:"#ef4444",minWidth:52,textAlign:"right"}}>賣 {(100-sentBull).toFixed(0)}%</span>
             </div>
-            <div style={{width:1,height:26,background:"#202130"}}/>
+            <div style={{width:1,height:26,background:"#1c1c1c"}}/>
             <div style={{textAlign:"right"}}>
-              <div style={{fontSize:11,color:"#6a7090"}}>當日損益</div>
-              <div style={{fontSize:15,fontWeight:700,color:pnl.day>=0?"#00e5a0":"#ff4d6d",fontFamily:"'IBM Plex Mono'"}}>{pnl.day>=0?"+":""}{fmt$(pnl.day)}</div>
+              <div style={{fontSize:11,color:"#444444"}}>當日損益</div>
+              <div style={{fontSize:15,fontWeight:700,color:pnl.day>=0?"#10b981":"#ef4444",fontFamily:"'IBM Plex Mono'"}}>{pnl.day>=0?"+":""}{fmt$(pnl.day)}</div>
             </div>
-            <div style={{width:1,height:26,background:"#202130"}}/>
+            <div style={{width:1,height:26,background:"#1c1c1c"}}/>
             <div style={{textAlign:"right"}}>
-              <div style={{fontSize:11,color:"#6a7090"}}>淨資產</div>
-              <div style={{fontSize:15,fontWeight:700,color:"#f0f0f5"}}>{fmtK(nav)}</div>
+              <div style={{fontSize:11,color:"#444444"}}>淨資產</div>
+              <div style={{fontSize:15,fontWeight:700,color:"#ffffff"}}>{fmtK(nav)}</div>
             </div>
           </div>
         </div>
@@ -1346,65 +1349,65 @@ function App(){
             <div className="anim" style={{display:"flex",flexDirection:"column",gap:16}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
                 <KCard label="淨資產價值" value={fmtK(nav)} sub={`+${pnl.pct}% 本月`} spark={sparks.nav} badge="即時"/>
-                <KCard label="夏普比率"   value={metrics.sharpe.toFixed(2)} sub="▲ vs 基準 1.9" spark={sparks.sh} color="#ab47bc"/>
-                <KCard label="勝率"       value={`${metrics.wr.toFixed(1)}%`} sub={`+${(metrics.wr-58).toFixed(1)}pp 基準線`} spark={sparks.wr} color="#29b6f6"/>
-                <KCard label="最大回撤"   value={`${metrics.dd.toFixed(1)}%`} sub="近 90 日" spark={sparks.dd} color="#ff4d6d"/>
+                <KCard label="夏普比率"   value={metrics.sharpe.toFixed(2)} sub="▲ vs 基準 1.9" spark={sparks.sh} color="#7c3aed"/>
+                <KCard label="勝率"       value={`${metrics.wr.toFixed(1)}%`} sub={`+${(metrics.wr-58).toFixed(1)}pp 基準線`} spark={sparks.wr} color="#3b82f6"/>
+                <KCard label="最大回撤"   value={`${metrics.dd.toFixed(1)}%`} sub="近 90 日" spark={sparks.dd} color="#ef4444"/>
               </div>
 
               {/* 曲線 + 情緒 */}
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
-                <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:18}}>
+                <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:18}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <div>
-                      <div style={{fontSize:12,color:"#6a7090",letterSpacing:1}}>權益曲線 — 90 日</div>
-                      <div style={{fontSize:20,fontWeight:700,color:"#ffa726",marginTop:3}}>{fmtK(nav)}</div>
+                      <div style={{fontSize:12,color:"#444444",letterSpacing:1}}>權益曲線 — 90 日</div>
+                      <div style={{fontSize:20,fontWeight:700,color:"#d97706",marginTop:3}}>{fmtK(nav)}</div>
                     </div>
                     <div style={{display:"flex",gap:5}}>
                       {["1D","1W","1M","3M"].map((p,i)=>(
                         <div key={p} className="chip" style={{padding:"3px 10px",borderRadius:4,fontSize:12,
-                          background:i===3?"#ffa72618":"#ffffff08",
-                          border:`1px solid ${i===3?"#ffa72650":"#ffffff10"}`,
-                          color:i===3?"#ffa726":"#ffffff40"}}>{p}</div>
+                          background:i===3?"#d9770612":"#ffffff08",
+                          border:`1px solid ${i===3?"#d9770650":"#ffffff10"}`,
+                          color:i===3?"#d97706":"#ffffff40"}}>{p}</div>
                       ))}
                     </div>
                   </div>
                   <EqChart data={equity}/>
                 </div>
-                <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:18,display:"flex",flexDirection:"column",gap:10}}>
-                  <div style={{fontSize:12,color:"#6a7090",letterSpacing:1}}>
-                    期權情緒 {!uwKey&&<span style={{color:"#ffa72660",fontSize:11}}>（模擬）</span>}
+                <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:18,display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{fontSize:12,color:"#444444",letterSpacing:1}}>
+                    期權情緒 {!uwKey&&<span style={{color:"#d9770660",fontSize:11}}>（模擬）</span>}
                   </div>
-                  {[{l:"買權溢價",v:fmtM(totalCall),c:"#00e5a0"},{l:"賣權溢價",v:fmtM(totalPut),c:"#ff4d6d"},
-                    {l:"P/C 比率",v:(totalPut/(totalCall||1)).toFixed(2),c:"#ffa726"},
-                    {l:"異常訊號",v:flow.filter(f=>f.unusual).length+" 筆",c:"#ba68c8"},
-                    {l:"掃單數",v:flow.filter(f=>f.sweep).length+" 筆",c:"#29b6f6"},
+                  {[{l:"買權溢價",v:fmtM(totalCall),c:"#10b981"},{l:"賣權溢價",v:fmtM(totalPut),c:"#ef4444"},
+                    {l:"P/C 比率",v:(totalPut/(totalCall||1)).toFixed(2),c:"#d97706"},
+                    {l:"異常訊號",v:flow.filter(f=>f.unusual).length+" 筆",c:"#8b5cf6"},
+                    {l:"掃單數",v:flow.filter(f=>f.sweep).length+" 筆",c:"#3b82f6"},
                   ].map(r=>(
                     <div key={r.l} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid #ffffff06",paddingBottom:8}}>
-                      <span style={{fontSize:14,color:"#7880a0"}}>{r.l}</span>
+                      <span style={{fontSize:14,color:"#555555"}}>{r.l}</span>
                       <span style={{fontSize:14,fontWeight:600,color:r.c}}>{r.v}</span>
                     </div>
                   ))}
-                  <Spark data={sparks.prem} color="#ffa726" w={170} h={36}/>
+                  <Spark data={sparks.prem} color="#d97706" w={170} h={36}/>
                 </div>
               </div>
 
               {/* 即時報價列 */}
-              <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:"14px 16px"}}>
+              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:"14px 16px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <span style={{fontSize:12,color:"#6a7090",letterSpacing:1}}>
+                  <span style={{fontSize:12,color:"#444444",letterSpacing:1}}>
                     即時報價 · Yahoo Finance {yfOk===true?"✓":yfOk===false?"✗":""}
-                    {yfLoading&&<span style={{color:"#ffa72660",marginLeft:8}}>⟳ 更新中</span>}
+                    {yfLoading&&<span style={{color:"#d9770660",marginLeft:8}}>⟳ 更新中</span>}
                   </span>
                   <div onClick={loadPrices} className="chip" style={{fontSize:12,padding:"3px 10px",borderRadius:4,
-                    border:"1px solid #2e3048",color:"#7880a0",background:"#ffffff06"}}>↻ 刷新</div>
+                    border:"1px solid #2e3048",color:"#555555",background:"#ffffff06"}}>↻ 刷新</div>
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {SYMS.slice(0,8).map(sym=>{
                     const q=priceOf(sym);
                     return(
-                      <div key={sym} style={{padding:"8px 14px",background:"#0d0d12",border:"1px solid #ffffff0a",borderRadius:8,minWidth:96}}>
-                        <div style={{fontSize:14,fontWeight:700,color:"#f0f0f5"}}>{sym}</div>
-                        <div style={{fontSize:18,fontWeight:700,color:"#f0f0f5",fontFamily:"'IBM Plex Mono'"}}>{q.price}</div>
+                      <div key={sym} style={{padding:"8px 14px",background:"#0d0d12",border:"1px solid #ffffff0a",borderRadius:4,minWidth:96}}>
+                        <div style={{fontSize:14,fontWeight:700,color:"#ffffff"}}>{sym}</div>
+                        <div style={{fontSize:18,fontWeight:700,color:"#ffffff",fontFamily:"'IBM Plex Mono'"}}>{q.price}</div>
                         <div style={{fontSize:13,color:q.color}}>{q.pct}</div>
                       </div>
                     );
@@ -1414,48 +1417,48 @@ function App(){
 
               {/* 底部三欄 */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-                <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:16}}>
-                  <div style={{fontSize:12,color:"#6a7090",letterSpacing:1,marginBottom:12}}>今日損益明細</div>
-                  {[{l:"已實現",v:fmt$(pnl.day+1100),c:"#00e5a0"},{l:"未實現",v:fmt$(pnl.total-pnl.day-1100),c:"#ffa726"},
-                    {l:"手續費",v:"-$318",c:"#ff4d6d"},{l:"淨損益",v:fmt$(pnl.day),c:"#00e5a0"}].map(r=>(
+                <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:16}}>
+                  <div style={{fontSize:12,color:"#444444",letterSpacing:1,marginBottom:12}}>今日損益明細</div>
+                  {[{l:"已實現",v:fmt$(pnl.day+1100),c:"#10b981"},{l:"未實現",v:fmt$(pnl.total-pnl.day-1100),c:"#d97706"},
+                    {l:"手續費",v:"-$318",c:"#ef4444"},{l:"淨損益",v:fmt$(pnl.day),c:"#10b981"}].map(r=>(
                     <div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #ffffff06"}}>
-                      <span style={{fontSize:14,color:"#7880a0"}}>{r.l}</span>
+                      <span style={{fontSize:14,color:"#555555"}}>{r.l}</span>
                       <span style={{fontSize:14,fontWeight:600,color:r.c}}>{r.v}</span>
                     </div>
                   ))}
                 </div>
-                <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:16}}>
-                  <div style={{fontSize:12,color:"#6a7090",letterSpacing:1,marginBottom:12}}>持倉曝險</div>
-                  {[{l:"總曝險",v:`${metrics.exp.toFixed(1)}%`,b:metrics.exp,c:"#ffa726"},
-                    {l:"淨曝險",v:`${(metrics.exp*.62).toFixed(1)}%`,b:metrics.exp*.62,c:"#29b6f6"},
-                    {l:"Beta曝險",v:`${(metrics.beta*100).toFixed(1)}%`,b:metrics.beta*100,c:"#ab47bc"},
-                    {l:"現金",v:`${(100-metrics.exp).toFixed(1)}%`,b:100-metrics.exp,c:"#00e5a0"},
+                <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:16}}>
+                  <div style={{fontSize:12,color:"#444444",letterSpacing:1,marginBottom:12}}>持倉曝險</div>
+                  {[{l:"總曝險",v:`${metrics.exp.toFixed(1)}%`,b:metrics.exp,c:"#d97706"},
+                    {l:"淨曝險",v:`${(metrics.exp*.62).toFixed(1)}%`,b:metrics.exp*.62,c:"#3b82f6"},
+                    {l:"Beta曝險",v:`${(metrics.beta*100).toFixed(1)}%`,b:metrics.beta*100,c:"#7c3aed"},
+                    {l:"現金",v:`${(100-metrics.exp).toFixed(1)}%`,b:100-metrics.exp,c:"#10b981"},
                   ].map(r=>(
                     <div key={r.l} style={{marginBottom:10}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                        <span style={{fontSize:13,color:"#7880a0"}}>{r.l}</span>
+                        <span style={{fontSize:13,color:"#555555"}}>{r.l}</span>
                         <span style={{fontSize:13,fontWeight:600,color:r.c}}>{r.v}</span>
                       </div>
-                      <div style={{height:4,background:"#252638",borderRadius:2}}>
+                      <div style={{height:4,background:"#222222",borderRadius:2}}>
                         <div style={{width:`${r.b}%`,height:"100%",background:r.c,borderRadius:2,transition:"width .5s"}}/>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:16}}>
-                  <div style={{fontSize:12,color:"#6a7090",letterSpacing:1,marginBottom:12}}>
-                    前五大持倉 {yfOk===true&&<span style={{color:"#00e5a060",fontSize:11}}>· 真實報價</span>}
+                <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:16}}>
+                  <div style={{fontSize:12,color:"#444444",letterSpacing:1,marginBottom:12}}>
+                    前五大持倉 {yfOk===true&&<span style={{color:"#10b98150",fontSize:11}}>· 真實報價</span>}
                   </div>
                   {positions.slice(0,5).map(p=>(
                     <div key={p.sym} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #ffffff06"}}>
                       <div style={{display:"flex",alignItems:"center",gap:7}}>
-                        <span style={{fontSize:14,fontWeight:700,color:"#f0f0f5",width:48}}>{p.sym}</span>
-                        <Pill color={p.side==="多頭"?"#00e5a0":"#ff4d6d"}>{p.side}</Pill>
-                        {p.live&&<div style={{width:5,height:5,borderRadius:"50%",background:"#00e5a0"}}/>}
+                        <span style={{fontSize:14,fontWeight:700,color:"#ffffff",width:48}}>{p.sym}</span>
+                        <Pill color={p.side==="多頭"?"#10b981":"#ef4444"}>{p.side}</Pill>
+                        {p.live&&<div style={{width:5,height:5,borderRadius:"50%",background:"#10b981"}}/>}
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:14,fontWeight:600,color:+p.pnl>=0?"#00e5a0":"#ff4d6d"}}>{+p.pnl>=0?"+":""}{fmt$(+p.pnl)}</div>
-                        <div style={{fontSize:12,color:+p.pct>=0?"#00e5a060":"#ff4d6d60"}}>{p.pct}%</div>
+                        <div style={{fontSize:14,fontWeight:600,color:+p.pnl>=0?"#10b981":"#ef4444"}}>{+p.pnl>=0?"+":""}{fmt$(+p.pnl)}</div>
+                        <div style={{fontSize:12,color:+p.pct>=0?"#10b98150":"#ef444450"}}>{p.pct}%</div>
                       </div>
                     </div>
                   ))}
@@ -1470,35 +1473,35 @@ function App(){
 
               {/* ── 頂部統計列 ── */}
               <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,flexShrink:0}}>
-                <KCard label="買權溢價" value={fmtM(totalCall)} sub="▲" color="#00e5a0" badge={uwKey?"UW":"模擬"}/>
-                <KCard label="賣權溢價" value={fmtM(totalPut)}  sub="▼" color="#ff4d6d" badge={uwKey?"UW":"模擬"}/>
-                <KCard label="P/C 比率" value={(totalPut/(totalCall||1)).toFixed(2)} sub={sentBull>55?"偏多傾向":"偏空傾向"} color="#ffa726"/>
-                <KCard label="異常訊號" value={flow.filter(f=>f.unusual).length} sub="高溢價" color="#ba68c8" badge="UW"/>
-                <KCard label="掃單訂單" value={flow.filter(f=>f.sweep).length}   sub="跨所掃單" color="#29b6f6"/>
+                <KCard label="買權溢價" value={fmtM(totalCall)} sub="▲" color="#10b981" badge={uwKey?"UW":"模擬"}/>
+                <KCard label="賣權溢價" value={fmtM(totalPut)}  sub="▼" color="#ef4444" badge={uwKey?"UW":"模擬"}/>
+                <KCard label="P/C 比率" value={(totalPut/(totalCall||1)).toFixed(2)} sub={sentBull>55?"偏多傾向":"偏空傾向"} color="#d97706"/>
+                <KCard label="異常訊號" value={flow.filter(f=>f.unusual).length} sub="高溢價" color="#8b5cf6" badge="UW"/>
+                <KCard label="掃單訂單" value={flow.filter(f=>f.sweep).length}   sub="跨所掃單" color="#3b82f6"/>
               </div>
 
               {/* ── 情緒條 ── */}
-              <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:8,padding:"10px 16px",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
-                <span style={{fontSize:13,color:"#00e5a0",minWidth:80}}>買權 {sentBull.toFixed(1)}%</span>
-                <div style={{flex:1,height:7,background:"#ff4d6d30",borderRadius:4,overflow:"hidden"}}>
+              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:4,padding:"10px 16px",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
+                <span style={{fontSize:13,color:"#10b981",minWidth:80}}>買權 {sentBull.toFixed(1)}%</span>
+                <div style={{flex:1,height:7,background:"#ef444430",borderRadius:4,overflow:"hidden"}}>
                   <div style={{width:`${sentBull}%`,height:"100%",background:"linear-gradient(90deg,#00e5a0,#00e5a060)",borderRadius:4,transition:"width .6s"}}/>
                 </div>
-                <span style={{fontSize:13,color:"#ff4d6d",minWidth:80,textAlign:"right"}}>賣權 {(100-sentBull).toFixed(1)}%</span>
-                {uwLoading&&<span style={{fontSize:12,color:"#ffa72670"}}>⟳ 更新中</span>}
+                <span style={{fontSize:13,color:"#ef4444",minWidth:80,textAlign:"right"}}>賣權 {(100-sentBull).toFixed(1)}%</span>
+                {uwLoading&&<span style={{fontSize:12,color:"#d9770660"}}>⟳ 更新中</span>}
               </div>
 
               {/* ── 篩選列 ── */}
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",flexShrink:0}}>
                 {["全部","CALL","PUT"].map(f=>(
                   <div key={f} onClick={()=>setFFilter(f)} className="chip" style={{padding:"5px 14px",borderRadius:5,fontSize:13,
-                    background:fFilter===f?`${f==="CALL"?"#00e5a0":f==="PUT"?"#ff4d6d":"#ffa726"}18`:"#ffffff08",
-                    border:`1px solid ${fFilter===f?f==="CALL"?"#00e5a050":f==="PUT"?"#ff4d6d50":"#ffa72650":"#ffffff12"}`,
-                    color:fFilter===f?f==="CALL"?"#00e5a0":f==="PUT"?"#ff4d6d":"#ffa726":"#ffffff40"}}>{f}</div>
+                    background:fFilter===f?`${f==="CALL"?"#10b981":f==="PUT"?"#ef4444":"#d97706"}18`:"#ffffff08",
+                    border:`1px solid ${fFilter===f?f==="CALL"?"#10b98150":f==="PUT"?"#ef444450":"#d9770650":"#ffffff12"}`,
+                    color:fFilter===f?f==="CALL"?"#10b981":f==="PUT"?"#ef4444":"#d97706":"#ffffff40"}}>{f}</div>
                 ))}
-                <div style={{width:1,height:22,background:"#202130"}}/>
+                <div style={{width:1,height:22,background:"#1c1c1c"}}/>
                 <div onClick={()=>setFUnusual(v=>!v)} className="chip" style={{padding:"5px 14px",borderRadius:5,fontSize:13,
-                  background:fUnusual?"#ba68c818":"#ffffff08",border:`1px solid ${fUnusual?"#ba68c850":"#ffffff12"}`,
-                  color:fUnusual?"#ba68c8":"#ffffff40"}}>⚡ 僅異常</div>
+                  background:fUnusual?"#8b5cf615":"#ffffff08",border:`1px solid ${fUnusual?"#8b5cf650":"#ffffff12"}`,
+                  color:fUnusual?"#8b5cf6":"#ffffff40"}}>⚡ 僅異常</div>
                 <div style={{marginLeft:"auto",display:"flex",gap:5}}>
                   {["時間","溢價"].map(s=>(
                     <div key={s} onClick={()=>setFSort(s)} className="chip" style={{padding:"4px 10px",borderRadius:4,fontSize:12,
@@ -1506,24 +1509,24 @@ function App(){
                       color:fSort===s?"#fff":"#ffffff40"}}>{s}{fSort===s?" ↓":""}</div>
                   ))}
                 </div>
-                <div style={{fontSize:12,color:"#6a7090"}}>共{filteredFlow.length}筆</div>
+                <div style={{fontSize:12,color:"#444444"}}>共{filteredFlow.length}筆</div>
               </div>
 
               {/* ── 主表格：滿版、可滾動 ── */}
-              <div style={{flex:1,background:"#1a1b24",border:"1px solid #252738",borderRadius:10,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}}>
+              <div style={{flex:1,background:"#141414",border:"1px solid #252738",borderRadius:5,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}}>
                 {/* 表頭 */}
                 <div style={{display:"grid",
                   gridTemplateColumns:"90px 110px 82px 104px 100px 190px 120px 68px 100px 1fr",
                   padding:"10px 16px",borderBottom:"1px solid #222334",
-                  fontSize:13,color:"#6a7090",letterSpacing:0.5,flexShrink:0,
-                  background:"#16172080"}}>
+                  fontSize:13,color:"#444444",letterSpacing:0.5,flexShrink:0,
+                  background:"#11111180"}}>
                   <span>時間</span><span>標的</span><span>類型</span><span>行使價</span><span>到期</span>
                   <span>溢價</span><span>量/倉</span><span>IV</span><span>情緒</span><span>策略/標記</span>
                 </div>
                 {/* 置頂標籤 */}
                 {top20.length>0&&(
-                  <div style={{padding:"5px 14px",fontSize:11,color:"#ffa726",
-                    background:"#ffa72608",borderBottom:"1px solid #ffa72618",
+                  <div style={{padding:"5px 14px",fontSize:11,color:"#d97706",
+                    background:"#d9770608",borderBottom:"1px solid #ffa72618",
                     flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
                     <span>⚡ 溢價前20名置頂</span>
                     <span style={{color:"#ffffff25"}}>·</span>
@@ -1539,32 +1542,32 @@ function App(){
                     <div key={f.id||fi} className="tr" style={{display:"grid",
                       gridTemplateColumns:"90px 110px 82px 104px 100px 190px 120px 68px 100px 1fr",
                       padding:"10px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
-                      background:isTop?"#ffa7260c":f.unusual?"#ba68c806":"transparent",
+                      background:isTop?"#d9770610":f.unusual?"#8b5cf606":"transparent",
                       borderLeft:isTop?"3px solid #ffa72645":"3px solid transparent",
                       transition:"background .12s"}}>
-                      <span style={{fontSize:13,color:"#6a7090"}}>{String(f.time).slice(-8)}</span>
+                      <span style={{fontSize:13,color:"#444444"}}>{String(f.time).slice(-8)}</span>
                       <div style={{display:"flex",flexDirection:"column",gap:0}}>
-                        <span style={{fontSize:15,fontWeight:700,color:"#f0f0f5",lineHeight:1.2}}>{f.sym}</span>
-                        <span style={{fontSize:12,color:priceOf(f.sym).color,fontFamily:"monospace"}}>{priceOf(f.sym).price}</span>
+                        <span style={{fontSize:15,fontWeight:700,color:"#ffffff",lineHeight:1.2}}>{f.sym}</span>
+                        <span style={{fontSize:12,color:priceOf(f.sym).color,fontFamily:"'IBM Plex Mono',monospace"}}>{priceOf(f.sym).price}</span>
                       </div>
                       <Pill color={typeColor(f.type)}>{f.type}</Pill>
-                      <span style={{fontSize:14,color:"#8890a8"}}>${f.strike}</span>
-                      <span style={{fontSize:13,color:"#7880a0"}}>{String(f.exp).slice(0,10)}</span>
+                      <span style={{fontSize:14,color:"#666666"}}>${f.strike}</span>
+                      <span style={{fontSize:13,color:"#555555"}}>{String(f.exp).slice(0,10)}</span>
                       <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                        <span style={{fontSize:14,fontWeight:600,color:isTop?"#ffa726":f.prem>500000?"#ffd580":"#c0c4d8"}}>{fmtM(f.prem)}</span>
-                        <div style={{height:3,borderRadius:2,background:"#202130",overflow:"hidden"}}>
+                        <span style={{fontSize:14,fontWeight:600,color:isTop?"#d97706":f.prem>500000?"#fcd34d":"#c0c4d8"}}>{fmtM(f.prem)}</span>
+                        <div style={{height:3,borderRadius:2,background:"#1c1c1c",overflow:"hidden"}}>
                           <div style={{height:"100%",borderRadius:2,
                             width:`${Math.min(100,f.prem/maxPrem*100)}%`,
-                            background:f.type==="CALL"?"#00e5a070":"#ff4d6d70",
+                            background:f.type==="CALL"?"#10b98150":"#ff4d6d70",
                             transition:"width .3s"}}/>
                         </div>
                       </div>
-                      <span style={{fontSize:12,color:"#7880a0"}}>{Number(f.size).toLocaleString()}/{Number(f.oi)>999?(Number(f.oi)/1000).toFixed(0)+"K":f.oi}</span>
-                      <span style={{fontSize:13,color:"#7880a0"}}>{(Number(f.iv)*100).toFixed(0)}%</span>
+                      <span style={{fontSize:12,color:"#555555"}}>{Number(f.size).toLocaleString()}/{Number(f.oi)>999?(Number(f.oi)/1000).toFixed(0)+"K":f.oi}</span>
+                      <span style={{fontSize:13,color:"#555555"}}>{(Number(f.iv)*100).toFixed(0)}%</span>
                       <Pill color={sentColor(f.sent)}>{sentZh(f.sent)}</Pill>
                       <div style={{display:"flex",gap:3,alignItems:"center",flexWrap:"wrap"}}>
-                        {f.unusual&&<Pill color="#ba68c8">⚡</Pill>}
-                        {f.sweep&&<Pill color="#29b6f6">掃</Pill>}
+                        {f.unusual&&<Pill color="#8b5cf6">⚡</Pill>}
+                        {f.sweep&&<Pill color="#3b82f6">掃</Pill>}
                         {isTop&&(()=>{var st=inferStrategy(f);return(
                           <span title={st.tip} style={{fontSize:12,padding:"3px 8px",borderRadius:4,
                             background:st.color+"22",color:st.color,border:"1px solid "+st.color+"40",
@@ -1585,12 +1588,12 @@ function App(){
           {tab==="darkpool"&&(
             <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-                <KCard label="暗池總成交額" value={fmtM(dark.reduce((a,d)=>a+d.notional,0))} sub="最近成交" color="#ab47bc" badge={uwKey?"UW":"模擬"}/>
-                <KCard label="大宗交易"     value={dark.filter(d=>d.type==="BLOCK").length} sub="≥1萬股" color="#ffa726"/>
-                <KCard label="最大單筆"     value={fmtM(Math.max(0,...dark.map(d=>d.notional)))} sub="單筆最高" color="#ff4d6d"/>
-                <KCard label="買方比例"     value={`${(dark.filter(d=>d.side==="BUY").length/Math.max(1,dark.length)*100).toFixed(0)}%`} sub="暗池成交量" color="#00e5a0"/>
+                <KCard label="暗池總成交額" value={fmtM(dark.reduce((a,d)=>a+d.notional,0))} sub="最近成交" color="#7c3aed" badge={uwKey?"UW":"模擬"}/>
+                <KCard label="大宗交易"     value={dark.filter(d=>d.type==="BLOCK").length} sub="≥1萬股" color="#d97706"/>
+                <KCard label="最大單筆"     value={fmtM(Math.max(0,...dark.map(d=>d.notional)))} sub="單筆最高" color="#ef4444"/>
+                <KCard label="買方比例"     value={`${(dark.filter(d=>d.side==="BUY").length/Math.max(1,dark.length)*100).toFixed(0)}%`} sub="暗池成交量" color="#10b981"/>
               </div>
-              <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,overflow:"hidden"}}>
+              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
                 <div style={{display:"grid",gridTemplateColumns:"90px 80px 70px 90px 140px 80px 70px 80px",
                   padding:"10px 16px",borderBottom:"1px solid #222334",fontSize:12,color:"#7a809a",letterSpacing:1}}>
                   <span>時間</span><span>標的</span><span>類型</span><span>成交價</span><span>成交額</span><span>股數</span><span>方向</span><span>場所</span>
@@ -1601,21 +1604,21 @@ function App(){
                       gridTemplateColumns:"90px 80px 70px 90px 140px 80px 70px 80px",
                       padding:"11px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
                       background:d.notional>1e6?"#ab47bc06":"transparent",transition:"background .12s"}}>
-                      <span style={{fontSize:12,color:"#6a7090"}}>{String(d.time).slice(-8)}</span>
+                      <span style={{fontSize:12,color:"#444444"}}>{String(d.time).slice(-8)}</span>
                       <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                        <span style={{fontSize:15,fontWeight:700,color:"#f0f0f5",lineHeight:1.2}}>{d.sym}</span>
-                        <span style={{fontSize:11,color:priceOf(d.sym).color,fontFamily:"monospace"}}>{priceOf(d.sym).price}</span>
+                        <span style={{fontSize:15,fontWeight:700,color:"#ffffff",lineHeight:1.2}}>{d.sym}</span>
+                        <span style={{fontSize:11,color:priceOf(d.sym).color,fontFamily:"'IBM Plex Mono',monospace"}}>{priceOf(d.sym).price}</span>
                       </div>
-                      <Pill color={d.type==="BLOCK"?"#ffa726":"#ab47bc"}>{d.type==="BLOCK"?"大宗":"暗池"}</Pill>
-                      <span style={{fontSize:14,color:"#8890a8"}}>${d.price}</span>
+                      <Pill color={d.type==="BLOCK"?"#d97706":"#7c3aed"}>{d.type==="BLOCK"?"大宗":"暗池"}</Pill>
+                      <span style={{fontSize:14,color:"#666666"}}>${d.price}</span>
                       <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                        <span style={{fontSize:13,fontWeight:600,color:d.notional>1e6?"#ab47bc":"#ffffff80"}}>{fmtM(d.notional)}</span>
-                        <div style={{height:3,borderRadius:2,background:"#202130",overflow:"hidden"}}>
-                          <div style={{height:"100%",borderRadius:2,width:`${Math.min(100,d.notional/Math.max(1,...dark.map(x=>x.notional))*100)}%`,background:d.side==="BUY"?"#00e5a060":"#ff4d6d60",transition:"width .3s"}}/>
+                        <span style={{fontSize:13,fontWeight:600,color:d.notional>1e6?"#7c3aed":"#ffffff80"}}>{fmtM(d.notional)}</span>
+                        <div style={{height:3,borderRadius:2,background:"#1c1c1c",overflow:"hidden"}}>
+                          <div style={{height:"100%",borderRadius:2,width:`${Math.min(100,d.notional/Math.max(1,...dark.map(x=>x.notional))*100)}%`,background:d.side==="BUY"?"#10b98150":"#ef444450",transition:"width .3s"}}/>
                         </div>
                       </div>
-                      <span style={{fontSize:13,color:"#7880a0"}}>{Number(d.shares).toLocaleString()}</span>
-                      <Pill color={d.side==="BUY"?"#00e5a0":"#ff4d6d"}>{d.side==="BUY"?"買":"賣"}</Pill>
+                      <span style={{fontSize:13,color:"#555555"}}>{Number(d.shares).toLocaleString()}</span>
+                      <Pill color={d.side==="BUY"?"#10b981":"#ef4444"}>{d.side==="BUY"?"買":"賣"}</Pill>
                       <Tag>{d.venue}</Tag>
                     </div>
                   ))}
@@ -1632,16 +1635,16 @@ function App(){
                 {["NASDAQ:NVDA","NASDAQ:TSLA","NASDAQ:AAPL","NASDAQ:QQQ","NYSE:SPY","NASDAQ:AMZN","NASDAQ:META"].map(s=>(
                   <div key={s} onClick={()=>{setTvSym(s);setTvInput(s);}} className="chip" style={{
                     padding:"5px 12px",borderRadius:5,fontSize:14,
-                    background:tvSym===s?"#ffa72618":"#ffffff08",
-                    border:`1px solid ${tvSym===s?"#ffa72650":"#ffffff10"}`,
-                    color:tvSym===s?"#ffa726":"#ffffff40"}}>{s.split(":")[1]}</div>
+                    background:tvSym===s?"#d9770612":"#ffffff08",
+                    border:`1px solid ${tvSym===s?"#d9770650":"#ffffff10"}`,
+                    color:tvSym===s?"#d97706":"#ffffff40"}}>{s.split(":")[1]}</div>
                 ))}
                 <div style={{display:"flex",gap:5,marginLeft:"auto"}}>
                   <input value={tvInput} onChange={e=>setTvInput(e.target.value.toUpperCase())}
                     placeholder="EXCHANGE:TICKER" style={{width:175}}
                     onKeyDown={e=>e.key==="Enter"&&setTvSym(tvInput)}/>
-                  <div onClick={()=>setTvSym(tvInput)} style={{padding:"7px 14px",background:"#ffa72620",
-                    border:"1px solid #ffa72640",borderRadius:6,cursor:"pointer",fontSize:14,color:"#ffa726"}}>確認</div>
+                  <div onClick={()=>setTvSym(tvInput)} style={{padding:"7px 14px",background:"#d9770620",
+                    border:"1px solid #ffa72640",borderRadius:6,cursor:"pointer",fontSize:14,color:"#d97706"}}>確認</div>
                 </div>
               </div>
               <div style={{flex:1}}><TVChart symbol={tvSym}/></div>
@@ -1651,18 +1654,18 @@ function App(){
           {tab==="guide"&&(
             <div className="anim" style={{maxHeight:"calc(100vh - 100px)",overflowY:"auto",paddingRight:8}}>
               <div style={{padding:"28px 32px 20px",background:"linear-gradient(135deg,#ffa72608,#0a0a0d)",border:"1px solid #ffa72620",borderRadius:14,marginBottom:32,position:"relative",overflow:"hidden"}}>
-                <div style={{position:"absolute",right:20,top:"50%",transform:"translateY(-50%)",fontFamily:"'Syne',sans-serif",fontSize:110,fontWeight:900,color:"#ffa72806",lineHeight:1,pointerEvents:"none"}}>期</div>
-                <div style={{fontSize:10,letterSpacing:2,color:"#ffa726",marginBottom:8}}>COMPLETE GUIDE</div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:900,marginBottom:6,color:"#f0f0f5"}}>期權完全手冊</div>
+                <div style={{position:"absolute",right:20,top:"50%",transform:"translateY(-50%)",fontFamily:"'Inter',sans-serif",fontSize:110,fontWeight:900,color:"#ffa72806",lineHeight:1,pointerEvents:"none"}}>期</div>
+                <div style={{fontSize:10,letterSpacing:2,color:"#d97706",marginBottom:8}}>COMPLETE GUIDE</div>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:26,fontWeight:900,marginBottom:6,color:"#ffffff"}}>期權完全手冊</div>
                 <div style={{fontSize:13,color:"#ffffff45",lineHeight:1.8}}>從零開始理解期權的本質、策略邏輯與實戰應用</div>
               </div>
               {GUIDE_DATA.map(ch=>(
                 <div key={ch.num} style={{marginBottom:28}}>
                   <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,color:ch.c,letterSpacing:3,marginBottom:4}}>CHAPTER {ch.num}</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:900,marginBottom:10,paddingBottom:8,borderBottom:"1px solid #ffffff0c"}}>{ch.t}</div>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:900,marginBottom:10,paddingBottom:8,borderBottom:"1px solid #ffffff0c"}}>{ch.t}</div>
                   <div style={{display:"flex",flexDirection:"column",gap:7}}>
                     {ch.items.map((item,i)=>(
-                      <div key={i} style={{background:"#1e1f2a",borderRadius:9,padding:"12px 14px",border:"1px solid #222334",borderLeft:"3px solid "+ch.c+"40"}}>
+                      <div key={i} style={{background:"#1a1a1a",borderRadius:5,padding:"12px 14px",border:"1px solid #222334",borderLeft:"3px solid "+ch.c+"40"}}>
                         <div style={{fontSize:13,fontWeight:700,color:ch.c,marginBottom:5}}>{item[0]}</div>
                         <div style={{fontSize:13,color:"#7a809a",lineHeight:1.8,whiteSpace:"pre-line"}}>{item[1]}</div>
                       </div>
@@ -1677,11 +1680,11 @@ function App(){
             <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
                 <KCard label="啟用策略" value={strats.filter(s=>s.on).length} sub={`共 ${strats.length} 個`}/>
-                <KCard label="平均夏普" value={(strats.filter(s=>s.on).reduce((a,s)=>a+s.sharpe,0)/Math.max(1,strats.filter(s=>s.on).length)).toFixed(2)} sub="僅統計啟用" color="#ab47bc"/>
-                <KCard label="累計成交" value={strats.reduce((a,s)=>a+s.trades,0).toLocaleString()} sub="全部時間" color="#29b6f6"/>
-                <KCard label="最佳夏普" value={Math.max(...strats.map(s=>s.sharpe)).toFixed(2)} sub={strats.find(s=>s.sharpe===Math.max(...strats.map(s=>s.sharpe)))?.name} color="#00e5a0"/>
+                <KCard label="平均夏普" value={(strats.filter(s=>s.on).reduce((a,s)=>a+s.sharpe,0)/Math.max(1,strats.filter(s=>s.on).length)).toFixed(2)} sub="僅統計啟用" color="#7c3aed"/>
+                <KCard label="累計成交" value={strats.reduce((a,s)=>a+s.trades,0).toLocaleString()} sub="全部時間" color="#3b82f6"/>
+                <KCard label="最佳夏普" value={Math.max(...strats.map(s=>s.sharpe)).toFixed(2)} sub={strats.find(s=>s.sharpe===Math.max(...strats.map(s=>s.sharpe)))?.name} color="#10b981"/>
               </div>
-              <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,overflow:"hidden"}}>
+              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
                 <div style={{display:"grid",gridTemplateColumns:"1.5fr 80px 90px 55px 75px 90px 90px 55px",
                   padding:"10px 18px",borderBottom:"1px solid #222334",fontSize:12,color:"#7a809a",letterSpacing:1}}>
                   <span>策略名稱</span><span>類型</span><span>股票池</span><span>週期</span><span>夏普</span><span>最大回撤</span><span>成交次數</span><span>開關</span>
@@ -1693,11 +1696,11 @@ function App(){
                     opacity:s.on?1:.45,transition:"all .12s"}}>
                     <div style={{fontSize:15,fontWeight:600,color:s.on?"#fff":"#ffffff55"}}>{s.name}</div>
                     <Tag color="#ffa72680">{s.type}</Tag>
-                    <span style={{fontSize:14,color:"#7880a0"}}>{s.uni}</span>
-                    <span style={{fontSize:14,fontFamily:"monospace",color:"#7880a0"}}>{s.tf}</span>
-                    <span style={{fontSize:15,fontWeight:600,color:"#00e5a0"}}>{s.sharpe}</span>
-                    <span style={{fontSize:15,color:"#ff4d6d"}}>{s.dd}%</span>
-                    <span style={{fontSize:14,color:"#7880a0"}}>{s.trades.toLocaleString()}</span>
+                    <span style={{fontSize:14,color:"#555555"}}>{s.uni}</span>
+                    <span style={{fontSize:14,fontFamily:"'IBM Plex Mono',monospace",color:"#555555"}}>{s.tf}</span>
+                    <span style={{fontSize:15,fontWeight:600,color:"#10b981"}}>{s.sharpe}</span>
+                    <span style={{fontSize:15,color:"#ef4444"}}>{s.dd}%</span>
+                    <span style={{fontSize:14,color:"#555555"}}>{s.trades.toLocaleString()}</span>
                     <Toggle on={s.on} onChange={()=>setStrats(st=>st.map(x=>x.id===s.id?{...x,on:!x.on}:x))}/>
                   </div>
                 ))}
@@ -1709,13 +1712,13 @@ function App(){
           {tab==="signals"&&(
             <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{fontSize:13,color:"#6a7090",letterSpacing:1}}>即時訊號串流（量化策略輸出）</div>
+                <div style={{fontSize:13,color:"#444444",letterSpacing:1}}>即時訊號串流（量化策略輸出）</div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:"#00e5a0",animation:"pulse 1.5s infinite"}}/>
-                  <span style={{fontSize:13,color:"#00e5a0"}}>串流中 · {sigs.filter(s=>!s.filled).length} 筆待成交</span>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",animation:"pulse 1.5s infinite"}}/>
+                  <span style={{fontSize:13,color:"#10b981"}}>串流中 · {sigs.filter(s=>!s.filled).length} 筆待成交</span>
                 </div>
               </div>
-              <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,overflow:"hidden"}}>
+              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
                 <div style={{display:"grid",gridTemplateColumns:"110px 75px 65px 100px 160px 1fr 100px",
                   padding:"10px 16px",borderBottom:"1px solid #222334",fontSize:12,color:"#7a809a",letterSpacing:1}}>
                   <span>時間</span><span>標的</span><span>訊號</span><span>價格</span><span>策略</span><span></span><span>狀態</span>
@@ -1726,13 +1729,13 @@ function App(){
                       gridTemplateColumns:"110px 75px 65px 100px 160px 1fr 100px",
                       padding:"13px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
                       opacity:i>10?.3:1,transition:"background .12s"}}>
-                      <span style={{fontSize:13,fontFamily:"monospace",color:"#7a809a"}}>{s.time}</span>
-                      <span style={{fontSize:16,fontWeight:700,color:"#f0f0f5"}}>{s.sym}</span>
+                      <span style={{fontSize:13,fontFamily:"'IBM Plex Mono',monospace",color:"#7a809a"}}>{s.time}</span>
+                      <span style={{fontSize:16,fontWeight:700,color:"#ffffff"}}>{s.sym}</span>
                       <span style={{fontSize:14,fontWeight:700,color:s.color}}>{s.type}</span>
-                      <span style={{fontSize:15,fontFamily:"monospace",color:"#7880a0"}}>${s.price}</span>
-                      <Tag color="#ffa72660">{s.strat}</Tag>
+                      <span style={{fontSize:15,fontFamily:"'IBM Plex Mono',monospace",color:"#555555"}}>${s.price}</span>
+                      <Tag color="#d9770660">{s.strat}</Tag>
                       <span/>
-                      <span style={{fontSize:13,color:s.filled?"#00e5a0":"#ffa726"}}>{s.filled?"✓ 已成交":"⟳ 待成交"}</span>
+                      <span style={{fontSize:13,color:s.filled?"#10b981":"#d97706"}}>{s.filled?"✓ 已成交":"⟳ 待成交"}</span>
                     </div>
                   ))}
                 </div>
@@ -1745,16 +1748,16 @@ function App(){
             <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
                 {[
-                  {label:"VaR (95%)",    value:"-$12,400",sub:"1日歷史模擬",  color:"#ff4d6d"},
-                  {label:"組合 Beta",    value:metrics.beta.toFixed(2),sub:"對比 SPY",color:"#ffa726"},
-                  {label:"SPY 相關係數", value:"0.28",    sub:"30日滾動",     color:"#29b6f6"},
-                  {label:"板塊集中度",   value:"34%",     sub:"科技類",       color:"#ab47bc"},
-                  {label:"槓桿倍數",     value:"1.2×",   sub:"總曝險/NAV",   color:"#ffa726"},
-                  {label:"流動性評級",   value:"A+",      sub:"清倉天數 <1",  color:"#00e5a0"},
+                  {label:"VaR (95%)",    value:"-$12,400",sub:"1日歷史模擬",  color:"#ef4444"},
+                  {label:"組合 Beta",    value:metrics.beta.toFixed(2),sub:"對比 SPY",color:"#d97706"},
+                  {label:"SPY 相關係數", value:"0.28",    sub:"30日滾動",     color:"#3b82f6"},
+                  {label:"板塊集中度",   value:"34%",     sub:"科技類",       color:"#7c3aed"},
+                  {label:"槓桿倍數",     value:"1.2×",   sub:"總曝險/NAV",   color:"#d97706"},
+                  {label:"流動性評級",   value:"A+",      sub:"清倉天數 <1",  color:"#10b981"},
                 ].map(c=><KCard key={c.label} {...c}/>)}
               </div>
-              <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:10,padding:20}}>
-                <div style={{fontSize:13,color:"#6a7090",letterSpacing:1,marginBottom:16}}>風控限額監控</div>
+              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:20}}>
+                <div style={{fontSize:13,color:"#444444",letterSpacing:1,marginBottom:16}}>風控限額監控</div>
                 {[
                   {l:"單一持倉上限",   used:4.2,        limit:10,  u:"% NAV"},
                   {l:"總曝險上限",     used:metrics.exp, limit:120, u:"% NAV"},
@@ -1764,17 +1767,17 @@ function App(){
                   {l:"掛單數量上限",   used:3,           limit:20,  u:"筆"},
                 ].map(r=>{
                   const p=limPct(r.used,r.limit);
-                  const c=p>85?"#ff4d6d":p>65?"#ffa726":"#00e5a0";
+                  const c=p>85?"#ef4444":p>65?"#d97706":"#10b981";
                   return(
                     <div key={r.l} style={{marginBottom:16}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                        <span style={{fontSize:15,color:"#8890a8"}}>{r.l}</span>
-                        <span style={{fontSize:14,fontFamily:"monospace"}}>
+                        <span style={{fontSize:15,color:"#666666"}}>{r.l}</span>
+                        <span style={{fontSize:14,fontFamily:"'IBM Plex Mono',monospace"}}>
                           <span style={{color:c}}>{r.used}{r.u}</span>
                           <span style={{color:"#666c84"}}> / {r.limit}{r.u}</span>
                         </span>
                       </div>
-                      <div style={{height:5,background:"#252638",borderRadius:3}}>
+                      <div style={{height:5,background:"#222222",borderRadius:3}}>
                         <div style={{width:`${p}%`,height:"100%",background:c,borderRadius:3,
                           transition:"width .5s",boxShadow:`0 0 8px ${c}45`}}/>
                       </div>
@@ -1797,12 +1800,12 @@ function App(){
                   return(
                     <div key={t} onClick={()=>setResearchTab(t)}
                       style={{padding:"10px 24px",cursor:"pointer",fontSize:14,fontWeight:isActive?700:400,
-                        color:isActive?"#ffa726":"#ffffff40",
+                        color:isActive?"#d97706":"#ffffff40",
                         borderBottom:isActive?"2px solid #ffa726":"2px solid transparent",
                         marginBottom:-1,transition:"all 0.15s",display:"flex",alignItems:"center",gap:6}}>
                       {t==="新分析"?"✏️ 新分析":"📚 報告庫"}
-                      {count>0&&<span style={{fontSize:11,background:"#ffa72620",color:"#ffa726",
-                        padding:"1px 6px",borderRadius:10,fontWeight:700}}>{count}</span>}
+                      {count>0&&<span style={{fontSize:11,background:"#d9770620",color:"#d97706",
+                        padding:"1px 6px",borderRadius:5,fontWeight:700}}>{count}</span>}
                     </div>
                   );
                 })}
@@ -1816,9 +1819,9 @@ function App(){
                     {/* 鈴鐺按鈕 */}
                     <div style={{position:"relative",display:"inline-block"}}>
                       <div onClick={()=>setRemindersOpen(v=>!v)}
-                        style={{width:40,height:40,borderRadius:9,cursor:"pointer",
-                          background:remindersOpen?"#ffa72625":"#1e1f2a",
-                          border:"1px solid "+(pending.length>0?"#ffa72650":"#252738"),
+                        style={{width:40,height:40,borderRadius:5,cursor:"pointer",
+                          background:remindersOpen?"#d9770620":"#1a1a1a",
+                          border:"1px solid "+(pending.length>0?"#d9770650":"#2a2a2a"),
                           display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,
                           boxShadow:pending.length>0?"0 0 12px #ffa72630":"none",
                           transition:"all .15s"}}>
@@ -1826,7 +1829,7 @@ function App(){
                       </div>
                       {pending.length>0&&(
                         <div style={{position:"absolute",top:-5,right:-5,minWidth:18,height:18,
-                          borderRadius:9,background:"#ffa726",color:"#000",
+                          borderRadius:5,background:"#d97706",color:"#000",
                           fontSize:10,fontWeight:700,display:"flex",alignItems:"center",
                           justifyContent:"center",padding:"0 3px"}}>
                           {pending.length}
@@ -1834,11 +1837,11 @@ function App(){
                       )}
                       {remindersOpen&&(
                         <div style={{position:"absolute",right:0,top:48,width:320,zIndex:300,
-                          background:"#1a1b24",border:"1px solid #252738",borderRadius:12,
+                          background:"#141414",border:"1px solid #252738",borderRadius:6,
                           boxShadow:"0 8px 32px #00000070"}}>
                           <div style={{padding:"10px 14px",borderBottom:"1px solid #222334",
                             display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                            <span style={{fontSize:13,color:"#ffa726",fontWeight:700}}>
+                            <span style={{fontSize:13,color:"#d97706",fontWeight:700}}>
                               🔔 操作提醒（{pending.length}）
                             </span>
                             <span onClick={()=>setRemindersOpen(false)}
@@ -1856,8 +1859,8 @@ function App(){
                                   display:"flex",alignItems:"flex-start",gap:10}}>
                                   <span style={{fontSize:14,marginTop:2,flexShrink:0}}>🔔</span>
                                   <div style={{flex:1}}>
-                                    <div style={{fontSize:13,color:"#e8e9f0",lineHeight:1.6}}>{r.msg}</div>
-                                    <div style={{fontSize:11,color:"#6a7090",marginTop:3}}>
+                                    <div style={{fontSize:13,color:"#f0f0f0",lineHeight:1.6}}>{r.msg}</div>
+                                    <div style={{fontSize:11,color:"#444444",marginTop:3}}>
                                       {new Date(r.at).toLocaleString("zh-TW")}
                                     </div>
                                   </div>
@@ -1879,35 +1882,35 @@ function App(){
               <React.Fragment>
 
               {/* 輸入區 */}
-              <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:12,padding:20}}>
-                <div style={{fontSize:13,color:"#6a7090",letterSpacing:1,marginBottom:12}}>貼上研究報告</div>
+              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:6,padding:20}}>
+                <div style={{fontSize:13,color:"#444444",letterSpacing:1,marginBottom:12}}>貼上研究報告</div>
                 <input value={reportTitle} onChange={e=>setReportTitle(e.target.value)}
                   placeholder="報告標題（選填）"
-                  style={{width:"100%",background:"#13141a",border:"1px solid #ffffff12",borderRadius:7,
-                    padding:"8px 12px",fontSize:14,color:"#f0f0f5",marginBottom:10,boxSizing:"border-box"}}/>
+                  style={{width:"100%",background:"#0a0a0a",border:"1px solid #ffffff12",borderRadius:4,
+                    padding:"8px 12px",fontSize:14,color:"#ffffff",marginBottom:10,boxSizing:"border-box"}}/>
                 <textarea value={reportInput} onChange={e=>setReportInput(e.target.value)}
                   placeholder="貼上你的研究報告內容、市場分析、個股觀點..."
-                  style={{width:"100%",height:160,background:"#13141a",border:"1px solid #ffffff12",
-                    borderRadius:7,padding:"10px 12px",fontSize:17,color:"#e8e9f0",resize:"vertical",
+                  style={{width:"100%",height:160,background:"#0a0a0a",border:"1px solid #ffffff12",
+                    borderRadius:4,padding:"10px 12px",fontSize:17,color:"#f0f0f0",resize:"vertical",
                     lineHeight:1.7,boxSizing:"border-box"}}/>
                 <div style={{display:"flex",gap:10,marginTop:12}}>
                   <div onClick={()=>reportInput.trim()&&analyzeReport(reportInput,null)}
-                    style={{padding:"9px 20px",background:aiLoading?"#ffffff10":"#ffa72620",
-                      border:"1px solid #ffa72640",borderRadius:7,cursor:"pointer",
-                      fontSize:14,color:aiLoading?"#ffffff40":"#ffa726",fontWeight:600,transition:"all .15s"}}>
+                    style={{padding:"9px 20px",background:aiLoading?"#ffffff10":"#d9770620",
+                      border:"1px solid #ffa72640",borderRadius:4,cursor:"pointer",
+                      fontSize:14,color:aiLoading?"#ffffff40":"#d97706",fontWeight:600,transition:"all .15s"}}>
                     {aiLoading?"⟳ AI 分析中...":"⚡ AI 分析"}
                   </div>
                   {aiResult&&(
                     <div onClick={saveReport}
                       style={{padding:"9px 20px",background:"#00e5a015",border:"1px solid #00e5a040",
-                        borderRadius:7,cursor:"pointer",fontSize:14,color:"#00e5a0",fontWeight:600}}>
+                        borderRadius:4,cursor:"pointer",fontSize:14,color:"#10b981",fontWeight:600}}>
                       ✓ 儲存報告
                     </div>
                   )}
                   {reportInput.trim()&&!aiResult&&(
                     <div onClick={saveReport}
-                      style={{padding:"9px 20px",background:"#252638",border:"1px solid #2e3048",
-                        borderRadius:7,cursor:"pointer",fontSize:14,color:"#7880a0"}}>
+                      style={{padding:"9px 20px",background:"#222222",border:"1px solid #2e3048",
+                        borderRadius:4,cursor:"pointer",fontSize:14,color:"#555555"}}>
                       直接儲存（不分析）
                     </div>
                   )}
@@ -1916,22 +1919,22 @@ function App(){
 
               {/* AI 分析結果 */}
               {aiResult&&(
-                <div style={{background:"#1e1f2a",border:"1px solid #00e5a020",borderRadius:12,padding:20}}>
+                <div style={{background:"#1a1a1a",border:"1px solid #00e5a020",borderRadius:6,padding:20}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-                    <div style={{fontSize:13,color:"#00e5a0",letterSpacing:1,fontWeight:600}}>⚡ AI 分析結果</div>
+                    <div style={{fontSize:13,color:"#10b981",letterSpacing:1,fontWeight:600}}>⚡ AI 分析結果</div>
                     <div style={{fontSize:11,color:"#666c84"}}>基於最新期權流 + 暗池數據</div>
                   </div>
                   <div>{renderAiCards(aiResult)}</div>
                   {/* 快速新增提醒按鈕 */}
                   <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #222334"}}>
-                    <div style={{fontSize:12,color:"#6a7090",marginBottom:8}}>快速新增提醒：</div>
+                    <div style={{fontSize:12,color:"#444444",marginBottom:8}}>快速新增提醒：</div>
                     <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                       {["1天後複查","3天後操作","1週後檢視","財報前提醒（7天）"].map((label,i)=>{
                         const days=[1,3,7,7][i];
                         return(
                           <div key={label} onClick={()=>addReminder(`${reportTitle||"研究報告"}：${label}`,days)}
-                            style={{padding:"5px 12px",background:"#ffa72610",border:"1px solid #ffa72625",
-                              borderRadius:5,cursor:"pointer",fontSize:12,color:"#ffa726"}}>
+                            style={{padding:"5px 12px",background:"#d9770610",border:"1px solid #ffa72625",
+                              borderRadius:5,cursor:"pointer",fontSize:12,color:"#d97706"}}>
                             🔔 {label}
                           </div>
                         );
@@ -1955,17 +1958,17 @@ function App(){
                   <div style={{fontSize:13,marginTop:8,color:"#525870"}}>分析完成後會自動儲存</div>
                 </div>
               ):(
-                <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:12,padding:20}}>
+                <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:6,padding:20}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                    <div style={{fontSize:13,color:"#6a7090"}}>已儲存報告（{reports.length}份）</div>
+                    <div style={{fontSize:13,color:"#444444"}}>已儲存報告（{reports.length}份）</div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       {["全部","財報","總經","技術","產業","期權","其他"].map(function(c){
                         return(
                           <div key={c} onClick={()=>setReportCat(c)}
                             style={{padding:"3px 10px",borderRadius:4,cursor:"pointer",fontSize:12,
-                              background:reportCat===c?"#ffa72625":"#ffffff08",
-                              border:"1px solid "+(reportCat===c?"#ffa72650":"#ffffff10"),
-                              color:reportCat===c?"#ffa726":"#ffffff40",fontWeight:reportCat===c?700:400}}>
+                              background:reportCat===c?"#d9770620":"#ffffff08",
+                              border:"1px solid "+(reportCat===c?"#d9770650":"#ffffff10"),
+                              color:reportCat===c?"#d97706":"#ffffff40",fontWeight:reportCat===c?700:400}}>
                             {c}
                             {c!=="全部"&&<span style={{marginLeft:3,fontSize:10,color:"#7a809a"}}>({reports.filter(function(x){return (x.category||"其他")===c;}).length})</span>}
                           </div>
@@ -1977,26 +1980,26 @@ function App(){
                     {reports.slice().sort(function(a,b){return b.ts-a.ts;}).filter(function(r){return reportCat==="全部"||(r.category||"其他")===reportCat;}).map(r=>(
                       <div key={r.id}
                         style={{background:selectedReport?.id===r.id?"#0b0b0e":"#0f0f14",
-                          border:`1px solid ${selectedReport?.id===r.id?"#ffa72630":"#ffffff08"}`,
-                          borderRadius:9,padding:"14px 16px",cursor:"pointer",transition:"all .15s"}}
+                          border:`1px solid ${selectedReport?.id===r.id?"#d9770630":"#ffffff08"}`,
+                          borderRadius:5,padding:"14px 16px",cursor:"pointer",transition:"all .15s"}}
                         onClick={()=>setSelectedReport(selectedReport?.id===r.id?null:r)}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
                           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <div style={{fontSize:15,fontWeight:600,color:"#f0f0f5"}}>{r.title}</div>
+                            <div style={{fontSize:15,fontWeight:600,color:"#ffffff"}}>{r.title}</div>
                             {r.category&&r.category!=="其他"&&(
                               <span style={{fontSize:10,padding:"2px 7px",borderRadius:3,
-                                background:({財報:"#29b6f620",總經:"#ab47bc20",技術:"#ffa72620",產業:"#00e5a020",期權:"#ff4d6d20"})[r.category]||"#ffffff10",
-                                color:({財報:"#29b6f6",總經:"#ab47bc",技術:"#ffa726",產業:"#00e5a0",期權:"#ff4d6d"})[r.category]||"#ffffff50"}}>
+                                background:({財報:"#29b6f620",總經:"#ab47bc20",技術:"#d9770620",產業:"#00e5a020",期權:"#ff4d6d20"})[r.category]||"#ffffff10",
+                                color:({財報:"#3b82f6",總經:"#7c3aed",技術:"#d97706",產業:"#10b981",期權:"#ef4444"})[r.category]||"#ffffff50"}}>
                                 {r.category}
                               </span>
                             )}
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            {r.aiAnalysis&&<span style={{fontSize:11,color:"#00e5a060",background:"#00e5a010",padding:"2px 8px",borderRadius:3}}>已分析</span>}
-                            <span style={{fontSize:12,color:"#ffa726",background:"#ffa72615",padding:"2px 8px",borderRadius:3,fontWeight:600}}>
+                            {r.aiAnalysis&&<span style={{fontSize:11,color:"#10b98150",background:"#10b98110",padding:"2px 8px",borderRadius:3}}>已分析</span>}
+                            <span style={{fontSize:12,color:"#d97706",background:"#d9770612",padding:"2px 8px",borderRadius:3,fontWeight:600}}>
                               📅 {r.timeStr||new Date(r.ts).toLocaleString("zh-TW")}
                             </span>
-                            <span style={{fontSize:11,color:"#6a7090"}}>
+                            <span style={{fontSize:11,color:"#444444"}}>
                               （{Math.floor((Date.now()-r.ts)/86400000)}天前）
                             </span>
                             <span onClick={e=>{e.stopPropagation();setReports(prev=>prev.filter(x=>x.id!==r.id));}}
@@ -2005,14 +2008,14 @@ function App(){
                         </div>
                         {selectedReport?.id===r.id&&(
                           <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #222334"}}>
-                            <div style={{fontSize:16,color:"#8890a8",lineHeight:1.9,marginBottom:r.aiAnalysis?14:0,
+                            <div style={{fontSize:16,color:"#666666",lineHeight:1.9,marginBottom:r.aiAnalysis?14:0,
                               maxHeight:150,overflow:"auto",whiteSpace:"pre-wrap"}}>{r.content}</div>
                             {r.aiAnalysis&&(
                               <>
                                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                                <div style={{fontSize:12,color:"#00e5a0"}}>⚡ AI 分析</div>
+                                <div style={{fontSize:12,color:"#10b981"}}>⚡ AI 分析</div>
                                 <div onClick={e=>{e.stopPropagation();setSelectedReport(null);setReportInput(r.content);setReportTitle(r.title+" [驗證]");analyzeReport(r.content,r);}}
-                                  style={{fontSize:11,color:"#ffa726",background:"#ffa72615",border:"1px solid #ffa72630",
+                                  style={{fontSize:11,color:"#d97706",background:"#d9770612",border:"1px solid #ffa72630",
                                     padding:"3px 10px",borderRadius:4,cursor:"pointer"}}>
                                   🔄 重新驗證
                                 </div>
@@ -2023,8 +2026,8 @@ function App(){
                                     const days=[1,3,7][i];
                                     return(
                                       <div key={label} onClick={e=>{e.stopPropagation();addReminder(`${r.title}：${label}`,days);}}
-                                        style={{padding:"4px 10px",background:"#ffa72610",border:"1px solid #ffa72625",
-                                          borderRadius:5,cursor:"pointer",fontSize:12,color:"#ffa726"}}>
+                                        style={{padding:"4px 10px",background:"#d9770610",border:"1px solid #ffa72625",
+                                          borderRadius:5,cursor:"pointer",fontSize:12,color:"#d97706"}}>
                                         🔔 {label}
                                       </div>
                                     );
@@ -2050,16 +2053,16 @@ function App(){
       {loginOpen&&(
         <div style={{position:"fixed",inset:0,background:"#000000cc",zIndex:9999,
           display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"#1c1d26",border:"1px solid #2e3048",borderRadius:14,
-            padding:"36px 32px",width:360,boxShadow:"0 20px 60px #000"}}>
+          <div style={{background:"#161616",border:"1px solid #2e3048",borderRadius:14,
+            padding:"36px 32px",width:360,boxShadow:"0 8px 24px #000000cc"}}>
             {/* Logo */}
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:24}}>
-              <div style={{width:36,height:36,borderRadius:9,
+              <div style={{width:36,height:36,borderRadius:5,
                 background:"linear-gradient(135deg,#ffa726,#ff6d00)",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:900,color:"#000"}}>D</div>
               <div>
-                <div style={{fontFamily:"'Syne',sans-serif",fontSize:14,fontWeight:900,color:"#f0f0f5"}}>DONDONHAPPY</div>
-                <div style={{fontSize:10,color:"#6a7090",letterSpacing:1.5}}>期權 · 量化 · 暗池</div>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:14,fontWeight:900,color:"#ffffff"}}>DONDONHAPPY</div>
+                <div style={{fontSize:10,color:"#444444",letterSpacing:1.5}}>期權 · 量化 · 暗池</div>
               </div>
             </div>
 
@@ -2068,9 +2071,9 @@ function App(){
               {["login","setup"].map(m=>(
                 <div key={m} onClick={()=>{setLoginMode(m);setLoginErr("");}}
                   style={{flex:1,padding:"7px",borderRadius:6,cursor:"pointer",textAlign:"center",fontSize:13,
-                    background:loginMode===m?"#ffa72620":"#ffffff08",
-                    border:`1px solid ${loginMode===m?"#ffa72650":"#ffffff10"}`,
-                    color:loginMode===m?"#ffa726":"#ffffff40",fontWeight:loginMode===m?700:400}}>
+                    background:loginMode===m?"#d9770620":"#ffffff08",
+                    border:`1px solid ${loginMode===m?"#d9770650":"#ffffff10"}`,
+                    color:loginMode===m?"#d97706":"#ffffff40",fontWeight:loginMode===m?700:400}}>
                   {m==="login"?"🔐 登入":"⚙️ 首次設定"}
                 </div>
               ))}
@@ -2078,41 +2081,41 @@ function App(){
 
             {loginMode==="login"?(
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                <div style={{fontSize:12,color:"#7880a0"}}>輸入你設定的密碼解鎖 UW API 金鑰</div>
+                <div style={{fontSize:12,color:"#555555"}}>輸入你設定的密碼解鎖 UW API 金鑰</div>
                 <input
                   type="password" value={loginPwd}
                   onChange={e=>setLoginPwd(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&handleLogin()}
                   placeholder="密碼" autoFocus
-                  style={{padding:"10px 12px",fontSize:14,borderRadius:7,
-                    background:"#0a0a0d",border:"1px solid #ffffff20",color:"#f0f0f5"}}/>
+                  style={{padding:"10px 12px",fontSize:14,borderRadius:4,
+                    background:"#0a0a0d",border:"1px solid #ffffff20",color:"#ffffff"}}/>
                 <div onClick={handleLogin}
-                  style={{padding:"11px",borderRadius:7,cursor:"pointer",textAlign:"center",
-                    background:loginLoading?"#ffffff10":"#ffa72625",
-                    border:"1px solid #ffa72650",fontSize:14,color:"#ffa726",fontWeight:700}}>
+                  style={{padding:"11px",borderRadius:4,cursor:"pointer",textAlign:"center",
+                    background:loginLoading?"#ffffff10":"#d9770620",
+                    border:"1px solid #ffa72650",fontSize:14,color:"#d97706",fontWeight:700}}>
                   {loginLoading?"解密中…":"登入"}
                 </div>
               </div>
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                <div style={{fontSize:12,color:"#7880a0"}}>設定一組密碼保護你的 UW API 金鑰，儲存於雲端</div>
+                <div style={{fontSize:12,color:"#555555"}}>設定一組密碼保護你的 UW API 金鑰，儲存於雲端</div>
                 <input
                   type="text" value={setupKey}
                   onChange={e=>setSetupKey(e.target.value)}
                   placeholder="UW API 金鑰 (UUID 格式)"
-                  style={{padding:"10px 12px",fontSize:13,borderRadius:7,
-                    background:"#0a0a0d",border:"1px solid #ffffff20",color:"#f0f0f5"}}/>
+                  style={{padding:"10px 12px",fontSize:13,borderRadius:4,
+                    background:"#0a0a0d",border:"1px solid #ffffff20",color:"#ffffff"}}/>
                 <input
                   type="password" value={setupPwd}
                   onChange={e=>setSetupPwd(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&handleSetup()}
                   placeholder="設定密碼（至少 6 字元）"
-                  style={{padding:"10px 12px",fontSize:14,borderRadius:7,
-                    background:"#0a0a0d",border:"1px solid #ffffff20",color:"#f0f0f5"}}/>
+                  style={{padding:"10px 12px",fontSize:14,borderRadius:4,
+                    background:"#0a0a0d",border:"1px solid #ffffff20",color:"#ffffff"}}/>
                 <div onClick={handleSetup}
-                  style={{padding:"11px",borderRadius:7,cursor:"pointer",textAlign:"center",
-                    background:loginLoading?"#ffffff10":"#ffa72625",
-                    border:"1px solid #ffa72650",fontSize:14,color:"#ffa726",fontWeight:700}}>
+                  style={{padding:"11px",borderRadius:4,cursor:"pointer",textAlign:"center",
+                    background:loginLoading?"#ffffff10":"#d9770620",
+                    border:"1px solid #ffa72650",fontSize:14,color:"#d97706",fontWeight:700}}>
                   {loginLoading?"儲存中…":"加密儲存金鑰"}
                 </div>
               </div>
@@ -2120,9 +2123,9 @@ function App(){
 
             {loginErr&&(
               <div style={{marginTop:12,padding:"8px 12px",borderRadius:6,fontSize:12,
-                background:loginErr.startsWith("✅")?"#00e5a010":"#ff4d6d10",
-                border:`1px solid ${loginErr.startsWith("✅")?"#00e5a030":"#ff4d6d30"}`,
-                color:loginErr.startsWith("✅")?"#00e5a0":"#ff4d6d"}}>
+                background:loginErr.startsWith("✅")?"#10b98110":"#ff4d6d10",
+                border:`1px solid ${loginErr.startsWith("✅")?"#10b98130":"#ef444430"}`,
+                color:loginErr.startsWith("✅")?"#10b981":"#ef4444"}}>
                 {loginErr}
               </div>
             )}
