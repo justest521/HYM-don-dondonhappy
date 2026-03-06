@@ -591,6 +591,7 @@ function App(){
 
   // flow filters
   const [fFilter,setFFilter]  = useState("全部");
+  const [reportCat,setReportCat] = useState("全部");
 
   // ── 研究報告 ──
   const [reports,setReports]       = useState(()=>{
@@ -879,6 +880,26 @@ function App(){
       var data = await resp.json();
       var text = (data&&data.result)||"分析失敗，請重試";
       setAiResult(text);
+      // ── 自動儲存 ──
+      if(!existingReport && reportInput.trim()){
+        var now2 = new Date();
+        var timeStr2 = now2.toLocaleString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+        // 自動分類：從報告文字判斷類別
+        var cat = "其他";
+        var rt = reportText.toLowerCase();
+        if(/財報|earnings|revenue|eps|q[1-4]/.test(rt)) cat = "財報";
+        else if(/fed|fomc|利率|升息|降息|inflation|通膨/.test(rt)) cat = "總經";
+        else if(/技術分析|support|resistance|突破|ma|rsi|macd|k線/.test(rt)) cat = "技術";
+        else if(/產業|sector|晶片|ai|半導體|cloud|藥|生技/.test(rt)) cat = "產業";
+        else if(/期權|option|call|put|iv|delta|gamma/.test(rt)) cat = "期權";
+        var autoTitle = reportTitle.trim()||(cat+"研究 "+timeStr2);
+        var newR = {
+          id:Date.now(), ts:Date.now(), timeStr:timeStr2,
+          title:autoTitle, category:cat,
+          content:reportInput.trim(), aiAnalysis:text
+        };
+        setReports(function(prev){ return [newR,...prev]; });
+      }
     }catch(e){
       setAiResult("AI 分析失敗："+e.message);
     }
@@ -888,11 +909,19 @@ function App(){
     if(!reportInput.trim())return;
     const now = new Date();
     const timeStr = now.toLocaleString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+    var rt2 = reportInput.trim().toLowerCase();
+    var cat2 = "其他";
+    if(/財報|earnings|revenue|eps|q[1-4]/.test(rt2)) cat2="財報";
+    else if(/fed|fomc|利率|升息|降息|inflation|通膨/.test(rt2)) cat2="總經";
+    else if(/技術分析|support|resistance|突破|ma|rsi|macd|k線/.test(rt2)) cat2="技術";
+    else if(/產業|sector|晶片|ai|半導體|cloud|藥|生技/.test(rt2)) cat2="產業";
+    else if(/期權|option|call|put|iv|delta|gamma/.test(rt2)) cat2="期權";
     const r={
       id:Date.now(),
       ts:Date.now(),
       timeStr:timeStr,
       title:reportTitle.trim()||"研究報告 "+timeStr,
+      category:cat2,
       content:reportInput.trim(),
       aiAnalysis:aiResult,
     };
@@ -1573,18 +1602,41 @@ function App(){
               {/* 已儲存報告列表 */}
               {reports.length>0&&(
                 <div style={{background:"#131317",border:"1px solid #ffffff0c",borderRadius:12,padding:20}}>
-                  <div style={{fontSize:13,color:"#ffffff35",letterSpacing:1,marginBottom:14}}>
-                    已儲存報告（{reports.length}份，保留6個月）
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+                    <div style={{fontSize:13,color:"#ffffff35"}}>已儲存報告（{reports.length}份）</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {["全部","財報","總經","技術","產業","期權","其他"].map(function(c){
+                        return(
+                          <div key={c} onClick={()=>setReportCat(c)}
+                            style={{padding:"3px 10px",borderRadius:4,cursor:"pointer",fontSize:12,
+                              background:reportCat===c?"#ffa72625":"#ffffff08",
+                              border:"1px solid "+(reportCat===c?"#ffa72650":"#ffffff10"),
+                              color:reportCat===c?"#ffa726":"#ffffff40",fontWeight:reportCat===c?700:400}}>
+                            {c}
+                            {c!=="全部"&&<span style={{marginLeft:3,fontSize:10,color:"#ffffff30"}}>({reports.filter(function(x){return (x.category||"其他")===c;}).length})</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {reports.map(r=>(
+                    {reports.filter(function(r){return reportCat==="全部"||(r.category||"其他")===reportCat;}).map(r=>(
                       <div key={r.id}
                         style={{background:selectedReport?.id===r.id?"#0b0b0e":"#0f0f14",
                           border:`1px solid ${selectedReport?.id===r.id?"#ffa72630":"#ffffff08"}`,
                           borderRadius:9,padding:"14px 16px",cursor:"pointer",transition:"all .15s"}}
                         onClick={()=>setSelectedReport(selectedReport?.id===r.id?null:r)}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
-                          <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{r.title}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <div style={{fontSize:15,fontWeight:600,color:"#fff"}}>{r.title}</div>
+                            {r.category&&r.category!=="其他"&&(
+                              <span style={{fontSize:10,padding:"2px 7px",borderRadius:3,
+                                background:({財報:"#29b6f620",總經:"#ab47bc20",技術:"#ffa72620",產業:"#00e5a020",期權:"#ff4d6d20"})[r.category]||"#ffffff10",
+                                color:({財報:"#29b6f6",總經:"#ab47bc",技術:"#ffa726",產業:"#00e5a0",期權:"#ff4d6d"})[r.category]||"#ffffff50"}}>
+                                {r.category}
+                              </span>
+                            )}
+                          </div>
                           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                             {r.aiAnalysis&&<span style={{fontSize:11,color:"#00e5a060",background:"#00e5a010",padding:"2px 8px",borderRadius:3}}>已分析</span>}
                             <span style={{fontSize:12,color:"#ffa726",background:"#ffa72615",padding:"2px 8px",borderRadius:3,fontWeight:600}}>
