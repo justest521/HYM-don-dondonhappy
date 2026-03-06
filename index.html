@@ -889,11 +889,14 @@ function App(){
       var nowStr = now.toLocaleString("zh-TW");
 
       // ── 即時期權流 & 暗池 ──
+      var todayStr = now.toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"});
       var flowLines = flow.slice(0,15).map(function(f){
-        return [f.time,f.sym,f.type,"$"+f.strike,f.exp,fmtM(f.prem),f.unusual?"[異常]":"",f.sweep?"[掃單]":""].join(" ");
+        var dateTag = f.date ? new Date(f.date).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}) : todayStr;
+        return ["["+dateTag+"]",f.time,f.sym,f.type,"$"+f.strike,"到期:"+f.exp,fmtM(f.prem),f.unusual?"[異常]":"",f.sweep?"[掃單]":""].filter(Boolean).join(" ");
       }).join(NL);
       var darkLines = dark.slice(0,10).map(function(d){
-        return [d.time,d.sym,d.type,"$"+d.price,fmtM(d.notional),d.side].join(" ");
+        var dateTag = d.date ? new Date(d.date).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}) : todayStr;
+        return ["["+dateTag+"]",d.time,d.sym,d.type,"$"+d.price,fmtM(d.notional),d.side].join(" ");
       }).join(NL);
 
       // ── 3個月歷史快照統計 ──
@@ -924,10 +927,12 @@ function App(){
           }
         });
       });
+      var dateRangeStart = recentSnaps.length ? new Date(recentSnaps[recentSnaps.length-1].ts).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}) : "";
+      var dateRangeEnd = recentSnaps.length ? new Date(recentSnaps[0].ts).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}) : "";
       var histLines = Object.keys(histMap).map(function(sym){
         var h = histMap[sym];
         var bias = h.callPrem > h.putPrem ? "偏多" : h.putPrem > h.callPrem ? "偏空" : "中性";
-        return sym+" 出現"+h.count+"次 CALL溢價:"+fmtM(h.callPrem)+" PUT溢價:"+fmtM(h.putPrem)+" 異常:"+h.unusual+"筆 掃單:"+h.sweep+"筆 機構方向:"+bias;
+        return sym+" 出現"+h.count+"次（"+dateRangeStart+"～"+dateRangeEnd+"）CALL溢價:"+fmtM(h.callPrem)+" PUT溢價:"+fmtM(h.putPrem)+" 異常:"+h.unusual+"筆 掃單:"+h.sweep+"筆 機構方向:"+bias;
       }).join(NL) || "無相關歷史記錄（快照數："+recentSnaps.length+"）";
 
       // ── 舊報告驗證模式 ──
@@ -953,8 +958,8 @@ function App(){
         "【3個月歷史期權流統計】",histLines,"",
         "請依序完成：",
         "1. 【交叉比對】報告提到的股票在即時與歷史期權流/暗池中的機構資金方向是否與報告觀點一致？",
-        "2. 【策略推薦】根據報告觀點＋市場情緒，推薦2-3個期權策略（含具體行使價、到期日）",
-        "3. 【時間點建議】給出具體操作條件",
+        "2. 【策略推薦】根據報告觀點＋市場情緒，推薦2-3個期權策略。每個策略須明確標示：操作日期建議、行使價、到期日（YYYY-MM-DD格式）、建議持有天數",
+        "3. 【時間點建議】給出具體操作時間窗口：進場日期範圍、出場條件、最晚止損日期（均用YYYY-MM-DD標示）",
         existingReport ? "4. 【報告驗證】距原始報告"+Math.floor((Date.now()-(existingReport.ts||Date.now()))/86400000)+"天後，原報告觀點是否被市場數據印證？準確度評估（0-100分）並說明原因。" : "4. 【提醒建議】給出1-2個提醒（格式：[提醒] 條件 | 建議操作）",
         "","⚠️ 每項分析都必須標明分析時間："+nowStr,
         "用繁體中文回答，結構清晰，重點突出。"
