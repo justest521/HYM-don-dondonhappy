@@ -137,7 +137,7 @@ async function uwFetch(key, endpoint) {
 }
 
 async function fetchUWFlow(key,limit=30){
-  const j = await uwFetch(key, `/api/option-trades/flow?limit=${limit}`);
+  const j = await uwFetch(key, `/api/option-trades/flow-alerts?limit=${limit}`);
   if (!j) return null;
   const rows=j?.data??j?.results??[];
   return rows.slice(0,limit).map((f,i)=>({
