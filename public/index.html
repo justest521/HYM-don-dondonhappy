@@ -987,19 +987,30 @@ function App(){
         else if(/產業|sector|晶片|ai|半導體|cloud|藥|生技/.test(rt)) cat = "產業";
         else if(/期權|option|call|put|iv|delta|gamma/.test(rt)) cat = "期權";
 
-        // 自動從文章標題萃取：取第一行非空白文字，去掉 markdown 符號，截40字
+        // 從 AI 分析結果萃取標題：找第一個有意義的行
         var autoTitle = reportTitle.trim();
         if(!autoTitle){
-          var firstLines = reportText.trim().split("\n").map(function(l){return l.trim();}).filter(Boolean);
-          if(firstLines.length>0){
-            var firstLine = firstLines[0]
-              .replace(/^[#*>\-=_~`]+\s*/,"")  // 去 markdown
-              .replace(/\*\*/g,"")
-              .replace(/^\[.+\]\s*/,"")
-              .trim();
-            autoTitle = firstLine.length > 40 ? firstLine.slice(0,40)+"…" : firstLine;
+          // 先嘗試從 AI 結果第一行抓主題
+          var aiLines = text.split("\n").map(function(l){return l.trim().replace(/^#+\s*/,"").replace(/\*\*/g,"").trim();}).filter(Boolean);
+          var titleFromAI = "";
+          for(var ai=0; ai<Math.min(aiLines.length,5); ai++){
+            var al = aiLines[ai];
+            // 跳過太短或只是分類標題的行
+            if(al.length>8 && !/^[1-5][.、]$/.test(al) && !/^【.{1,4}】$/.test(al)){
+              titleFromAI = al.length>45 ? al.slice(0,45)+"…" : al;
+              break;
+            }
           }
-          if(!autoTitle) autoTitle = cat+"研究 "+timeStr2;
+          // 若 AI 結果沒有，從報告本文抓
+          if(!titleFromAI){
+            var firstLines = reportText.trim().split("\n").map(function(l){
+              return l.trim().replace(/^[#*>\-=_~`]+\s*/,"").replace(/\*\*/g,"").replace(/^\[.+\]\s*/,"").trim();
+            }).filter(function(l){ return l.length>6; });
+            titleFromAI = firstLines.length>0 ? (firstLines[0].length>45?firstLines[0].slice(0,45)+"…":firstLines[0]) : "";
+          }
+          // 加上日期前綴讓標題更清楚
+          var datePrefix = now2.toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"});
+          autoTitle = titleFromAI ? "["+datePrefix+"] "+titleFromAI : cat+"研究 "+timeStr2;
         }
         var newR = {
           id:Date.now(), ts:Date.now(), timeStr:timeStr2,
@@ -1026,10 +1037,13 @@ function App(){
     else if(/期權|option|call|put|iv|delta|gamma/.test(rt2)) cat2="期權";
     var manualTitle = reportTitle.trim();
     if(!manualTitle){
-      var fl = reportInput.trim().split("\n").map(function(l){return l.trim();}).filter(Boolean);
+      var fl = reportInput.trim().split("\n").map(function(l){
+        return l.trim().replace(/^[#*>\-=_~`]+\s*/,"").replace(/\*\*/g,"").replace(/^\[.+\]\s*/,"").trim();
+      }).filter(function(l){ return l.length>6; });
       if(fl.length>0){
-        var fl0 = fl[0].replace(/^[#*>\-=_~`]+\s*/,"").replace(/\*\*/g,"").replace(/^\[.+\]\s*/,"").trim();
-        manualTitle = fl0.length>40 ? fl0.slice(0,40)+"…" : fl0;
+        var fl0 = fl[0];
+        var datePrefix2 = now.toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"});
+        manualTitle = "["+datePrefix2+"] "+(fl0.length>42 ? fl0.slice(0,42)+"…" : fl0);
       }
       if(!manualTitle) manualTitle = "研究報告 "+timeStr;
     }
