@@ -594,6 +594,8 @@ function App(){
   const [reportCat,setReportCat] = useState("全部");
   const [researchTab,setResearchTab] = useState("新分析");
   const [remindersOpen,setRemindersOpen] = useState(false);
+  const [editingReportId,setEditingReportId] = useState(null);
+  const [editingTitle,setEditingTitle] = useState("");
 
   // ── 研究報告 ──
   const [reports,setReports]       = useState(()=>{
@@ -1209,6 +1211,7 @@ function App(){
   input,textarea{outline:none}
   input::placeholder,textarea::placeholder{color:#444}
   button,input,textarea,select{font-family:inherit}
+  .tr:hover .edit-btn{opacity:1!important}
 `}</style>
 
       {/* ════════════════ 側欄 ════════════════ */}
@@ -1997,7 +2000,31 @@ function App(){
                         onClick={()=>setSelectedReport(selectedReport?.id===r.id?null:r)}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
                           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <div style={{fontSize:15,fontWeight:600,color:"#ffffff"}}>{r.title}</div>
+                            {editingReportId===r.id?(
+                              <div style={{display:"flex",alignItems:"center",gap:6,flex:1}} onClick={e=>e.stopPropagation()}>
+                                <input value={editingTitle} onChange={e=>setEditingTitle(e.target.value)}
+                                  onKeyDown={e=>{
+                                    if(e.key==="Enter"){setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}
+                                    if(e.key==="Escape"){setEditingReportId(null);}
+                                  }}
+                                  autoFocus
+                                  style={{flex:1,background:"#1a1a1a",border:"1px solid #d97706",borderRadius:4,
+                                    padding:"4px 8px",fontSize:14,color:"#fff",minWidth:200}}/>
+                                <span onClick={()=>{setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}}
+                                  style={{fontSize:12,color:"#10b981",cursor:"pointer",padding:"2px 8px",
+                                    background:"#10b98115",border:"1px solid #10b98140",borderRadius:4}}>✓</span>
+                                <span onClick={()=>setEditingReportId(null)}
+                                  style={{fontSize:12,color:"#666",cursor:"pointer",padding:"2px 6px"}}>✕</span>
+                              </div>
+                            ):(
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <div style={{fontSize:15,fontWeight:600,color:"#ffffff"}}>{r.title}</div>
+                                <span onClick={e=>{e.stopPropagation();setEditingReportId(r.id);setEditingTitle(r.title);}}
+                                  style={{fontSize:11,color:"#444",cursor:"pointer",padding:"1px 5px",
+                                    borderRadius:3,border:"1px solid #333",opacity:0,transition:"opacity .15s"}}
+                                  className="edit-btn">✎</span>
+                              </div>
+                            )}
                             {r.category&&r.category!=="其他"&&(
                               <span style={{fontSize:10,padding:"2px 7px",borderRadius:3,
                                 background:({財報:"#29b6f620",總經:"#ab47bc20",技術:"#d9770620",產業:"#00e5a020",期權:"#ff4d6d20"})[r.category]||"#ffffff10",
