@@ -1808,28 +1808,75 @@ function App(){
                 })}
               </div>
 
-              {/* 提醒卡片 - 兩個 tab 都顯示 */}
+              {/* 提醒鈴鐺 - 兩個 tab 都顯示 */}
+              {(()=>{
+                var pending = reminders.filter(r=>!r.fired);
+                return(
+                  <div style={{display:"flex",justifyContent:"flex-end",position:"relative"}}>
+                    {/* 鈴鐺按鈕 */}
+                    <div style={{position:"relative",display:"inline-block"}}>
+                      <div onClick={()=>setRemindersOpen(v=>!v)}
+                        style={{width:40,height:40,borderRadius:9,cursor:"pointer",
+                          background:remindersOpen?"#ffa72625":"#1e1f2a",
+                          border:"1px solid "+(pending.length>0?"#ffa72650":"#252738"),
+                          display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,
+                          boxShadow:pending.length>0?"0 0 12px #ffa72630":"none",
+                          transition:"all .15s"}}>
+                        🔔
+                      </div>
+                      {pending.length>0&&(
+                        <div style={{position:"absolute",top:-5,right:-5,minWidth:18,height:18,
+                          borderRadius:9,background:"#ffa726",color:"#000",
+                          fontSize:10,fontWeight:700,display:"flex",alignItems:"center",
+                          justifyContent:"center",padding:"0 3px"}}>
+                          {pending.length}
+                        </div>
+                      )}
+                      {remindersOpen&&(
+                        <div style={{position:"absolute",right:0,top:48,width:320,zIndex:300,
+                          background:"#1a1b24",border:"1px solid #252738",borderRadius:12,
+                          boxShadow:"0 8px 32px #00000070"}}>
+                          <div style={{padding:"10px 14px",borderBottom:"1px solid #222334",
+                            display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                            <span style={{fontSize:13,color:"#ffa726",fontWeight:700}}>
+                              🔔 操作提醒（{pending.length}）
+                            </span>
+                            <span onClick={()=>setRemindersOpen(false)}
+                              style={{color:"#ffffff30",cursor:"pointer",fontSize:18,lineHeight:1}}>×</span>
+                          </div>
+                          {pending.length===0?(
+                            <div style={{padding:24,textAlign:"center",color:"#ffffff25",fontSize:13}}>
+                              無待提醒事項
+                            </div>
+                          ):(
+                            <div style={{maxHeight:320,overflow:"auto"}}>
+                              {pending.map(r=>(
+                                <div key={r.id} style={{padding:"10px 14px",
+                                  borderBottom:"1px solid #ffffff06",
+                                  display:"flex",alignItems:"flex-start",gap:10}}>
+                                  <span style={{fontSize:14,marginTop:2,flexShrink:0}}>🔔</span>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:13,color:"#e8e9f0",lineHeight:1.6}}>{r.msg}</div>
+                                    <div style={{fontSize:11,color:"#6a7090",marginTop:3}}>
+                                      {new Date(r.at).toLocaleString("zh-TW")}
+                                    </div>
+                                  </div>
+                                  <div onClick={()=>setReminders(prev=>prev.filter(x=>x.id!==r.id))}
+                                    style={{color:"#ffffff25",cursor:"pointer",fontSize:18,
+                                      padding:"0 2px",flexShrink:0,lineHeight:1}}>×</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {researchTab==="新分析"&&(
               <React.Fragment>
-              {reminders.filter(r=>!r.fired).length>0&&(
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {reminders.filter(r=>!r.fired).map(r=>(
-                    <div key={r.id} style={{background:"#ffa72610",border:"1px solid #ffa72630",borderRadius:10,
-                      padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
-                      <span style={{fontSize:18}}>🔔</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:14,color:"#ffa726",fontWeight:600,marginBottom:2}}>操作提醒</div>
-                        <div style={{fontSize:13,color:"#9a9cb0"}}>{r.msg}</div>
-                        <div style={{fontSize:11,color:"#6a7090",marginTop:3}}>
-                          提醒時間：{new Date(r.at).toLocaleString("zh-TW")}
-                        </div>
-                      </div>
-                      <div onClick={()=>dismissReminder(r.id)} style={{cursor:"pointer",color:"#7a809a",fontSize:18,padding:"0 4px"}}>×</div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               {/* 輸入區 */}
               <div style={{background:"#1e1f2a",border:"1px solid #252738",borderRadius:12,padding:20}}>
