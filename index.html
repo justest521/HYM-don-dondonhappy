@@ -380,7 +380,7 @@ function App(){
   const [tvInput,setTvInput]  = useState("NASDAQ:NVDA");
 
   // API state
-  const [uwKey,setUwKey]      = useState("");
+  const [uwKey,setUwKey]      = useState(()=>localStorage.getItem('ddh_uw_key')||'');
   const [showKey,setShowKey]  = useState(false);
   const [uwOk,setUwOk]        = useState(null);   // null/true/false
   const [yfOk,setYfOk]        = useState(null);
@@ -433,7 +433,12 @@ function App(){
     setUwLoading(false);
   },[]);
 
-  useEffect(()=>{if(uwKey)loadUW(uwKey);},[uwKey]);
+  useEffect(()=>{
+    if(uwKey){
+      localStorage.setItem('ddh_uw_key', uwKey);
+      loadUW(uwKey);
+    }
+  },[uwKey]);
   useEffect(()=>{
     if(!uwKey)return;
     const id=setInterval(()=>loadUW(uwKey),15000);
