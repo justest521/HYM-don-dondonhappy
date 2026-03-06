@@ -981,7 +981,21 @@ function App(){
         else if(/技術分析|support|resistance|突破|ma|rsi|macd|k線/.test(rt)) cat = "技術";
         else if(/產業|sector|晶片|ai|半導體|cloud|藥|生技/.test(rt)) cat = "產業";
         else if(/期權|option|call|put|iv|delta|gamma/.test(rt)) cat = "期權";
-        var autoTitle = reportTitle.trim()||(cat+"研究 "+timeStr2);
+
+        // 自動從文章標題萃取：取第一行非空白文字，去掉 markdown 符號，截40字
+        var autoTitle = reportTitle.trim();
+        if(!autoTitle){
+          var firstLines = reportText.trim().split("\n").map(function(l){return l.trim();}).filter(Boolean);
+          if(firstLines.length>0){
+            var firstLine = firstLines[0]
+              .replace(/^[#*>\-=_~`]+\s*/,"")  // 去 markdown
+              .replace(/\*\*/g,"")
+              .replace(/^\[.+\]\s*/,"")
+              .trim();
+            autoTitle = firstLine.length > 40 ? firstLine.slice(0,40)+"…" : firstLine;
+          }
+          if(!autoTitle) autoTitle = cat+"研究 "+timeStr2;
+        }
         var newR = {
           id:Date.now(), ts:Date.now(), timeStr:timeStr2,
           title:autoTitle, category:cat,
@@ -1005,11 +1019,20 @@ function App(){
     else if(/技術分析|support|resistance|突破|ma|rsi|macd|k線/.test(rt2)) cat2="技術";
     else if(/產業|sector|晶片|ai|半導體|cloud|藥|生技/.test(rt2)) cat2="產業";
     else if(/期權|option|call|put|iv|delta|gamma/.test(rt2)) cat2="期權";
+    var manualTitle = reportTitle.trim();
+    if(!manualTitle){
+      var fl = reportInput.trim().split("\n").map(function(l){return l.trim();}).filter(Boolean);
+      if(fl.length>0){
+        var fl0 = fl[0].replace(/^[#*>\-=_~`]+\s*/,"").replace(/\*\*/g,"").replace(/^\[.+\]\s*/,"").trim();
+        manualTitle = fl0.length>40 ? fl0.slice(0,40)+"…" : fl0;
+      }
+      if(!manualTitle) manualTitle = "研究報告 "+timeStr;
+    }
     const r={
       id:Date.now(),
       ts:Date.now(),
       timeStr:timeStr,
-      title:reportTitle.trim()||"研究報告 "+timeStr,
+      title:manualTitle,
       category:cat2,
       content:reportInput.trim(),
       aiAnalysis:aiResult,
