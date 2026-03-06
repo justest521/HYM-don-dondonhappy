@@ -792,6 +792,73 @@ function App(){
   },[reminders]);
 
   /* ── AI 分析研究報告 ── */
+  // ── AI 結果解析成卡片 ──
+  const renderAiCards = (text) => {
+    if(!text) return null;
+    // 分割成區塊：以 ## 或數字. 開頭的行作為區塊標題
+    var lines = text.split("\n");
+    var sections = [];
+    var current = null;
+    lines.forEach(function(line){
+      var trimmed = line.trim();
+      // 偵測標題行
+      var isHeader = /^#{1,3}\s/.test(trimmed) || /^[1-5][.、]\s/.test(trimmed) || /^【.+】/.test(trimmed);
+      if(isHeader){
+        if(current) sections.push(current);
+        var title = trimmed.replace(/^#{1,3}\s+/,"").replace(/^[1-5][.、]\s+/,"").replace(/\*\*/g,"");
+        var icon = "📋";
+        if(/交叉|比對|信號|機構/.test(title)) icon="🔍";
+        else if(/策略|推薦|建議/.test(title)) icon="⚡";
+        else if(/時間|操作|條件/.test(title)) icon="🕐";
+        else if(/提醒/.test(title)) icon="🔔";
+        else if(/驗證|準確|印證/.test(title)) icon="✅";
+        else if(/風險/.test(title)) icon="⚠️";
+        var color = "#ffffff15";
+        if(/交叉|比對/.test(title)) color="#29b6f620";
+        else if(/策略|推薦/.test(title)) color="#00e5a018";
+        else if(/時間|操作/.test(title)) color="#ffa72618";
+        else if(/提醒/.test(title)) color="#ffa72618";
+        else if(/驗證|準確/.test(title)) color="#ab47bc18";
+        else if(/風險/.test(title)) color="#ff4d6d18";
+        current = {title:title, icon:icon, color:color, lines:[]};
+      } else if(trimmed){
+        if(!current) current={title:"分析摘要",icon:"📋",color:"#ffffff10",lines:[]};
+        current.lines.push(trimmed);
+      }
+    });
+    if(current && current.lines.length) sections.push(current);
+    if(!sections.length) return React.createElement("div",{style:{fontSize:14,color:"#ffffffcc",lineHeight:2,whiteSpace:"pre-wrap"}},text);
+
+    return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:12}},
+      sections.map(function(sec, si){
+        return React.createElement("div",{key:si,style:{
+          background:sec.color, border:"1px solid #ffffff10",
+          borderRadius:10, padding:"14px 16px"
+        }},
+          React.createElement("div",{style:{fontSize:13,fontWeight:700,color:"#fff",marginBottom:10,display:"flex",alignItems:"center",gap:6}},
+            React.createElement("span",{style:{fontSize:16}},sec.icon),
+            sec.title
+          ),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+            sec.lines.map(function(line, li){
+              var clean = line.replace(/\*\*/g,"").replace(/^[-•]\s*/,"");
+              var isBullet = /^[-•*]/.test(line) || /^\*\*/.test(line);
+              var isHighlight = /\[提醒\]|建議操作|行使價|到期日/.test(clean);
+              return React.createElement("div",{key:li,style:{
+                fontSize:13, color: isHighlight?"#ffa726":"#ffffffaa",
+                lineHeight:1.8, paddingLeft: isBullet?8:0,
+                borderLeft: isHighlight?"2px solid #ffa72650":"none",
+                paddingTop: isHighlight?2:0, paddingBottom: isHighlight?2:0,
+                background: isHighlight?"#ffa72608":"transparent",
+                borderRadius: isHighlight?4:0
+              }}, clean);
+            })
+          )
+        );
+      })
+    );
+  };
+
   const analyzeReport = async(reportText, existingReport)=>{
     setAiLoading(true); setAiResult(null);
     try{
@@ -1579,7 +1646,7 @@ function App(){
                     <div style={{fontSize:13,color:"#00e5a0",letterSpacing:1,fontWeight:600}}>⚡ AI 分析結果</div>
                     <div style={{fontSize:11,color:"#ffffff25"}}>基於最新期權流 + 暗池數據</div>
                   </div>
-                  <div style={{fontSize:14,color:"#ffffffcc",lineHeight:2,whiteSpace:"pre-wrap"}}>{aiResult}</div>
+                  <div>{renderAiCards(aiResult)}</div>
                   {/* 快速新增提醒按鈕 */}
                   <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #ffffff08"}}>
                     <div style={{fontSize:12,color:"#ffffff35",marginBottom:8}}>快速新增提醒：</div>
@@ -1663,7 +1730,7 @@ function App(){
                                   🔄 重新驗證
                                 </div>
                               </div>
-                                <div style={{fontSize:13,color:"#ffffffcc",lineHeight:1.9,whiteSpace:"pre-wrap"}}>{r.aiAnalysis}</div>
+                                <div>{renderAiCards(r.aiAnalysis)}</div>
                                 <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
                                   {["1天後複查","3天後操作","1週後檢視"].map((label,i)=>{
                                     const days=[1,3,7][i];
