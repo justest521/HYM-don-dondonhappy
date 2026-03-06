@@ -314,7 +314,7 @@ async function uwFetch(key, endpoint) {
   }
 }
 
-async function fetchUWFlow(key,limit=50){
+async function fetchUWFlow(key,limit=100){
   const j = await uwFetch(key, `/api/option-trades/flow-alerts?limit=${limit}`);
   if (!j) return null;
   const rows=j?.data??j?.results??[];
@@ -356,7 +356,7 @@ async function fetchUWDark(key,limit=50){
 /* ══════════════════════════════════════════════════════════════════════════════
    Mock 備用
 ══════════════════════════════════════════════════════════════════════════════ */
-function mockFlow(n=50){
+function mockFlow(n=100){
   const types=["CALL","PUT"];
   return Array.from({length:n},(_,i)=>{
     const type=types[ri(0,2)];
@@ -559,7 +559,7 @@ function App(){
   const [strats,setStrats]    = useState(STRATS);
   const [equity]              = useState(mockEquity());
   const [positions,setPositions] = useState(mockPositions());
-  const [flow,setFlow]        = useState(mockFlow());
+  const [flow,setFlow]        = useState(mockFlow(100));
   const [dark,setDark]        = useState(mockDark());
   const [sigs,setSigs]        = useState(mockSignals());
   const [tvSym,setTvSym]      = useState("NASDAQ:NVDA");
@@ -660,7 +660,7 @@ function App(){
   const loadUW=useCallback(async(key)=>{
     if(!key||key.length<8)return;
     setUwLoading(true);
-    const [fd,dd]=await Promise.all([fetchUWFlow(key,50),fetchUWDark(key,50)]);
+    const [fd,dd]=await Promise.all([fetchUWFlow(key,100),fetchUWDark(key,100)]);
     if(fd){setFlow(fd);setUwOk(true);}else setUwOk(false);
     if(dd) setDark(dd);
     setUwLoading(false);
@@ -731,7 +731,7 @@ function App(){
       setPnl(p=>({total:p.total+ri(-200,400),day:p.day+ri(-80,150),pct:+(p.pct+rnd(-0.02,0.04)).toFixed(2)}));
       setMetrics(m=>({...m,exp:Math.min(100,Math.max(20,m.exp+rnd(-0.3,0.3)))}));
       setSigs(mockSignals());
-      if(!uwKey){setFlow(mockFlow());setDark(mockDark());}
+      if(!uwKey){setFlow(mockFlow(100));setDark(mockDark());}
     },3000);
     return()=>clearInterval(id);
   },[uwKey]);
@@ -741,10 +741,21 @@ function App(){
   const totalPut =flow.filter(f=>f.type==="PUT").reduce((a,f)=>a+f.prem,0);
   const sentBull =totalCall/(totalCall+totalPut||1)*100;
 
-  const filteredFlow=flow
+  // 先取全部100筆做篩選
+  const allFiltered = flow
     .filter(f=>fFilter==="全部"||(fFilter==="CALL"&&f.type==="CALL")||(fFilter==="PUT"&&f.type==="PUT"))
     .filter(f=>!fUnusual||f.unusual)
+    .slice(0,100);
+
+  // 溢價前20名（固定置頂，即時更新）
+  const top20ids = new Set(
+    [...allFiltered].sort((a,b)=>b.prem-a.prem).slice(0,20).map(f=>f.id||f.time+f.sym)
+  );
+  const top20 = allFiltered.filter(f=>top20ids.has(f.id||f.time+f.sym))
+    .sort((a,b)=>b.prem-a.prem);
+  const rest = allFiltered.filter(f=>!top20ids.has(f.id||f.time+f.sym))
     .sort((a,b)=>fSort==="溢價"?b.prem-a.prem:0);
+  const filteredFlow = [...top20, ...rest];
 
   const priceOf=sym=>{
     const p=prices[sym];
@@ -1474,7 +1485,16 @@ function App(){
                   <span>溢價</span><span>量/未平倉</span><span>隱波</span><span>情緒</span><span>交易所</span><span>標記</span>
                 </div>
                 <div style={{maxHeight:"calc(100vh - 290px)",overflow:"auto"}}>
-                  {filteredFlow.map(f=>(
+                  {/* 溢價前20名置頂區 */}
+                  {top20.length>0&&(
+                    <div style={{padding:"4px 12px 6px",fontSize:11,color:"#ffa726",
+                      borderBottom:"1px solid #ffa72620",background:"#ffa72606",
+                      letterSpacing:1,display:"flex",alignItems:"center",gap:6}}>
+                      <span>⚡ 溢價前20名</span>
+                      <span style={{color:"#ffffff30"}}>置頂 · 即時更新</span>
+                    </div>
+                  )}
+                  {filteredFlow.map((f,fi)=>(
                     <div key={f.id} className="tr" style={{display:"grid",
                       gridTemplateColumns:"90px 80px 60px 70px 65px 140px 100px 70px 70px 65px 1fr",
                       padding:"11px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
