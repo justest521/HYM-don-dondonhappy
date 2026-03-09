@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     html,body,#root{height:100%;margin:0;padding:0;background:#0b0b0e}
   </style>
@@ -208,6 +209,60 @@ const sg   = ()    => Math.random()>.5?1:-1;
 const fmt$ = (n,d=0) => (n<0?"-$":"$")+Math.abs(n).toLocaleString("en",{maximumFractionDigits:d});
 const fmtK = n => "$"+(n/1000).toFixed(1)+"K";
 const fmtM = n => n>=1e6?"$"+(n/1e6).toFixed(2)+"M":n>=1e3?"$"+(n/1e3).toFixed(1)+"K":fmt$(n);
+
+/* ── Supabase 雲端儲存 ── */
+const SUPABASE_URL = "https://kzxunbohppykfkaqioqd.supabase.co";
+const SUPABASE_ANON = localStorage.getItem("ddh_supabase_anon") || "";
+var db = null;
+if (SUPABASE_ANON && window.supabase) {
+  try { db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e) { console.warn("Supabase init failed:", e.message); }
+}
+
+async function cloudLoadReports() {
+  if (!db) return null;
+  try {
+    var cutoff = new Date(Date.now() - 180*24*3600*1000).toISOString();
+    var res = await db.from("reports").select("*").gte("created_at", cutoff).order("created_at", { ascending: false }).limit(500);
+    if (res.error) throw res.error;
+    return (res.data || []).map(function(r) {
+      return {
+        id: Number(r.id) || r.id,
+        ts: r.ts || new Date(r.created_at).getTime(),
+        timeStr: r.time_str || "",
+        title: r.title || "",
+        category: r.category || "其他",
+        content: r.content || "",
+        aiAnalysis: r.ai_analysis || null
+      };
+    });
+  } catch(e) { console.warn("cloudLoadReports failed:", e.message); return null; }
+}
+
+async function cloudSaveReport(r) {
+  if (!db) return;
+  try {
+    await db.from("reports").upsert([{
+      id: String(r.id),
+      title: r.title || "",
+      category: r.category || "其他",
+      content: (r.content || "").substring(0, 100000),
+      ai_analysis: (r.aiAnalysis || "").substring(0, 100000),
+      ts: r.ts || Date.now(),
+      time_str: r.timeStr || "",
+      created_at: new Date(r.ts || Date.now()).toISOString()
+    }]);
+  } catch(e) { console.warn("cloudSaveReport failed:", e.message); }
+}
+
+async function cloudDeleteReport(id) {
+  if (!db) return;
+  try { await db.from("reports").delete().eq("id", String(id)); } catch(e) { console.warn("cloudDeleteReport:", e.message); }
+}
+
+async function cloudUpdateTitle(id, title) {
+  if (!db) return;
+  try { await db.from("reports").update({ title: title }).eq("id", String(id)); } catch(e) { console.warn("cloudUpdateTitle:", e.message); }
+}
 const limPct = (u,l) => Math.min(100,(u/l)*100);
 
 const SYMS = ["TSLA","NVDA","AAPL","MSFT","SPY","QQQ","AMZN","META","GOOGL","AMD"];
@@ -607,6 +662,7 @@ function App(){
       return arr.filter(r=>r.ts>cutoff);
     }catch{return[];}
   });
+  const [cloudLoaded,setCloudLoaded] = useState(false);
   const [flowSnaps,setFlowSnaps]   = useState(()=>{
     try{
       const raw=localStorage.getItem("ddh_flowsnaps");
@@ -650,6 +706,23 @@ function App(){
 
   useEffect(()=>{loadPrices();},[]);
   useEffect(()=>{const id=setInterval(loadPrices,60000);return()=>clearInterval(id);},[loadPrices]);
+
+  // ── Supabase 雲端載入報告 ──
+  useEffect(()=>{
+    cloudLoadReports().then(function(cloud){
+      if(!cloud) { setCloudLoaded(true); return; }
+      // 合併雲端和本地：以雲端為主，本地有但雲端沒有的也加入
+      setReports(function(local){
+        var idMap = {};
+        cloud.forEach(function(r){ idMap[r.id]=r; });
+        // 本地有但雲端沒有的，推到雲端
+        var localOnly = local.filter(function(r){ return !idMap[r.id]; });
+        localOnly.forEach(function(r){ cloudSaveReport(r); });
+        return cloud.concat(localOnly);
+      });
+      setCloudLoaded(true);
+    });
+  },[]);
 
   // 自動抓 flow/dark 裡出現的新股票價格
   useEffect(()=>{
@@ -769,7 +842,7 @@ function App(){
     return{price:"$"+p.price.toFixed(2),pct:(chg>=0?"+":"")+cp.toFixed(2)+"%",color:chg>=0?"#10b981":"#ef4444"};
   };
 
-  // 儲存報告
+  // 儲存報告（localStorage 快取）
   useEffect(()=>{
     try{localStorage.setItem("ddh_reports",JSON.stringify(reports));}catch{}
   },[reports]);
@@ -1163,6 +1236,7 @@ function App(){
           content:reportInput.trim(), aiAnalysis:text
         };
         setReports(function(prev){ return [newR,...prev]; });
+        cloudSaveReport(newR);
       }
     }catch(e){
       setAiResult("AI 分析失敗："+e.message);
@@ -1199,6 +1273,7 @@ function App(){
       aiAnalysis:aiResult,
     };
     setReports(prev=>[r,...prev]);
+    cloudSaveReport(r);
     setReportInput(""); setReportTitle(""); setAiResult(null);
   };
 
@@ -1992,7 +2067,7 @@ function App(){
               ):(
                 <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:6,padding:20}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                    <div style={{fontSize:13,color:"#444444"}}>已儲存報告（{reports.length}份）</div>
+                    <div style={{fontSize:13,color:"#444444"}}>已儲存報告（{reports.length}份）{db&&<span style={{fontSize:10,color:"#10b98180",marginLeft:6}}>☁️ 雲端同步</span>}</div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       {["全部","財報","總經","技術","產業","期權","其他"].map(function(c){
                         return(
@@ -2024,13 +2099,13 @@ function App(){
                               <div style={{display:"flex",alignItems:"center",gap:6,flex:1}} onClick={e=>e.stopPropagation()}>
                                 <input value={editingTitle} onChange={e=>setEditingTitle(e.target.value)}
                                   onKeyDown={e=>{
-                                    if(e.key==="Enter"){setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}
+                                    if(e.key==="Enter"){cloudUpdateTitle(r.id,editingTitle);setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}
                                     if(e.key==="Escape"){setEditingReportId(null);}
                                   }}
                                   autoFocus
                                   style={{flex:1,background:"#1a1a1a",border:"1px solid #d97706",borderRadius:4,
                                     padding:"4px 8px",fontSize:14,color:"#fff",minWidth:200}}/>
-                                <span onClick={()=>{setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}}
+                                <span onClick={()=>{cloudUpdateTitle(r.id,editingTitle);setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}}
                                   style={{fontSize:12,color:"#10b981",cursor:"pointer",padding:"2px 8px",
                                     background:"#10b98115",border:"1px solid #10b98140",borderRadius:4}}>✓</span>
                                 <span onClick={()=>setEditingReportId(null)}
@@ -2061,7 +2136,7 @@ function App(){
                             <span style={{fontSize:11,color:"#444444"}}>
                               （{Math.floor((Date.now()-r.ts)/86400000)}天前）
                             </span>
-                            <span onClick={e=>{e.stopPropagation();setReports(prev=>prev.filter(x=>x.id!==r.id));}}
+                            <span onClick={e=>{e.stopPropagation();cloudDeleteReport(r.id);setReports(prev=>prev.filter(x=>x.id!==r.id));}}
                               style={{color:"#666c84",cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</span>
                           </div>
                         </div>
@@ -2190,8 +2265,25 @@ function App(){
             )}
 
             {/* 跳過 */}
+            <div style={{marginTop:16,borderTop:"1px solid #222",paddingTop:14}}>
+              <div style={{fontSize:11,color:"#555",marginBottom:8}}>☁️ Supabase 雲端報告庫（選填）</div>
+              <input
+                type="text"
+                defaultValue={localStorage.getItem("ddh_supabase_anon")||""}
+                placeholder="貼上 Supabase anon key"
+                onBlur={function(e){
+                  var v=e.target.value.trim();
+                  if(v){localStorage.setItem("ddh_supabase_anon",v);window.location.reload();}
+                  else{localStorage.removeItem("ddh_supabase_anon");}
+                }}
+                style={{width:"100%",padding:"8px 10px",fontSize:12,borderRadius:4,
+                  background:"#0a0a0d",border:"1px solid #ffffff15",color:"#aaa",boxSizing:"border-box"}}/>
+              <div style={{fontSize:10,color:db?"#10b981":"#666",marginTop:4}}>
+                {db?"✅ 已連線 Supabase":"未連線 — 報告僅存本機"}
+              </div>
+            </div>
             <div onClick={()=>setLoginOpen(false)}
-              style={{marginTop:16,textAlign:"center",fontSize:12,color:"#666c84",cursor:"pointer"}}>
+              style={{marginTop:12,textAlign:"center",fontSize:12,color:"#666c84",cursor:"pointer"}}>
               略過，使用模擬數據
             </div>
           </div>
