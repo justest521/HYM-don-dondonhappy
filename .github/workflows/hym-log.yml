@@ -1,0 +1,32 @@
+name: HYM Auto Log
+on:
+  push:
+    branches: ['**']
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Push log to HYM Dashboard
+        run: |
+          MSG=$(git log -1 --pretty=%s)
+          FILES=$(git diff-tree --no-commit-id -r --name-only HEAD | wc -l | tr -d ' ')
+          TYPE="update"
+          echo "$MSG" | grep -qiE "^feat|新增|完成|上線" && TYPE="feature"
+          echo "$MSG" | grep -qiE "^fix|修正|修復" && TYPE="bug"
+          echo "$MSG" | grep -qiE "release|里程碑|v[0-9]" && TYPE="milestone"
+          curl -s -X POST "https://kzxunbohppykfkaqioqd.supabase.co/rest/v1/$(
+            case $repo in
+              moto-saas) echo hym_saas_changelog;;
+              HYM-CPO) echo hymmoto_changelog;;
+              dondonhappy) echo quickbuy_changelog;;
+              options-desk) echo trading_changelog;;
+            esac
+          )" \
+            -H "apikey: sb_publishable_4wUaKatN4Ep7rqupZ82RLw_Qq96E-Vn" \
+            -H "Authorization: Bearer sb_publishable_4wUaKatN4Ep7rqupZ82RLw_Qq96E-Vn" \
+            -H "Content-Type: application/json" \
+            -d "{\"action\":\"$TYPE\",\"target_name\":\"$MSG (${FILES} 個檔案)\",\"note\":null}"
+          echo "✅ 推送完成：$MSG"
