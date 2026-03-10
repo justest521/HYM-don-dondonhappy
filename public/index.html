@@ -8,7 +8,13 @@
   <!-- React + ReactDOM + Babel (無需 build 工具，直接瀏覽器執行) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+  // 預設 UW API Key（可在登入介面覆蓋）
+  if(!localStorage.getItem("ddh_uwkey")){
+    localStorage.setItem("ddh_uwkey","d56cdfa6-0ffb-4421-816c-890629220505");
+  }
+</script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     html,body,#root{height:100%;margin:0;padding:0;background:#0b0b0e}
@@ -348,6 +354,43 @@ async function fetchAllPrices(syms) {
   return out;
 }
 
+/* ── UW 期權現價抓取 ── */
+async function fetchOptionPrices(positions, uwKey) {
+  // 從持倉中取出所有期權，按標的分組
+  if(!uwKey) return {};
+  var optPositions = positions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+  if(!optPositions.length) return {};
+  // 取得不重複的標的列表
+  var syms = Array.from(new Set(optPositions.map(function(p){ return p.sym; })));
+  var optPrices = {};
+  for(var i=0; i<syms.length; i++){
+    var sym = syms[i];
+    try{
+      var data = await uwFetch(uwKey, "/api/options/contracts/"+sym);
+      var contracts = data?.data || data?.contracts || [];
+      contracts.forEach(function(c){
+        // UW contract 格式: strike, expiration, option_type, ask, bid, last, mid
+        var strike = String(Math.round(Number(c.strike||c.strike_price||0)));
+        var expRaw = c.expiration||c.expiry||c.expiration_date||"";
+        // 統一格式 YYYY-MM-DD
+        var exp = expRaw.length===10 ? expRaw : "";
+        if(!exp) return;
+        var optType = (c.option_type||c.type||"").toUpperCase();
+        if(optType==="C") optType="CALL";
+        if(optType==="P") optType="PUT";
+        var mid = c.mid_price || ((Number(c.ask||0)+Number(c.bid||0))/2) || Number(c.last||c.last_price||0);
+        if(mid>0){
+          var key = sym+"_"+optType+"_"+strike+"_"+exp;
+          optPrices[key] = {price: mid, bid: Number(c.bid||0), ask: Number(c.ask||0)};
+        }
+      });
+    }catch(e){
+      console.warn("UW optionPrice("+sym+") failed:", e.message);
+    }
+  }
+  return optPrices;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    Unusual Whales API
 ══════════════════════════════════════════════════════════════════════════════ */
@@ -530,7 +573,7 @@ function mockPositions(prices={}){
   });
 }
 function mockEquity(n=90){
-  let v=1000000;
+  let v=75608;
   return Array.from({length:n},(_,i)=>{v+=v*rnd(-0.008,0.013);return{d:i,v:Math.round(v)};});
 }
 
@@ -688,7 +731,9 @@ function App(){
   const [tvInput,setTvInput]  = useState("NASDAQ:NVDA");
 
   // API state
-  const [uwKey,setUwKey]      = useState("");
+  const [uwKey,setUwKey]      = useState(()=>{
+    try{ return localStorage.getItem("ddh_uwkey")||""; }catch(e){ return ""; }
+  });
   const [showKey,setShowKey]  = useState(false);
   const [uwOk,setUwOk]        = useState(null);   // null/true/false
   // 登入系統
@@ -707,9 +752,14 @@ function App(){
 
   // live mock counters
   const [tick,setTick]        = useState(0);
-  const [nav,setNav]          = useState(1_047_832);
-  const [pnl,setPnl]          = useState({total:47832,day:3214,pct:4.82});
-  const [metrics,setMetrics]  = useState({exp:78.4,beta:0.31,sharpe:2.28,wr:63.4,dd:-6.2});
+  const [nav,setNav]          = useState(75_608);
+  const [watchSyms,setWatchSyms] = useState(()=>{
+    try{ var s=localStorage.getItem('ddh_watch'); return s?JSON.parse(s):["TSLA","NVDA","AAPL","MSFT","SPY","QQQ","AMZN","META"]; }
+    catch(e){ return ["TSLA","NVDA","AAPL","MSFT","SPY","QQQ","AMZN","META"]; }
+  });
+  const [watchEdit,setWatchEdit] = useState(null); // index being edited
+  const [pnl,setPnl]          = useState({total:0,day:0,pct:0});
+  const [metrics,setMetrics]  = useState({exp:78.4,beta:0.31,sharpe:null,wr:44.3,dd:null});
 
   // ── 使用者真實持倉 ──
   const [userPositions,setUserPositions] = useState(()=>{
@@ -987,28 +1037,60 @@ function App(){
   const loadPrices=useCallback(async()=>{
     setYfLoading(true);
     try{
-      const p=await fetchAllPrices(SYMS);
+      // 合併：固定 SYMS + watchlist + 真實持倉標的
+      var wSyms = [];
+      try{ var ws=localStorage.getItem("ddh_watch"); if(ws) wSyms=JSON.parse(ws); }catch(e){}
+      var posSyms = [];
+      try{ var ps=localStorage.getItem("ddh_positions"); if(ps) posSyms=JSON.parse(ps).map(function(x){return x.sym;}); }catch(e){}
+      var allSyms = Array.from(new Set(SYMS.concat(wSyms).concat(posSyms)));
+      const p=await fetchAllPrices(allSyms);
       const anyReal=Object.values(p).some(v=>v?.price>0);
       setYfOk(anyReal);
       setPrices(p);
+      // 抓期權現價（UW API）
+      var ups = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
+      var savedKey = localStorage.getItem("ddh_uwkey")||"";
+      var optP = {};
+      if(savedKey && ups.length>0){
+        try{ optP = await fetchOptionPrices(ups, savedKey); }catch(e){}
+      }
       // 如果有真實持倉就用真實的，否則 mock
-      setPositions(prev=>{
-        var ups = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
-        if(ups.length===0) return mockPositions(p);
-        return ups.map(function(u){
-          var live = p[u.sym];
-          var cur  = live?.price || Number(u.entry);
-          var qty  = Number(u.qty)||0;
-          var entry= Number(u.entry)||0;
-          var pnlAmt= (cur-entry)*qty*(u.side==="空頭"?-1:1);
-          var pct   = entry>0?((cur-entry)/entry*100*(u.side==="空頭"?-1:1)):0;
-          return {sym:u.sym,qty:qty,entry:entry.toFixed(2),cur:cur.toFixed(2),
-            pnl:pnlAmt.toFixed(0),pct:pct.toFixed(2),
-            side:u.side||"多頭",strat:u.type||"股票",
-            strike:u.strike,exp:u.exp,note:u.note,live:!!live};
+      if(ups.length===0){
+        setPositions(mockPositions(p));
+      } else {
+        var mapped = ups.map(function(u){
+          var isOpt = (u.type==="CALL"||u.type==="PUT");
+          var optKey = u.sym+"_"+u.type+"_"+u.strike+"_"+u.exp;
+          var optLive = isOpt ? optP[optKey] : null;
+          var stockLive = p[u.sym];
+          // 現價：期權用 UW mid price，股票用 Yahoo
+          var cur = isOpt
+            ? (optLive?.price || Number(u.entry))
+            : (stockLive?.price || Number(u.entry));
+          var qty   = Number(u.qty)||0;
+          var entry = Number(u.entry)||0;
+          var mult  = isOpt ? 100 : 1;
+          // pnl: qty 含方向(空頭為負)，乘以 100(期權)
+          var pnlAmt = (cur - entry) * qty * mult;
+          var pct    = entry>0 ? ((cur-entry)/entry*100) : 0;
+          // 曝險 = abs(qty) × strike(期權)×100 或 abs(qty)×現價(股票)
+          var exposure = isOpt
+            ? (Math.abs(qty) * Number(u.strike||0) * 100)
+            : (Math.abs(qty) * cur);
+          return {
+            sym: u.sym, qty: qty, entry: entry.toFixed(2),
+            cur: cur.toFixed(2), pnl: pnlAmt.toFixed(0),
+            pct: pct.toFixed(2), side: u.side||"多頭",
+            strat: u.type||"股票", strike: u.strike, exp: u.exp,
+            note: u.note, live: isOpt ? !!optLive : !!stockLive,
+            isOpt: isOpt, optKey: optKey, exposure: exposure,
+            bid: optLive?.bid, ask: optLive?.ask
+          };
         });
-      });
-    }catch{setYfOk(false);}
+        // 前五大按曝險排序
+        setPositions(mapped.slice().sort(function(a,b){return b.exposure-a.exposure;}));
+      }
+    }catch(e){console.warn("loadPrices error:",e); setYfOk(false);}
     finally{setYfLoading(false);}
   },[]);
 
@@ -1020,40 +1102,49 @@ function App(){
     if(arr.length===0) return;
     var totalCost=0, totalVal=0, totalPnl=0, todayPnl=0;
     arr.forEach(function(u){
-      var live = prices[u.sym];
-      var cur  = live?.price || Number(u.entry);
-      var qty  = Number(u.qty)||0;
-      var entry= Number(u.entry)||0;
-      var mult = u.side==="空頭"?-1:1;
-      var cost = entry*qty;
-      var val  = cur*qty;
+      var live  = prices[u.sym];
+      var cur   = live?.price || Number(u.entry);
+      var qty   = Number(u.qty)||0;
+      var entry = Number(u.entry)||0;
+      var isOpt = (u.type==="CALL"||u.type==="PUT");
+      var optMult = isOpt ? 100 : 1;
+      // 成本與市值（期權×100，空頭qty為負）
+      var cost = entry * Math.abs(qty) * optMult;
+      var val  = cur   * Math.abs(qty) * optMult;
       totalCost += cost;
       totalVal  += val;
-      totalPnl  += (cur-entry)*qty*mult;
-      // 今日 pnl 估算：用 prev 價格
+      // pnl：qty 含方向（空頭為負）
+      totalPnl  += (cur - entry) * qty * optMult;
       var prev = live?.prev || cur;
-      todayPnl += (cur-prev)*qty*mult;
+      todayPnl += (cur - prev) * qty * optMult;
     });
-    var navVal = totalCost + totalPnl;
+    var navVal = 75608 + totalPnl; // 真實帳戶總值 + 持倉浮動損益
     var pct    = totalCost>0?(totalPnl/totalCost*100):0;
     setNav(navVal);
     setPnl({total:totalPnl, day:todayPnl, pct:+pct.toFixed(2)});
     var expPct = totalCost>0?(totalVal/navVal*100):0;
     setMetrics(m=>({...m, exp:Math.min(100,Math.max(0,expPct))}));
     // 強制更新持倉
-    setPositions(arr.map(function(u){
+    var mapped = arr.map(function(u){
       var live=prices[u.sym];
       var cur=live?.price||Number(u.entry);
-      var qty=Number(u.qty)||0;
+      var qty=Number(u.qty)||0;  // 空頭為負數
       var entry=Number(u.entry)||0;
-      var mult=u.side==="空頭"?-1:1;
+      var isOpt=(u.type==="CALL"||u.type==="PUT");
+      var mult=isOpt?100:1;  // 期權每口×100
+      // pnl: (現價-成本) × abs口數 × 100(期權) × 方向(空頭qty為負)
       var pnlAmt=(cur-entry)*qty*mult;
-      var pct2=entry>0?((cur-entry)/entry*100*mult):0;
+      var pct2=entry>0?((cur-entry)/entry*100):0;
+      // 曝險 = abs(qty) × strike(期權) 或 abs(qty)×現價(股票) × 100(期權)
+      var exposure=isOpt?(Math.abs(qty)*Number(u.strike||0)*100):(Math.abs(qty)*cur);
       return {sym:u.sym,qty:qty,entry:entry.toFixed(2),cur:cur.toFixed(2),
         pnl:pnlAmt.toFixed(0),pct:pct2.toFixed(2),
         side:u.side||"多頭",strat:u.type||"股票",
-        strike:u.strike,exp:u.exp,note:u.note,live:!!live};
-    }));
+        strike:u.strike,exp:u.exp,note:u.note,live:!!live,
+        exposure:exposure,isOpt:isOpt};
+    });
+    // 前五大按曝險金額排序
+    setPositions(mapped.slice().sort(function(a,b){return b.exposure-a.exposure;}));
   },[prices]);
 
   // ── Firstrade CSV 解析器（真實格式）──
@@ -1161,17 +1252,18 @@ function App(){
       var key = t.isOption
         ? (t.sym+"_"+t.optType+"_"+t.optStrike+"_"+t.optExp)
         : t.sym;
-      if(!lots[key]) lots[key] = {queue:[], meta:t};
       totalFees += t.commission||0;
 
       if(t.action==="BUY"){
+        if(!lots[key]) lots[key] = {queue:[], meta:t};
         lots[key].queue.push({qty:t.qty, price:t.price});
       } else if(t.action==="SELL"){
+        // 如果這個 key 完全沒有買入記錄（CSV 範圍外的舊持倉），直接跳過
+        if(!lots[key] || lots[key].queue.length===0) return;
         var remaining = t.qty;
         while(remaining>0 && lots[key].queue.length>0){
           var lot = lots[key].queue[0];
           var matched = Math.min(remaining, lot.qty);
-          // 期權每份合約×100
           var mult = t.isOption ? 100 : 1;
           var pnl  = (t.price - lot.price) * matched * mult;
           realizedPnl += pnl;
@@ -1300,6 +1392,7 @@ function App(){
       const j=await r.json();
       if(!r.ok){setLoginErr(j.error||"密碼錯誤");return;}
       setUwKey(j.uwKey);
+      localStorage.setItem("ddh_uwkey", j.uwKey);
       setLoginOpen(false);
       setLoginPwd("");
     }catch(e){setLoginErr("連線失敗："+e.message);}
@@ -2248,7 +2341,26 @@ function App(){
                               result.positions.length>0 && React.createElement("div", {
                                 onClick: function(){
                                   var res = csvToPositions(csvPreview.parsed);
-                                  saveUserPositions(res.positions);
+                                  // ── 合併模式：CSV 新持倉 merge 進現有持倉，不覆蓋手動新增/刪除 ──
+                                  var existing = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
+                                  var merged = existing.slice(); // 從現有持倉開始
+                                  res.positions.forEach(function(np){
+                                    // 用 sym + type + strike + exp 作為 key
+                                    var key = np.sym+"_"+np.type+"_"+np.strike+"_"+np.exp;
+                                    var found = false;
+                                    for(var i=0;i<merged.length;i++){
+                                      var ep = merged[i];
+                                      var ekey = ep.sym+"_"+ep.type+"_"+ep.strike+"_"+ep.exp;
+                                      if(ekey===key){
+                                        // 已存在 → 更新數量和成本（保留其他欄位）
+                                        merged[i] = Object.assign({},ep,{qty:np.qty,entry:np.entry,note:ep.note||np.note});
+                                        found = true;
+                                        break;
+                                      }
+                                    }
+                                    if(!found) merged.push(np); // 新持倉 → 新增
+                                  });
+                                  saveUserPositions(merged);
                                   setPnl(function(p){ return {total:p.total+res.realizedPnl, day:p.day}; });
                                   setCsvImportOpen(false);
                                   setCsvPreview(null);
@@ -2453,9 +2565,9 @@ function App(){
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
                 <KCard label="淨資產價值" value={fmtK(nav)} sub={`+${pnl.pct}% 本月`} spark={sparks.nav} badge="即時"/>
-                <KCard label="夏普比率"   value={metrics.sharpe.toFixed(2)} sub="▲ vs 基準 1.9" spark={sparks.sh} color="#7c3aed"/>
-                <KCard label="勝率"       value={`${metrics.wr.toFixed(1)}%`} sub={`+${(metrics.wr-58).toFixed(1)}pp 基準線`} spark={sparks.wr} color="#3b82f6"/>
-                <KCard label="最大回撤"   value={`${metrics.dd.toFixed(1)}%`} sub="近 90 日" spark={sparks.dd} color="#ef4444"/>
+                <KCard label="夏普比率"   value={metrics.sharpe!=null?metrics.sharpe.toFixed(2):"—"} sub={metrics.sharpe!=null?"▲ vs 基準 1.9":"數據累積中"} spark={sparks.sh} color="#7c3aed"/>
+                <KCard label="勝率"       value={`${metrics.wr.toFixed(1)}%`} sub={`${(metrics.wr-50).toFixed(1)}pp vs 50%`} spark={sparks.wr} color="#3b82f6"/>
+                <KCard label="最大回撤"   value={metrics.dd!=null?(metrics.dd.toFixed(1)+"%"):"—"} sub={metrics.dd!=null?"近 90 日":"數據累積中"} spark={sparks.dd} color="#ef4444"/>
               </div>
 
               {/* 曲線 + 情緒 */}
@@ -2506,11 +2618,30 @@ function App(){
                     border:"1px solid #2e3048",color:"#555555",background:"#ffffff06"}}>↻ 刷新</div>
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                  {SYMS.slice(0,8).map(sym=>{
+                  {watchSyms.map((sym,wi)=>{
                     const q=priceOf(sym);
+                    const isEditing=(watchEdit===wi);
                     return(
-                      <div key={sym} style={{padding:"8px 14px",background:"#0d0d12",border:"1px solid #ffffff0a",borderRadius:4,minWidth:96}}>
-                        <div style={{fontSize:14,fontWeight:700,color:"#ffffff"}}>{sym}</div>
+                      <div key={wi} style={{padding:"8px 14px",background:"#0d0d12",border:"1px solid "+(isEditing?"#d97706":"#ffffff0a"),borderRadius:4,minWidth:96,position:"relative",cursor:"pointer"}}
+                        title="點兩下編輯">
+                        {isEditing
+                          ? <input autoFocus defaultValue={sym}
+                              onBlur={function(e){
+                                var v=e.target.value.trim().toUpperCase();
+                                if(v){
+                                  var ns=watchSyms.slice(); ns[wi]=v;
+                                  setWatchSyms(ns);
+                                  localStorage.setItem('ddh_watch',JSON.stringify(ns));
+                                }
+                                setWatchEdit(null);
+                              }}
+                              onKeyDown={function(e){if(e.key==="Enter")e.target.blur(); if(e.key==="Escape")setWatchEdit(null);}}
+                              style={{width:"100%",background:"transparent",border:"none",outline:"none",
+                                fontSize:14,fontWeight:700,color:"#d97706",fontFamily:"Inter"}}
+                            />
+                          : <div style={{fontSize:14,fontWeight:700,color:"#ffffff"}}
+                              onDoubleClick={function(){setWatchEdit(wi);}}>{sym}</div>
+                        }
                         <div style={{fontSize:18,fontWeight:700,color:"#ffffff",fontFamily:"'IBM Plex Mono'"}}>{q.price}</div>
                         <div style={{fontSize:13,color:q.color}}>{q.pct}</div>
                       </div>
@@ -2554,15 +2685,18 @@ function App(){
                     前五大持倉 {yfOk===true&&<span style={{color:"#10b98150",fontSize:11}}>· 真實報價</span>}
                   </div>
                   {positions.slice(0,5).map(p=>(
-                    <div key={p.sym} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #ffffff06"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:7}}>
-                        <span style={{fontSize:14,fontWeight:700,color:"#ffffff",width:48}}>{p.sym}</span>
+                    <div key={p.optKey||p.sym} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #ffffff06"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:"#ffffff"}}>{p.sym}{p.isOpt?" "+p.strat:""}</div>
+                          {p.isOpt&&<div style={{fontSize:10,color:"#555"}}>${p.strike} {p.exp} ×{Math.abs(p.qty)}</div>}
+                        </div>
                         <Pill color={p.side==="多頭"?"#10b981":"#ef4444"}>{p.side}</Pill>
-                        {p.live&&<div style={{width:5,height:5,borderRadius:"50%",background:"#10b981"}}/>}
+                        {p.live&&<div style={{width:5,height:5,borderRadius:"50%",background:"#10b981",flexShrink:0}} title={p.isOpt?"UW即時":"Yahoo即時"}/>}
                       </div>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:14,fontWeight:600,color:+p.pnl>=0?"#10b981":"#ef4444"}}>{+p.pnl>=0?"+":""}{fmt$(+p.pnl)}</div>
-                        <div style={{fontSize:12,color:+p.pct>=0?"#10b98150":"#ef444450"}}>{p.pct}%</div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:+p.pnl>=0?"#10b981":"#ef4444"}}>{+p.pnl>=0?"+":""}{fmt$(+p.pnl)}</div>
+                        <div style={{fontSize:11,color:"#555"}}>現價 ${p.cur} · {+p.pct>=0?"+":""}{p.pct}%</div>
                       </div>
                     </div>
                   ))}
