@@ -212,7 +212,7 @@ const fmtM = n => n>=1e6?"$"+(n/1e6).toFixed(2)+"M":n>=1e3?"$"+(n/1e3).toFixed(1
 
 /* ── Supabase 雲端儲存 ── */
 const SUPABASE_URL = "https://kzxunbohppykfkaqioqd.supabase.co";
-const SUPABASE_ANON = localStorage.getItem("ddh_supabase_anon") || "";
+const SUPABASE_ANON = "sb_publishable_4wUaKatN4Ep7rqupZ82RLw_Qq96E-Vn";
 var db = null;
 if (SUPABASE_ANON && window.supabase) {
   try { db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e) { console.warn("Supabase init failed:", e.message); }
@@ -2292,23 +2292,58 @@ function App(){
               </div>
             )}
 
-            {/* 跳過 */}
+            {/* ☁️ Supabase 雲端報告庫 */}
             <div style={{marginTop:16,borderTop:"1px solid #222",paddingTop:14}}>
-              <div style={{fontSize:11,color:"#555",marginBottom:8}}>☁️ Supabase 雲端報告庫（選填）</div>
-              <input
-                type="text"
-                defaultValue={localStorage.getItem("ddh_supabase_anon")||""}
-                placeholder="貼上 Supabase anon key"
-                onBlur={function(e){
-                  var v=e.target.value.trim();
-                  if(v){localStorage.setItem("ddh_supabase_anon",v);window.location.reload();}
-                  else{localStorage.removeItem("ddh_supabase_anon");}
-                }}
-                style={{width:"100%",padding:"8px 10px",fontSize:12,borderRadius:4,
-                  background:"#0a0a0d",border:"1px solid #ffffff15",color:"#aaa",boxSizing:"border-box"}}/>
-              <div style={{fontSize:10,color:db?"#10b981":"#666",marginTop:4}}>
-                {db?"✅ 已連線 Supabase":"未連線 — 報告僅存本機"}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{fontSize:11,color:"#888",fontWeight:600}}>☁️ Supabase 雲端報告庫</div>
+                <div style={{fontSize:10,padding:"2px 7px",borderRadius:3,
+                  background:db?"#10b98118":"#ff4d6d12",
+                  border:"1px solid "+(db?"#10b98140":"#ef444430"),
+                  color:db?"#10b981":"#ef4444",fontWeight:600}}>
+                  {db?"✅ 已連線":"⚠ 未連線"}
+                </div>
               </div>
+              <div style={{fontSize:10,color:"#555",marginTop:2,fontFamily:"monospace",
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {window.location.hostname}
+              </div>
+              {db&&(
+                <div
+                  onClick={async function(){
+                    try{
+                      var res=await db.from("reports").select("id",{count:"exact",head:true});
+                      if(res.error) throw res.error;
+                      alert("✅ 連線正常！reports table 存在，共 "+(res.count||0)+" 筆記錄");
+                    }catch(e){
+                      alert("❌ 連線失敗："+e.message+"\n\n可能原因：\n1. reports table 未建立\n2. RLS 政策阻擋\n3. anon key 錯誤");
+                    }
+                  }}
+                  style={{marginTop:6,padding:"5px 10px",fontSize:11,borderRadius:4,cursor:"pointer",
+                    background:"#10b98115",border:"1px solid #10b98130",color:"#10b981",textAlign:"center"}}>
+                  🔌 測試連線
+                </div>
+              )}
+              {!db&&(
+                <div style={{marginTop:8,padding:"10px 12px",background:"#0a0a0d",borderRadius:4,border:"1px solid #ffffff0d"}}>
+                  <div style={{fontSize:10,color:"#666",lineHeight:1.7}}>
+                    <div style={{color:"#888",fontWeight:600,marginBottom:4}}>📋 設定步驟：</div>
+                    <div>1. 前往 <span style={{color:"#ffa726"}}>supabase.com</span> → 你的專案</div>
+                    <div>2. Project Settings → API → 複製 <span style={{color:"#ffa726"}}>anon public</span> key</div>
+                    <div>3. 貼上後離開輸入框（自動儲存重載）</div>
+                    <div style={{marginTop:6,color:"#888",fontWeight:600}}>🗃 首次使用請先建立 table：</div>
+                  </div>
+                  <div
+                    onClick={function(){
+                      var sql="create table if not exists reports (\n  id text primary key,\n  title text,\n  category text,\n  content text,\n  ai_analysis text,\n  ts bigint,\n  time_str text,\n  created_at timestamptz default now()\n);\nalter table reports enable row level security;\ncreate policy \"allow all\" on reports for all using (true) with check (true);";
+                      navigator.clipboard.writeText(sql).then(function(){alert("✅ SQL 已複製！\n\n請到 Supabase → SQL Editor → New query → 貼上執行");});
+                    }}
+                    style={{marginTop:6,padding:"6px 10px",fontSize:10,borderRadius:4,cursor:"pointer",
+                      background:"#1a1a2e",border:"1px solid #ffa72630",color:"#ffa726",
+                      textAlign:"center",fontWeight:600}}>
+                    📋 複製建表 SQL
+                  </div>
+                </div>
+              )}
             </div>
             <div onClick={()=>setLoginOpen(false)}
               style={{marginTop:12,textAlign:"center",fontSize:12,color:"#666c84",cursor:"pointer"}}>
