@@ -269,6 +269,82 @@ async function cloudUpdateTitle(id, title) {
   if (!db) return;
   try { await db.from("reports").update({ title: title }).eq("id", String(id)); } catch(e) { console.warn("cloudUpdateTitle:", e.message); }
 }
+
+/* ── 雲端持倉 CRUD ────────────────────────────────────────── */
+async function cloudLoadPositions() {
+  if (!db) return null;
+  try {
+    var res = await db.from("positions").select("*").order("created_at", { ascending: false });
+    if (res.error) throw res.error;
+    return (res.data || []).map(function(r) {
+      return {
+        id: r.id,
+        sym: r.ticker || "",
+        type: r.option_type || "股票",
+        qty: String(r.qty || 0),
+        entry: String(r.cost || 0),
+        strike: r.strike ? String(r.strike) : "",
+        exp: r.expiry || "",
+        side: (Number(r.qty) >= 0) ? "多頭" : "空頭",
+        note: r.note || "",
+        _cloud: true
+      };
+    });
+  } catch(e) { console.warn("cloudLoadPositions failed:", e.message); return null; }
+}
+
+async function cloudSavePosition(p) {
+  if (!db) return;
+  try {
+    await db.from("positions").upsert([{
+      id: p.id || undefined,
+      user_name: "TOYWU",
+      ticker: p.sym,
+      option_type: p.type || "股票",
+      qty: Number(p.qty) || 0,
+      cost: Number(p.entry) || 0,
+      strike: p.strike ? Number(p.strike) : null,
+      expiry: p.exp || null,
+      note: p.note || "",
+      current_price: null
+    }]);
+  } catch(e) { console.warn("cloudSavePosition failed:", e.message); }
+}
+
+async function cloudSaveAllPositions(arr) {
+  if (!db || !arr || arr.length === 0) return;
+  try {
+    var rows = arr.map(function(p) {
+      return {
+        id: p.id || undefined,
+        user_name: "TOYWU",
+        ticker: p.sym,
+        option_type: p.type || "股票",
+        qty: Number(p.qty) || 0,
+        cost: Number(p.entry) || 0,
+        strike: p.strike ? Number(p.strike) : null,
+        expiry: p.exp || null,
+        note: p.note || "",
+        current_price: null
+      };
+    });
+    await db.from("positions").upsert(rows);
+  } catch(e) { console.warn("cloudSaveAllPositions failed:", e.message); }
+}
+
+async function cloudDeletePosition(id) {
+  if (!db) return;
+  try { await db.from("positions").delete().eq("id", String(id)); } catch(e) { console.warn("cloudDeletePosition:", e.message); }
+}
+
+async function cloudClearAndSavePositions(arr) {
+  if (!db) return;
+  try {
+    await db.from("positions").delete().neq("id", "0");
+    if (arr && arr.length > 0) await cloudSaveAllPositions(arr);
+  } catch(e) { console.warn("cloudClearAndSave:", e.message); }
+}
+
 const limPct = (u,l) => Math.min(100,(u/l)*100);
 
 const SYMS = ["TSLA","NVDA","AAPL","MSFT","SPY","QQQ","AMZN","META","GOOGL","AMD"];
@@ -1094,10 +1170,12 @@ function App(){
     finally{setYfLoading(false);}
   },[]);
 
-  // ── 儲存 userPositions 到 localStorage ──
+  // ── 儲存 userPositions 到 localStorage + 雲端 ──
   const saveUserPositions = React.useCallback(function(arr){
     setUserPositions(arr);
     localStorage.setItem("ddh_positions", JSON.stringify(arr));
+    // 同步到 Supabase 雲端
+    cloudClearAndSavePositions(arr);
     // 重算 nav / pnl
     if(arr.length===0) return;
     var totalCost=0, totalVal=0, totalPnl=0, todayPnl=0;
@@ -1325,6 +1403,26 @@ function App(){
         return cloud.concat(localOnly);
       });
       setCloudLoaded(true);
+    });
+    // ── 雲端載入持倉 ──
+    cloudLoadPositions().then(function(cloud){
+      if(!cloud || cloud.length===0) return;
+      var local = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
+      if(local.length===0){
+        // 本地是空的，直接用雲端
+        localStorage.setItem("ddh_positions", JSON.stringify(cloud));
+        setUserPositions(cloud);
+      } else {
+        // 兩邊都有：以本地為主（本地是最新操作），雲端有但本地沒有的補入
+        var localSyms = local.map(function(p){ return p.sym+"|"+p.type+"|"+(p.strike||"")+"|"+(p.exp||""); });
+        var merged = local.slice();
+        cloud.forEach(function(cp){
+          var key = cp.sym+"|"+cp.type+"|"+(cp.strike||"")+"|"+(cp.exp||"");
+          if(localSyms.indexOf(key)===-1) merged.push(cp);
+        });
+        localStorage.setItem("ddh_positions", JSON.stringify(merged));
+        setUserPositions(merged);
+      }
     });
   },[]);
 
@@ -2537,7 +2635,7 @@ function App(){
                     {userPositions.length>0&&(
                       <div style={{padding:"12px 20px",borderTop:"1px solid #1a1a1a",flexShrink:0}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div style={{fontSize:12,color:"#444"}}>{userPositions.length} 筆持倉・localStorage 儲存</div>
+                          <div style={{fontSize:12,color:"#444"}}>{userPositions.length} 筆持倉・Supabase 雲端同步</div>
                           <div onClick={function(){if(confirm("確定清空所有持倉？")) saveUserPositions([]);}}
                             style={{fontSize:11,color:"#ef444460",cursor:"pointer"}}>清空全部</div>
                         </div>
@@ -2551,7 +2649,7 @@ function App(){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:-4}}>
                 <div style={{fontSize:11,color:"#444",letterSpacing:1}}>
                   {userPositions.length>0
-                    ? "真實持倉 · "+userPositions.length+" 筆 · localStorage"
+                    ? "真實持倉 · "+userPositions.length+" 筆 · 雲端同步"
                     : "使用模擬數據 — 點右方按鈕輸入真實持倉"}
                 </div>
                 <div style={{display:"flex",gap:8}}>
