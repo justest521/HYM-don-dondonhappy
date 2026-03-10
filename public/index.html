@@ -1887,17 +1887,22 @@ function App(){
       ];
       var prompt = parts.join(NL);
 
-      // ── 呼叫 Anthropic API（直接，含 web_search tool）──
-      var apiResp = await fetch("https://api.anthropic.com/v1/messages",{
+      // ── 呼叫 Anthropic API（透過 Cloudflare Worker 代理）──
+      var apiResp = await fetch(UW_WORKER + "/api/ai", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-20250514",
-          max_tokens:2000,
+          max_tokens:4096,
           tools:[{type:"web_search_20250305",name:"web_search"}],
           messages:[{role:"user",content:prompt}]
         })
       });
+      if(!apiResp.ok){
+        var errBody = "";
+        try{ errBody = await apiResp.text(); }catch(ignored){}
+        throw new Error("Worker HTTP " + apiResp.status + (errBody ? ": " + errBody.slice(0,200) : ""));
+      }
       var apiData = await apiResp.json();
       // 組合所有 text blocks
       var text = "";
