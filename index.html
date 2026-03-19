@@ -8,7 +8,14 @@
   <!-- React + ReactDOM + Babel (無需 build 工具，直接瀏覽器執行) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+  // 預設 UW API Key（可在登入介面覆蓋）
+  if(!localStorage.getItem("ddh_uwkey")){
+    localStorage.setItem("ddh_uwkey","d56cdfa6-0ffb-4421-816c-890629220505");
+  }
+</script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     html,body,#root{height:100%;margin:0;padding:0;background:#0b0b0e}
   </style>
@@ -208,6 +215,136 @@ const sg   = ()    => Math.random()>.5?1:-1;
 const fmt$ = (n,d=0) => (n<0?"-$":"$")+Math.abs(n).toLocaleString("en",{maximumFractionDigits:d});
 const fmtK = n => "$"+(n/1000).toFixed(1)+"K";
 const fmtM = n => n>=1e6?"$"+(n/1e6).toFixed(2)+"M":n>=1e3?"$"+(n/1e3).toFixed(1)+"K":fmt$(n);
+
+/* ── Supabase 雲端儲存 ── */
+const SUPABASE_URL = "https://kzxunbohppykfkaqioqd.supabase.co";
+const SUPABASE_ANON = "sb_publishable_4wUaKatN4Ep7rqupZ82RLw_Qq96E-Vn";
+var db = null;
+if (SUPABASE_ANON && window.supabase) {
+  try { db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); } catch(e) { console.warn("Supabase init failed:", e.message); }
+}
+
+async function cloudLoadReports() {
+  if (!db) return null;
+  try {
+    var cutoff = new Date(Date.now() - 180*24*3600*1000).toISOString();
+    var res = await db.from("reports").select("*").gte("created_at", cutoff).order("created_at", { ascending: false }).limit(500);
+    if (res.error) throw res.error;
+    return (res.data || []).map(function(r) {
+      return {
+        id: Number(r.id) || r.id,
+        ts: r.ts || new Date(r.created_at).getTime(),
+        timeStr: r.time_str || "",
+        title: r.title || "",
+        category: r.category || "其他",
+        content: r.content || "",
+        aiAnalysis: r.ai_analysis || null
+      };
+    });
+  } catch(e) { console.warn("cloudLoadReports failed:", e.message); return null; }
+}
+
+async function cloudSaveReport(r) {
+  if (!db) return;
+  try {
+    await db.from("reports").upsert([{
+      id: String(r.id),
+      title: r.title || "",
+      category: r.category || "其他",
+      content: (r.content || "").substring(0, 100000),
+      ai_analysis: (r.aiAnalysis || "").substring(0, 100000),
+      ts: r.ts || Date.now(),
+      time_str: r.timeStr || "",
+      created_at: new Date(r.ts || Date.now()).toISOString()
+    }]);
+  } catch(e) { console.warn("cloudSaveReport failed:", e.message); }
+}
+
+async function cloudDeleteReport(id) {
+  if (!db) return;
+  try { await db.from("reports").delete().eq("id", String(id)); } catch(e) { console.warn("cloudDeleteReport:", e.message); }
+}
+
+async function cloudUpdateTitle(id, title) {
+  if (!db) return;
+  try { await db.from("reports").update({ title: title }).eq("id", String(id)); } catch(e) { console.warn("cloudUpdateTitle:", e.message); }
+}
+
+/* ── 雲端持倉 CRUD ────────────────────────────────────────── */
+async function cloudLoadPositions() {
+  if (!db) return null;
+  try {
+    var res = await db.from("positions").select("*").order("created_at", { ascending: false });
+    if (res.error) throw res.error;
+    return (res.data || []).map(function(r) {
+      return {
+        id: r.id,
+        sym: r.ticker || "",
+        type: r.option_type || "股票",
+        qty: String(r.qty || 0),
+        entry: String(r.cost || 0),
+        strike: r.strike ? String(r.strike) : "",
+        exp: r.expiry || "",
+        side: (Number(r.qty) >= 0) ? "多頭" : "空頭",
+        note: r.note || "",
+        _cloud: true
+      };
+    });
+  } catch(e) { console.warn("cloudLoadPositions failed:", e.message); return null; }
+}
+
+async function cloudSavePosition(p) {
+  if (!db) return;
+  try {
+    await db.from("positions").upsert([{
+      id: p.id || undefined,
+      user_name: "TOYWU",
+      ticker: p.sym,
+      option_type: p.type || "股票",
+      qty: Number(p.qty) || 0,
+      cost: Number(p.entry) || 0,
+      strike: p.strike ? Number(p.strike) : null,
+      expiry: p.exp || null,
+      note: p.note || "",
+      current_price: null
+    }]);
+  } catch(e) { console.warn("cloudSavePosition failed:", e.message); }
+}
+
+async function cloudSaveAllPositions(arr) {
+  if (!db || !arr || arr.length === 0) return;
+  try {
+    var rows = arr.map(function(p) {
+      return {
+        id: p.id || undefined,
+        user_name: "TOYWU",
+        ticker: p.sym,
+        option_type: p.type || "股票",
+        qty: Number(p.qty) || 0,
+        cost: Number(p.entry) || 0,
+        strike: p.strike ? Number(p.strike) : null,
+        expiry: p.exp || null,
+        note: p.note || "",
+        current_price: null
+      };
+    });
+    await db.from("positions").upsert(rows);
+  } catch(e) { console.warn("cloudSaveAllPositions failed:", e.message); }
+}
+
+async function cloudDeletePosition(id) {
+  if (!db) return;
+  try { await db.from("positions").delete().eq("id", String(id)); } catch(e) { console.warn("cloudDeletePosition:", e.message); }
+}
+
+async function cloudClearAndSavePositions(arr) {
+  if (!db) return;
+  try {
+    await db.from("positions").delete().neq("id", "0");
+    if (arr && arr.length > 0) await cloudSaveAllPositions(arr);
+  } catch(e) { console.warn("cloudClearAndSave:", e.message); }
+}
+
 const limPct = (u,l) => Math.min(100,(u/l)*100);
 
 const SYMS = ["TSLA","NVDA","AAPL","MSFT","SPY","QQQ","AMZN","META","GOOGL","AMD"];
@@ -293,6 +430,43 @@ async function fetchAllPrices(syms) {
   return out;
 }
 
+/* ── UW 期權現價抓取 ── */
+async function fetchOptionPrices(positions, uwKey) {
+  // 從持倉中取出所有期權，按標的分組
+  if(!uwKey) return {};
+  var optPositions = positions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+  if(!optPositions.length) return {};
+  // 取得不重複的標的列表
+  var syms = Array.from(new Set(optPositions.map(function(p){ return p.sym; })));
+  var optPrices = {};
+  for(var i=0; i<syms.length; i++){
+    var sym = syms[i];
+    try{
+      var data = await uwFetch(uwKey, "/api/options/contracts/"+sym);
+      var contracts = data?.data || data?.contracts || [];
+      contracts.forEach(function(c){
+        // UW contract 格式: strike, expiration, option_type, ask, bid, last, mid
+        var strike = String(Math.round(Number(c.strike||c.strike_price||0)));
+        var expRaw = c.expiration||c.expiry||c.expiration_date||"";
+        // 統一格式 YYYY-MM-DD
+        var exp = expRaw.length===10 ? expRaw : "";
+        if(!exp) return;
+        var optType = (c.option_type||c.type||"").toUpperCase();
+        if(optType==="C") optType="CALL";
+        if(optType==="P") optType="PUT";
+        var mid = c.mid_price || ((Number(c.ask||0)+Number(c.bid||0))/2) || Number(c.last||c.last_price||0);
+        if(mid>0){
+          var key = sym+"_"+optType+"_"+strike+"_"+exp;
+          optPrices[key] = {price: mid, bid: Number(c.bid||0), ask: Number(c.ask||0)};
+        }
+      });
+    }catch(e){
+      console.warn("UW optionPrice("+sym+") failed:", e.message);
+    }
+  }
+  return optPrices;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    Unusual Whales API
 ══════════════════════════════════════════════════════════════════════════════ */
@@ -314,44 +488,114 @@ async function uwFetch(key, endpoint) {
   }
 }
 
-async function fetchUWFlow(key,limit=100){
-  const j = await uwFetch(key, `/api/option-trades/flow-alerts?limit=${limit}`);
-  if (!j) return null;
-  const rows=j?.data??j?.results??[];
-  return rows.slice(0,limit).map((f,i)=>({
-    id:i,
-    time: (t=>t?new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—")(f.created_at||f.filled_at||f.time),
-    sym:  f.ticker||f.ticker_symbol||f.symbol||"—",
-    type: (f.type||f.put_call||f.option_type||"CALL").toUpperCase(),
-    strike:f.strike||f.strike_price||"—",
-    exp:  f.expiry||f.expiry_date||"—",
-    prem: Number(f.total_premium||f.total_bid_side_prem||f.premium||0),
-    size: Number(f.volume||f.total_size||f.size||0),
-    oi:   Number(f.open_interest||0),
-    iv:   Number(f.iv_start||f.implied_volatility||0).toFixed(2),
-    sent: (f.type||f.put_call||"call").toLowerCase()==="call"?"BULLISH":"BEARISH",
-    unusual:!!(f.alert_rule&&f.alert_rule!=="RepeatedHits"||f.is_unusual),
-    sweep:!!(f.has_sweep||f.is_sweep),
-    exchange:f.exchange||f.venue||"—",
-  }));
+async function fetchUWFlow(key,limit=100,apiParams){
+  // 正確 UW API 欄位 (根據 OpenAPI spec):
+  // limit, newer_than, vol_greater_oi, is_otm, is_ask_side, is_bid_side, min_premium etc.
+  // 同時呼叫兩個 endpoint：全市場 flow-alerts + 補充 lit-flow
+  const params = apiParams || ("limit=" + limit + "&min_premium=25000");
+  const [j1, j2] = await Promise.allSettled([
+    uwFetch(key, "/api/option-trades/flow-alerts?" + params),
+    uwFetch(key, "/api/lit-flow/recent?limit=50")
+  ]);
+  const rows1 = (j1.status==="fulfilled"&&j1.value?.data) ? j1.value.data : [];
+  const rows2 = (j2.status==="fulfilled"&&j2.value?.data) ? j2.value.data : [];
+
+  function mapRow(f, i) {
+    const type = (f.type||f.put_call||f.option_type||"CALL").toUpperCase();
+    // 情緒：ask側=看多(主動買)，bid側=看空(主動賣)，否則由 type 推斷
+    const askPrem  = Number(f.total_ask_side_prem||0);
+    const bidPrem  = Number(f.total_bid_side_prem||0);
+    const totalPrem = Number(f.total_premium||f.premium||0);
+    let sent = "NEUTRAL";
+    if (askPrem > 0 || bidPrem > 0) {
+      sent = askPrem >= bidPrem ? "bullish" : "bearish";
+    } else {
+      sent = type === "CALL" ? "bullish" : "bearish";
+    }
+    // IV: 優先 iv_change/implied_volatility，UW flow-alerts 通常沒有原始IV
+    const ivRaw = f.implied_volatility||f.iv||f.iv_start||f.volatility||0;
+    const ivVal = ivRaw > 1 ? (ivRaw/100).toFixed(2) : Number(ivRaw).toFixed(2);
+    // Exchange: UW flow-alerts 沒有此欄位，用 issue_type 補充
+    const exch = f.exchange||f.venue||f.market_center||
+                 (f.issue_type ? f.issue_type.substring(0,6) : "—");
+    return {
+      id: i,
+      time: (function(t){ return t ? new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "—"; })(f.created_at||f.filled_at||f.time),
+      sym:    f.ticker||f.ticker_symbol||f.symbol||"—",
+      type:   type,
+      strike: f.strike||f.strike_price||"—",
+      exp:    f.expiry||f.expiry_date||"—",
+      prem:   totalPrem || askPrem + bidPrem,
+      size:   Number(f.total_size||f.volume||f.size||0),
+      oi:     Number(f.open_interest||0),
+      iv:     ivVal,
+      sent:   sent,
+      unusual: !!(f.alert_rule && f.alert_rule !== "RepeatedHits" || f.is_unusual),
+      sweep:   !!(f.has_sweep||f.is_sweep),
+      is_ask:  askPrem > bidPrem,
+      vol_oi:  f.volume_oi_ratio ? Number(f.volume_oi_ratio).toFixed(2) : "—",
+      exchange: exch,
+      alert_rule: f.alert_rule||"",
+      issue_type: f.issue_type||"",
+    };
+  }
+
+  // 合併兩個來源，去重（以 option_chain 或 sym+type+strike+exp 去重）
+  const seen = new Set();
+  const merged = [];
+  [...rows1, ...rows2].forEach(function(f, i) {
+    const key2 = f.option_chain || ((f.ticker||"")+"_"+(f.type||"")+"_"+(f.strike||"")+"_"+(f.expiry||""));
+    if (!seen.has(key2)) { seen.add(key2); merged.push(f); }
+  });
+
+  return merged.slice(0, limit).map(mapRow);
 }
 
-async function fetchUWDark(key,limit=50){
-  const j = await uwFetch(key, `/api/darkpool/recent?limit=${limit}`);
+async function fetchUWDark(key,limit=100){
+  // UW darkpool/recent 真實欄位: ticker, executed_at, price, size, nbbo_ask, nbbo_bid,
+  // market_center, premium (=notional), canceled_at
+  const j = await uwFetch(key, "/api/darkpool/recent?limit=" + limit);
   if (!j) return null;
-  const rows=j?.data??j?.results??[];
-  return rows.slice(0,limit).map((d,i)=>({
-    id:i,
-    time:(t=>t?new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—")(d.executed_at||d.time),
-    sym: d.ticker||d.ticker_symbol||d.underlying||d.symbol||"—",
-    price:Number(d.price||d.executed_price||0).toFixed(2),
-    shares:Number(d.size||d.volume||d.quantity||0),
-    notional:Number(d.notional_value||d.premium||d.notional||(Number(d.price||0)*Number(d.size||0))||0),
-    type:d.trade_type||(Number(d.size||0)>10000?"BLOCK":"DARK"),
-    side:(d.side||d.aggressor_side||(Math.random()>.5?"BUY":"SELL")).toUpperCase(),
-    venue:d.venue||d.exchange||d.market_center||"—",
-  }));
+  const rows = j?.data ?? j?.results ?? [];
+  return rows.slice(0, limit).map(function(d, i) {
+    const price   = Number(d.price||d.executed_price||0);
+    const shares  = Number(d.size||d.volume||d.quantity||0);
+    const notional= Number(d.premium||d.notional_value||d.notional||(price*shares)||0);
+    // Side: UW darkpool 沒有直接 side，用 price vs nbbo_ask/bid 推斷
+    let side = "UNKNOWN";
+    if (d.side||d.aggressor_side) {
+      side = (d.side||d.aggressor_side).toUpperCase();
+    } else if (d.nbbo_ask && price >= Number(d.nbbo_ask)) {
+      side = "BUY";
+    } else if (d.nbbo_bid && price <= Number(d.nbbo_bid)) {
+      side = "SELL";
+    } else {
+      side = notional > 1000000 ? "BLOCK" : "DARK";
+    }
+    return {
+      id: i,
+      time: (function(t){ return t ? new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "—"; })(d.executed_at||d.filled_at||d.time),
+      sym:     d.ticker||d.ticker_symbol||d.underlying||d.symbol||"—",
+      price:   price.toFixed(2),
+      shares:  shares,
+      notional: notional,
+      type:    notional >= 1000000 ? "BLOCK" : "DARK",
+      side:    side,
+      venue:   d.market_center||d.venue||d.exchange||"—",
+    };
+  });
 }
+
+// ── Venue 代碼對照表 ──────────────────────────────────
+const VENUE_MAP = {
+  "Q":"NASDAQ","N":"NYSE","P":"NYSE Arca","C":"CBOE","A":"NYSE American",
+  "D":"FINRA ADF","L":"LTSE","M":"Chicago SE","X":"PSX","B":"BZX","Z":"BATS",
+  "Y":"BYX","E":"EDGA","K":"EDGX","H":"MIAX Pearl","I":"ISE","F":"MEMX",
+  "W":"CBOE BZX","T":"NASDAQ BX","J":"CBOE EDGX","V":"IEX","G":"CBOE EDGA",
+  "FINRA":"FINRA","EDGX":"EDGX","EDGA":"EDGA","MEMX":"MEMX","IEX":"IEX",
+  "LTSE":"LTSE","MIAX":"MIAX"
+};
+function venueLabel(v){return VENUE_MAP[v]||v||"—";}
 
 /* ══════════════════════════════════════════════════════════════════════════════
    Mock 備用
@@ -405,7 +649,7 @@ function mockPositions(prices={}){
   });
 }
 function mockEquity(n=90){
-  let v=1000000;
+  let v=75608;
   return Array.from({length:n},(_,i)=>{v+=v*rnd(-0.008,0.013);return{d:i,v:Math.round(v)};});
 }
 
@@ -542,13 +786,10 @@ const NAV_ITEMS=[
   {id:"flow",      icon:"⟡",label:"期權流"},
   {id:"darkpool",  icon:"◉",label:"暗池"},
   {id:"chart",     icon:"▲",label:"K 線圖"},
-  {id:"strategies",icon:"⬡",label:"策略"},
-  {id:"signals",   icon:"⊛",label:"訊號"},
-  {id:"risk",      icon:"◬",label:"風控"},
   {id:"research",  icon:"📋",label:"研究"},
 ];
-const sentColor=s=>s==="BULLISH"?"#10b981":s==="BEARISH"?"#ef4444":"#888";
-const sentZh   =s=>s==="BULLISH"?"看漲":s==="BEARISH"?"看跌":"中性";
+const sentColor=s=>{const u=(s||"").toUpperCase();return u==="BULLISH"?"#10b981":u==="BEARISH"?"#ef4444":"#888";};
+const sentZh   =s=>{const u=(s||"").toUpperCase();return u==="BULLISH"?"看漲":u==="BEARISH"?"看跌":"中性";};
 const typeColor=t=>t==="CALL"?"#10b981":"#ef4444";
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -566,7 +807,9 @@ function App(){
   const [tvInput,setTvInput]  = useState("NASDAQ:NVDA");
 
   // API state
-  const [uwKey,setUwKey]      = useState("");
+  const [uwKey,setUwKey]      = useState(()=>{
+    try{ return localStorage.getItem("ddh_uwkey")||""; }catch(e){ return ""; }
+  });
   const [showKey,setShowKey]  = useState(false);
   const [uwOk,setUwOk]        = useState(null);   // null/true/false
   // 登入系統
@@ -585,9 +828,25 @@ function App(){
 
   // live mock counters
   const [tick,setTick]        = useState(0);
-  const [nav,setNav]          = useState(1_047_832);
-  const [pnl,setPnl]          = useState({total:47832,day:3214,pct:4.82});
-  const [metrics,setMetrics]  = useState({exp:78.4,beta:0.31,sharpe:2.28,wr:63.4,dd:-6.2});
+  const [nav,setNav]          = useState(75_608);
+  const [watchSyms,setWatchSyms] = useState(()=>{
+    try{ var s=localStorage.getItem('ddh_watch'); return s?JSON.parse(s):["TSLA","NVDA","AAPL","MSFT","SPY","QQQ","AMZN","META"]; }
+    catch(e){ return ["TSLA","NVDA","AAPL","MSFT","SPY","QQQ","AMZN","META"]; }
+  });
+  const [watchEdit,setWatchEdit] = useState(null); // index being edited
+  const [pnl,setPnl]          = useState({total:0,day:0,pct:0});
+  const [metrics,setMetrics]  = useState({exp:78.4,beta:0.31,sharpe:null,wr:44.3,dd:null});
+
+  // ── 使用者真實持倉 ──
+  const [userPositions,setUserPositions] = useState(()=>{
+    try{ var s=localStorage.getItem("ddh_positions"); return s?JSON.parse(s):[]; }catch{ return []; }
+  });
+  const [posDrawerOpen,setPosDrawerOpen] = useState(false);
+  const [posEditRow,setPosEditRow]       = useState(null); // null=新增, obj=編輯中
+  const [posForm,setPosForm]             = useState({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});
+  const [csvImportOpen,setCsvImportOpen] = useState(false);
+  const [csvPreview,setCsvPreview]       = useState(null);  // {raw, parsed, errors}
+  const [csvDragging,setCsvDragging]     = useState(false);
 
   // flow filters
   const [fFilter,setFFilter]  = useState("全部");
@@ -607,6 +866,7 @@ function App(){
       return arr.filter(r=>r.ts>cutoff);
     }catch{return[];}
   });
+  const [cloudLoaded,setCloudLoaded] = useState(false);
   const [flowSnaps,setFlowSnaps]   = useState(()=>{
     try{
       const raw=localStorage.getItem("ddh_flowsnaps");
@@ -626,6 +886,220 @@ function App(){
   });
   const [fSort,setFSort]      = useState("時間");
   const [fUnusual,setFUnusual]= useState(false);
+  const [fPreset,setFPreset]  = useState(null);  // 預設篩選策略
+
+  // ── 預設篩選策略定義 ──
+  // ── 預設策略參數（每個策略的可調條件） ──
+  // params schema 擴充版:
+  // premMin     溢價門檻（$）
+  // dteMin/Max  到期天數範圍
+  // ivMax       IV上限（%）
+  // sizeMin     合約數量下限
+  // volOiMin    Vol/OI比率下限（>1 = 今日新建倉信號）
+  // otm         只看 OTM（價外）：true/false/null(不限)
+  // sentReq     情緒要求："bullish"/"bearish"/null(不限)
+  // sweep/unusual 旗標
+  // optType     CALL/PUT/全部
+  const PRESET_DEFAULTS = {
+    bigmoney:  {premMin:500000, sizeMin:0,   dteMin:0,  dteMax:999, ivMax:999, ivMin:0,  volOiMin:0,   otm:null,  sentReq:null,      sweep:true,  unusual:false, optType:"全部"},
+    bullrun:   {premMin:500000, sizeMin:0,   dteMin:0,  dteMax:999, ivMax:999, ivMin:0,  volOiMin:0,   otm:null,  sentReq:"bullish",  sweep:false, unusual:true,  optType:"CALL"},
+    bearalert: {premMin:500000, sizeMin:0,   dteMin:0,  dteMax:999, ivMax:999, ivMin:0,  volOiMin:0,   otm:null,  sentReq:"bearish",  sweep:false, unusual:true,  optType:"PUT"},
+    leaps:     {premMin:200000, sizeMin:0,   dteMin:90, dteMax:999, ivMax:999, ivMin:0,  volOiMin:0,   otm:null,  sentReq:null,      sweep:false, unusual:false, optType:"全部"},
+    weekly:    {premMin:100000, sizeMin:100, dteMin:1,  dteMax:7,   ivMax:999, ivMin:0,  volOiMin:0,   otm:true,  sentReq:null,      sweep:false, unusual:false, optType:"全部"},
+    lowiv:     {premMin:100000, sizeMin:0,   dteMin:0,  dteMax:999, ivMax:30,  ivMin:0,  volOiMin:0,   otm:null,  sentReq:null,      sweep:false, unusual:false, optType:"全部"},
+    golden:    {premMin:1000000,sizeMin:0,   dteMin:1,  dteMax:45,  ivMax:999, ivMin:0,  volOiMin:1,   otm:true,  sentReq:"bullish",  sweep:true,  unusual:false, optType:"CALL"},
+    otmswing:  {premMin:500000, sizeMin:0,   dteMin:14, dteMax:183, ivMax:999, ivMin:0,  volOiMin:0,   otm:true,  sentReq:null,      sweep:false, unusual:false, optType:"CALL"},
+  };
+
+  const [presetParams, setPresetParams] = useState(function(){
+    try{
+      var saved = JSON.parse(localStorage.getItem("ddh_preset_params")||"{}");
+      var merged = {};
+      Object.keys(PRESET_DEFAULTS).forEach(function(k){
+        merged[k] = Object.assign({}, PRESET_DEFAULTS[k], saved[k]||{});
+      });
+      return merged;
+    }catch{ return JSON.parse(JSON.stringify(PRESET_DEFAULTS)); }
+  });
+  const [editingPreset, setEditingPreset] = useState(false);
+
+  var savePresetParams = function(next){
+    setPresetParams(next);
+    try{ localStorage.setItem("ddh_preset_params", JSON.stringify(next)); }catch{}
+    // 條件改變後重新打 API（用 next params 動態計算 query string）
+    if(uwKey && fPreset && fPreset!=="all") {
+      var pid2 = fPreset;
+      var p2   = next[pid2];
+      if(p2) {
+        var q2 = [];
+        q2.push("limit=100");
+        if(p2.premMin && p2.premMin>0) q2.push("min_premium="+p2.premMin); else q2.push("min_premium=25000");
+        if(p2.sizeMin && p2.sizeMin>0) q2.push("min_size="+p2.sizeMin);
+        if(p2.dteMin  && p2.dteMin>0)  q2.push("min_dte="+p2.dteMin);
+        if(p2.dteMax  && p2.dteMax<999) q2.push("max_dte="+p2.dteMax);
+        if(p2.volOiMin && p2.volOiMin>=1) q2.push("vol_greater_oi=true");
+        else if(p2.volOiMin && p2.volOiMin>0) q2.push("min_volume_oi_ratio="+p2.volOiMin);
+        if(p2.otm===true)   q2.push("is_otm=true");
+        if(p2.sweep===true) q2.push("is_sweep=true");
+        if(p2.sentReq==="bullish") q2.push("is_ask_side=true");
+        if(p2.sentReq==="bearish") q2.push("is_bid_side=true");
+        if(p2.optType==="CALL") q2.push("is_call=true");
+        if(p2.optType==="PUT")  q2.push("is_put=true");
+        var newApiParams2 = q2.join("&");
+        setTimeout(function(){ fetchUWFlow(uwKey,100,newApiParams2).then(function(fd){ if(fd&&fd.length>0) setFlow(fd); }); }, 300);
+      }
+    }
+  };
+
+  // ── preset params → UW API query string ─────────────────────────────────
+  // UW flow-alerts 支援的 server-side 篩選參數對照表：
+  //   premMin    → min_premium
+  //   sizeMin    → min_size
+  //   dteMin     → min_dte
+  //   dteMax     → max_dte  (999=不限)
+  //   volOiMin   → min_volume_oi_ratio (>=1 = vol_greater_oi)
+  //   otm:true   → is_otm=true
+  //   sentReq    → is_ask_side / is_bid_side
+  //   sweep:true → is_sweep=true
+  //   unusual    → (no direct API param, UW flow-alerts 本身就是 unusual alerts)
+  //   optType    → is_call / is_put
+  var presetToApiParams = function(id) {
+    var p = presetParams[id];
+    if (!p || id === "all") return "limit=100&min_premium=25000";
+    var q = [];
+    q.push("limit=100");
+    if (p.premMin && p.premMin > 0)  q.push("min_premium=" + p.premMin);
+    else                             q.push("min_premium=25000");
+    if (p.sizeMin && p.sizeMin > 0)  q.push("min_size=" + p.sizeMin);
+    if (p.dteMin  && p.dteMin > 0)   q.push("min_dte=" + p.dteMin);
+    if (p.dteMax  && p.dteMax < 999) q.push("max_dte=" + p.dteMax);
+    if (p.volOiMin && p.volOiMin >= 1) q.push("vol_greater_oi=true");
+    else if (p.volOiMin && p.volOiMin > 0) q.push("min_volume_oi_ratio=" + p.volOiMin);
+    if (p.otm === true)   q.push("is_otm=true");
+    if (p.sweep === true) q.push("is_sweep=true");
+    if (p.sentReq === "bullish") q.push("is_ask_side=true");
+    if (p.sentReq === "bearish") q.push("is_bid_side=true");
+    if (p.optType === "CALL")   q.push("is_call=true");
+    if (p.optType === "PUT")    q.push("is_put=true");
+    // ivMax/ivMin: UW API 沒有直接 IV 篩選，改為前端 filter
+    return q.join("&");
+  };
+
+  var makeFilter = function(id){
+    var p = presetParams[id];
+    if(!p) return function(){ return true; };
+    return function(f){
+      var dte     = Math.round((new Date(f.exp)-Date.now())/86400000);
+      var iv      = Number(f.iv)*100;
+      var size    = Number(f.size)||0;
+      var oi      = Number(f.oi)||0;
+      var volOi   = oi>0 ? size/oi : 0;
+      var strike  = Number(f.strike)||0;
+      // 判斷 OTM：需要股價，用 prices 全局變數
+      var spot    = (window.__ddh_prices&&window.__ddh_prices[f.sym]) ? window.__ddh_prices[f.sym].price : 0;
+      var isOTM   = spot>0 ? (f.type==="CALL" ? strike>spot : strike<spot) : true;
+      var sentLow = (f.sent||"").toLowerCase();
+
+      if(p.premMin  && f.prem < p.premMin) return false;
+      if(p.sizeMin  && size < p.sizeMin)   return false;
+      if(p.dteMin!=null && dte < p.dteMin) return false;
+      if(p.dteMax!=null && p.dteMax<999 && dte > p.dteMax) return false;
+      if(p.ivMax!=null  && p.ivMax<999  && iv > p.ivMax)   return false;
+      if(p.ivMin!=null  && p.ivMin>0    && iv < p.ivMin)   return false;
+      if(p.volOiMin && volOi < p.volOiMin) return false;
+      if(p.otm===true  && spot>0 && !isOTM) return false;
+      if(p.otm===false && spot>0 &&  isOTM) return false;
+      if(p.sentReq && sentLow!==p.sentReq.toLowerCase()) return false;
+      if(p.sweep   && !f.sweep)   return false;
+      if(p.unusual && !f.unusual) return false;
+      if(p.optType && p.optType!=="全部" && f.type!==p.optType) return false;
+      return true;
+    };
+  };
+
+  const FLOW_PRESETS = [
+    {
+      id: "all",
+      label: "全部",
+      icon: "◈",
+      color: "#ffffff",
+      desc: "顯示所有期權流，不套用額外篩選",
+      params: null,
+      filter: function(){ return true; }
+    },
+    {
+      id: "bigmoney",
+      label: "大戶急攻",
+      icon: "⚡",
+      color: "#f59e0b",
+      desc: "掃單 + 高溢價，機構快速大量建倉的強烈訊號",
+      params: ["premMin","sizeMin","sweep","unusual","volOiMin","sentReq","optType"],
+      get filter(){ return makeFilter("bigmoney"); }
+    },
+    {
+      id: "bullrun",
+      label: "做多訊號",
+      icon: "▲",
+      color: "#10b981",
+      desc: "異常 CALL 大單，機構看漲佈局，追多參考",
+      params: ["premMin","sizeMin","dteMin","dteMax","unusual","sweep","volOiMin","otm","sentReq","optType"],
+      get filter(){ return makeFilter("bullrun"); }
+    },
+    {
+      id: "bearalert",
+      label: "做空訊號",
+      icon: "▼",
+      color: "#ef4444",
+      desc: "異常 PUT 大單，機構對沖或看空，風險警示",
+      params: ["premMin","sizeMin","dteMin","dteMax","unusual","sweep","volOiMin","otm","sentReq","optType"],
+      get filter(){ return makeFilter("bearalert"); }
+    },
+    {
+      id: "leaps",
+      label: "長線佈局",
+      icon: "◎",
+      color: "#3b82f6",
+      desc: "DTE > 90天的大單，機構長線方向押注或 LEAPS",
+      params: ["premMin","sizeMin","dteMin","dteMax","volOiMin","otm","sentReq","optType"],
+      get filter(){ return makeFilter("leaps"); }
+    },
+    {
+      id: "weekly",
+      label: "週選賭注",
+      icon: "◉",
+      color: "#fbbf24",
+      desc: "DTE 1~7天，財報前後或關鍵事件的短期方向性押注",
+      params: ["premMin","sizeMin","dteMin","dteMax","volOiMin","otm","sentReq","sweep","optType"],
+      get filter(){ return makeFilter("weekly"); }
+    },
+    {
+      id: "lowiv",
+      label: "低IV收租",
+      icon: "◇",
+      color: "#80cbc4",
+      desc: "IV < 30%，市場平靜期的賣方策略機會（Covered Call / CSP）",
+      params: ["premMin","sizeMin","dteMin","dteMax","ivMin","ivMax","sentReq","optType"],
+      get filter(){ return makeFilter("lowiv"); }
+    },
+    {
+      id: "golden",
+      label: "黃金掃單",
+      icon: "★",
+      color: "#ffd700",
+      desc: "溢價 ≥ $1M + Sweep + OTM CALL + Vol>OI，大神公認最強機構信號",
+      params: ["premMin","dteMin","dteMax","volOiMin","sweep","optType"],
+      get filter(){ return makeFilter("golden"); }
+    },
+    {
+      id: "otmswing",
+      label: "OTM 波段",
+      icon: "◐",
+      color: "#a78bfa",
+      desc: "OTM CALL + DTE 14~183天 + 溢價≥$500K，UW官方推薦波段篩選",
+      params: ["premMin","dteMin","dteMax","otm","optType"],
+      get filter(){ return makeFilter("otmswing"); }
+    }
+  ];
 
   const [sparks] = useState({
     nav: Array.from({length:30},(_,i)=>1e6+i*rnd(300,2000)*sg()),
@@ -639,17 +1113,318 @@ function App(){
   const loadPrices=useCallback(async()=>{
     setYfLoading(true);
     try{
-      const p=await fetchAllPrices(SYMS);
+      // 合併：固定 SYMS + watchlist + 真實持倉標的
+      var wSyms = [];
+      try{ var ws=localStorage.getItem("ddh_watch"); if(ws) wSyms=JSON.parse(ws); }catch(e){}
+      var posSyms = [];
+      try{ var ps=localStorage.getItem("ddh_positions"); if(ps) posSyms=JSON.parse(ps).map(function(x){return x.sym;}); }catch(e){}
+      var allSyms = Array.from(new Set(SYMS.concat(wSyms).concat(posSyms)));
+      const p=await fetchAllPrices(allSyms);
       const anyReal=Object.values(p).some(v=>v?.price>0);
       setYfOk(anyReal);
       setPrices(p);
-      setPositions(mockPositions(p));
-    }catch{setYfOk(false);}
+      // 抓期權現價（UW API）
+      var ups = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
+      var savedKey = localStorage.getItem("ddh_uwkey")||"";
+      var optP = {};
+      if(savedKey && ups.length>0){
+        try{ optP = await fetchOptionPrices(ups, savedKey); }catch(e){}
+      }
+      // 如果有真實持倉就用真實的，否則 mock
+      if(ups.length===0){
+        setPositions(mockPositions(p));
+      } else {
+        var mapped = ups.map(function(u){
+          var isOpt = (u.type==="CALL"||u.type==="PUT");
+          var optKey = u.sym+"_"+u.type+"_"+u.strike+"_"+u.exp;
+          var optLive = isOpt ? optP[optKey] : null;
+          var stockLive = p[u.sym];
+          // 現價：期權用 UW mid price，股票用 Yahoo
+          var cur = isOpt
+            ? (optLive?.price || Number(u.entry))
+            : (stockLive?.price || Number(u.entry));
+          var qty   = Number(u.qty)||0;
+          var entry = Number(u.entry)||0;
+          var mult  = isOpt ? 100 : 1;
+          // pnl: qty 含方向(空頭為負)，乘以 100(期權)
+          var pnlAmt = (cur - entry) * qty * mult;
+          var pct    = entry>0 ? ((cur-entry)/entry*100) : 0;
+          // 曝險 = abs(qty) × strike(期權)×100 或 abs(qty)×現價(股票)
+          var exposure = isOpt
+            ? (Math.abs(qty) * Number(u.strike||0) * 100)
+            : (Math.abs(qty) * cur);
+          return {
+            sym: u.sym, qty: qty, entry: entry.toFixed(2),
+            cur: cur.toFixed(2), pnl: pnlAmt.toFixed(0),
+            pct: pct.toFixed(2), side: u.side||"多頭",
+            strat: u.type||"股票", strike: u.strike, exp: u.exp,
+            note: u.note, live: isOpt ? !!optLive : !!stockLive,
+            isOpt: isOpt, optKey: optKey, exposure: exposure,
+            bid: optLive?.bid, ask: optLive?.ask
+          };
+        });
+        // 前五大按曝險排序
+        setPositions(mapped.slice().sort(function(a,b){return b.exposure-a.exposure;}));
+      }
+    }catch(e){console.warn("loadPrices error:",e); setYfOk(false);}
     finally{setYfLoading(false);}
   },[]);
 
-  useEffect(()=>{loadPrices();},[]);
+  // ── 儲存 userPositions 到 localStorage + 雲端 ──
+  const saveUserPositions = React.useCallback(function(arr){
+    setUserPositions(arr);
+    localStorage.setItem("ddh_positions", JSON.stringify(arr));
+    // 同步到 Supabase 雲端
+    cloudClearAndSavePositions(arr);
+    // 重算 nav / pnl
+    if(arr.length===0) return;
+    var totalCost=0, totalVal=0, totalPnl=0, todayPnl=0;
+    arr.forEach(function(u){
+      var live  = prices[u.sym];
+      var cur   = live?.price || Number(u.entry);
+      var qty   = Number(u.qty)||0;
+      var entry = Number(u.entry)||0;
+      var isOpt = (u.type==="CALL"||u.type==="PUT");
+      var optMult = isOpt ? 100 : 1;
+      // 成本與市值（期權×100，空頭qty為負）
+      var cost = entry * Math.abs(qty) * optMult;
+      var val  = cur   * Math.abs(qty) * optMult;
+      totalCost += cost;
+      totalVal  += val;
+      // pnl：qty 含方向（空頭為負）
+      totalPnl  += (cur - entry) * qty * optMult;
+      var prev = live?.prev || cur;
+      todayPnl += (cur - prev) * qty * optMult;
+    });
+    var navVal = 75608 + totalPnl; // 真實帳戶總值 + 持倉浮動損益
+    var pct    = totalCost>0?(totalPnl/totalCost*100):0;
+    setNav(navVal);
+    setPnl({total:totalPnl, day:todayPnl, pct:+pct.toFixed(2)});
+    var expPct = totalCost>0?(totalVal/navVal*100):0;
+    setMetrics(m=>({...m, exp:Math.min(100,Math.max(0,expPct))}));
+    // 強制更新持倉
+    var mapped = arr.map(function(u){
+      var live=prices[u.sym];
+      var cur=live?.price||Number(u.entry);
+      var qty=Number(u.qty)||0;  // 空頭為負數
+      var entry=Number(u.entry)||0;
+      var isOpt=(u.type==="CALL"||u.type==="PUT");
+      var mult=isOpt?100:1;  // 期權每口×100
+      // pnl: (現價-成本) × abs口數 × 100(期權) × 方向(空頭qty為負)
+      var pnlAmt=(cur-entry)*qty*mult;
+      var pct2=entry>0?((cur-entry)/entry*100):0;
+      // 曝險 = abs(qty) × strike(期權) 或 abs(qty)×現價(股票) × 100(期權)
+      var exposure=isOpt?(Math.abs(qty)*Number(u.strike||0)*100):(Math.abs(qty)*cur);
+      return {sym:u.sym,qty:qty,entry:entry.toFixed(2),cur:cur.toFixed(2),
+        pnl:pnlAmt.toFixed(0),pct:pct2.toFixed(2),
+        side:u.side||"多頭",strat:u.type||"股票",
+        strike:u.strike,exp:u.exp,note:u.note,live:!!live,
+        exposure:exposure,isOpt:isOpt};
+    });
+    // 前五大按曝險金額排序
+    setPositions(mapped.slice().sort(function(a,b){return b.exposure-a.exposure;}));
+  },[prices]);
+
+  // ── Firstrade CSV 解析器（真實格式）──
+  // 欄位：Symbol, Quantity, Price, Action, Description, TradeDate, SettledDate, Interest, Amount, Commission, Fee, CUSIP, RecordType
+  // 期權：Symbol 為空，Description 格式 "CALL TSLA   06/18/26   960"
+  const parseFirstradeCSV = React.useCallback(function(text){
+    var lines = text.trim().split(/\r?\n/);
+    if(lines.length < 2) return {parsed:[], errors:["CSV 內容不足"]};
+
+    // 解析 CSV row（支援引號包覆）
+    function parseRow(line){
+      var result=[], cur="", inQ=false;
+      for(var i=0;i<line.length;i++){
+        var c=line[i];
+        if(c==='"'){inQ=!inQ;}
+        else if(c===','&&!inQ){result.push(cur.trim());cur="";}
+        else{cur+=c;}
+      }
+      result.push(cur.trim());
+      return result;
+    }
+
+    var headers = parseRow(lines[0]).map(function(h){return h.replace(/"/g,"").toLowerCase().trim();});
+    function col(name){ return headers.indexOf(name); }
+
+    var cSym    = col("symbol");
+    var cQty    = col("quantity");
+    var cPrice  = col("price");
+    var cAction = col("action");
+    var cDesc   = col("description");
+    var cDate   = col("tradedate");
+    var cAmt    = col("amount");
+    var cComm   = col("commission");
+    var cFee    = col("fee");
+    var cRtype  = col("recordtype");
+
+    var errors = [];
+    if(cSym<0||cQty<0||cAction<0||cDesc<0) errors.push("欄位不符，請確認是 Firstrade Excel CSV 格式");
+
+    // 期權 Description 解析：CALL TSLA   06/18/26   960
+    function parseOptDesc(desc){
+      var m = desc.match(/^(CALL|PUT)\s+(\S+)\s+(\d{2}\/\d{2}\/\d{2})\s+([\d.]+)/);
+      if(!m) return null;
+      var parts = m[3].split("/");
+      var exp = "20"+parts[2]+"-"+parts[0]+"-"+parts[1];
+      return {optType:m[1], sym:m[2].toUpperCase(), strike:parseFloat(m[4]).toFixed(0), exp:exp};
+    }
+
+    var parsed = [];
+    for(var r=1;r<lines.length;r++){
+      if(!lines[r].trim()) continue;
+      var row = parseRow(lines[r]);
+      var rtype = cRtype>=0 ? row[cRtype].replace(/"/g,"").trim() : "Trade";
+      if(rtype !== "Trade") continue;
+
+      var action = cAction>=0 ? row[cAction].replace(/"/g,"").trim() : "";
+      if(action!=="BUY" && action!=="SELL") continue;
+
+      var sym   = cSym>=0   ? row[cSym]  .replace(/"/g,"").trim().toUpperCase() : "";
+      var desc  = cDesc>=0  ? row[cDesc] .replace(/"/g,"").trim() : "";
+      var qtyRaw= cQty>=0   ? row[cQty]  .replace(/[",]/g,"").trim() : "0";
+      var priceR= cPrice>=0 ? row[cPrice].replace(/[",]/g,"").trim() : "0";
+      var dateS = cDate>=0  ? row[cDate] .replace(/"/g,"").trim() : "";
+      var comm  = (cComm>=0 ? Math.abs(parseFloat(row[cComm].replace(/[",]/g,"")||0)):0)
+                + (cFee>=0  ? Math.abs(parseFloat(row[cFee] .replace(/[",]/g,"")||0)):0);
+
+      var qty   = Math.abs(parseFloat(qtyRaw)||0);
+      var price = Math.abs(parseFloat(priceR)||0);
+      if(qty===0 || price===0) continue;
+
+      // 判斷是期權還是股票
+      var optInfo = (!sym) ? parseOptDesc(desc) : null;
+      var isOpt   = !!optInfo;
+
+      if(!sym && !optInfo) continue; // 跳過無法識別的
+
+      parsed.push({
+        id:       r,
+        date:     dateS,
+        sym:      isOpt ? optInfo.sym : sym,
+        qty:      qty,
+        price:    price,
+        action:   action,
+        commission: comm,
+        isOption: isOpt,
+        optType:  isOpt ? optInfo.optType : null,
+        optStrike:isOpt ? optInfo.strike  : null,
+        optExp:   isOpt ? optInfo.exp     : null,
+        desc:     desc,
+      });
+    }
+
+    return {parsed:parsed, errors:errors, headers:headers, rawCount:lines.length-1};
+  },[]);
+
+    // ── CSV → 持倉聚合（FIFO 配對）──
+  const csvToPositions = React.useCallback(function(trades){
+    var lots = {};
+    var realizedPnl = 0;
+    var totalFees   = 0;
+    var tradeCount  = 0;
+    var winCount    = 0;
+
+    trades.forEach(function(t){
+      var key = t.isOption
+        ? (t.sym+"_"+t.optType+"_"+t.optStrike+"_"+t.optExp)
+        : t.sym;
+      totalFees += t.commission||0;
+
+      if(t.action==="BUY"){
+        if(!lots[key]) lots[key] = {queue:[], meta:t};
+        lots[key].queue.push({qty:t.qty, price:t.price});
+      } else if(t.action==="SELL"){
+        // 如果這個 key 完全沒有買入記錄（CSV 範圍外的舊持倉），直接跳過
+        if(!lots[key] || lots[key].queue.length===0) return;
+        var remaining = t.qty;
+        while(remaining>0 && lots[key].queue.length>0){
+          var lot = lots[key].queue[0];
+          var matched = Math.min(remaining, lot.qty);
+          var mult = t.isOption ? 100 : 1;
+          var pnl  = (t.price - lot.price) * matched * mult;
+          realizedPnl += pnl;
+          tradeCount++;
+          if(pnl>0) winCount++;
+          lot.qty -= matched;
+          remaining -= matched;
+          if(lot.qty<=0.0001) lots[key].queue.shift();
+        }
+      }
+    });
+
+    // 建立持倉
+    var positions = [];
+    Object.keys(lots).forEach(function(key){
+      var l = lots[key];
+      var totalQty = l.queue.reduce(function(a,x){return a+x.qty;},0);
+      if(totalQty<0.0001) return;
+      var avgCost = l.queue.reduce(function(a,x){return a+x.price*x.qty;},0)/totalQty;
+      var m = l.meta;
+      positions.push({
+        id:    Date.now()+Math.random(),
+        sym:   m.sym,
+        type:  m.isOption ? m.optType : "股票",
+        qty:   Math.round(totalQty*10000)/10000,
+        entry: avgCost.toFixed(4),
+        strike: m.optStrike||"",
+        exp:    m.optExp||"",
+        side:  "多頭",
+        note:  "Firstrade CSV",
+      });
+    });
+
+    return {
+      positions:    positions,
+      realizedPnl:  Math.round(realizedPnl),
+      totalFees:    Math.round(totalFees*100)/100,
+      tradeCount:   tradeCount,
+      winRate:      tradeCount>0 ? Math.round(winCount/tradeCount*1000)/10 : 0,
+    };
+  },[]);
+
+    useEffect(()=>{loadPrices();},[]);
   useEffect(()=>{const id=setInterval(loadPrices,60000);return()=>clearInterval(id);},[loadPrices]);
+  // expose prices to window so makeFilter (outside React closure) can access OTM check
+  useEffect(()=>{ window.__ddh_prices = prices; },[prices]);
+
+  // ── Supabase 雲端載入報告 ──
+  useEffect(()=>{
+    cloudLoadReports().then(function(cloud){
+      if(!cloud) { setCloudLoaded(true); return; }
+      // 合併雲端和本地：以雲端為主，本地有但雲端沒有的也加入
+      setReports(function(local){
+        var idMap = {};
+        cloud.forEach(function(r){ idMap[r.id]=r; });
+        // 本地有但雲端沒有的，推到雲端
+        var localOnly = local.filter(function(r){ return !idMap[r.id]; });
+        localOnly.forEach(function(r){ cloudSaveReport(r); });
+        return cloud.concat(localOnly);
+      });
+      setCloudLoaded(true);
+    });
+    // ── 雲端載入持倉 ──
+    cloudLoadPositions().then(function(cloud){
+      if(!cloud || cloud.length===0) return;
+      var local = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
+      if(local.length===0){
+        // 本地是空的，直接用雲端
+        localStorage.setItem("ddh_positions", JSON.stringify(cloud));
+        setUserPositions(cloud);
+      } else {
+        // 兩邊都有：以本地為主（本地是最新操作），雲端有但本地沒有的補入
+        var localSyms = local.map(function(p){ return p.sym+"|"+p.type+"|"+(p.strike||"")+"|"+(p.exp||""); });
+        var merged = local.slice();
+        cloud.forEach(function(cp){
+          var key = cp.sym+"|"+cp.type+"|"+(cp.strike||"")+"|"+(cp.exp||"");
+          if(localSyms.indexOf(key)===-1) merged.push(cp);
+        });
+        localStorage.setItem("ddh_positions", JSON.stringify(merged));
+        setUserPositions(merged);
+      }
+    });
+  },[]);
 
   // 自動抓 flow/dark 裡出現的新股票價格
   useEffect(()=>{
@@ -660,21 +1435,35 @@ function App(){
   },[flow,dark]);
 
   /* ── Unusual Whales ─────────────────────────────────────────────────────── */
-  const loadUW=useCallback(async(key)=>{
+  const loadUW=useCallback(async(key,presetId)=>{
     if(!key||key.length<8)return;
     setUwLoading(true);
-    const [fd,dd]=await Promise.all([fetchUWFlow(key,100),fetchUWDark(key,100)]);
-    if(fd){setFlow(fd);setUwOk(true);}else setUwOk(false);
-    if(dd) setDark(dd);
+    try {
+      // 把 preset 條件轉成 UW API server-side 篩選參數
+      var apiParams = presetToApiParams(presetId||"all");
+      console.info("[UW] fetching with params:", apiParams, "preset:", presetId||"all");
+      const [fd,dd]=await Promise.all([fetchUWFlow(key,100,apiParams),fetchUWDark(key,100)]);
+      if(fd && fd.length>0){setFlow(fd);setUwOk(true);}
+      else if(fd && fd.length===0){
+        setUwOk(true);
+        console.info("UW flow-alerts returned 0 rows (non-trading hours or strict filters?)");
+      } else {
+        setUwOk(false);
+      }
+      if(dd && dd.length>0) setDark(dd);
+    } catch(e) {
+      console.error("loadUW error:", e);
+      setUwOk(false);
+    }
     setUwLoading(false);
-  },[]);
+  },[presetToApiParams]);
 
-  useEffect(()=>{if(uwKey)loadUW(uwKey);},[uwKey]);
+  useEffect(()=>{if(uwKey)loadUW(uwKey,fPreset);},[uwKey,fPreset]);
   useEffect(()=>{
     if(!uwKey)return;
-    const id=setInterval(()=>loadUW(uwKey),15000);
+    const id=setInterval(()=>loadUW(uwKey,fPreset),15000);
     return()=>clearInterval(id);
-  },[uwKey]);
+  },[uwKey,fPreset,loadUW]);
 
   /* ── 登入 / 設定 ───────────────────────────────────────────────────────── */
   const WORKER = "https://solitary-wood-898d.justest521.workers.dev";
@@ -701,6 +1490,7 @@ function App(){
       const j=await r.json();
       if(!r.ok){setLoginErr(j.error||"密碼錯誤");return;}
       setUwKey(j.uwKey);
+      localStorage.setItem("ddh_uwkey", j.uwKey);
       setLoginOpen(false);
       setLoginPwd("");
     }catch(e){setLoginErr("連線失敗："+e.message);}
@@ -730,8 +1520,12 @@ function App(){
   useEffect(()=>{
     const id=setInterval(()=>{
       setTick(t=>t+1);
-      setNav(v=>v+ri(-800,1500));
-      setPnl(p=>({total:p.total+ri(-200,400),day:p.day+ri(-80,150),pct:+(p.pct+rnd(-0.02,0.04)).toFixed(2)}));
+      // 只有沒有真實持倉時才 mock 跳動
+      var _ups = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
+      if(_ups.length===0){
+        setNav(v=>v+ri(-800,1500));
+        setPnl(p=>({total:p.total+ri(-200,400),day:p.day+ri(-80,150),pct:+(p.pct+rnd(-0.02,0.04)).toFixed(2)}));
+      }
       setMetrics(m=>({...m,exp:Math.min(100,Math.max(20,m.exp+rnd(-0.3,0.3)))}));
       setSigs(mockSignals());
       if(!uwKey){setFlow(mockFlow(100));setDark(mockDark());}
@@ -747,10 +1541,15 @@ function App(){
   // 穩定唯一鍵：sym+type+strike+exp
   const flowKey = (f) => (f.sym||"")+"_"+(f.type||"")+"_"+(f.strike||"")+"_"+(f.exp||"");
 
+  // 取得當前預設策略（預設為 "all"）
+  var _pid = fPreset||"all";
+  const activePreset = FLOW_PRESETS.find(function(p){ return p.id===_pid; }) || FLOW_PRESETS[0];
+
   // 先取全部100筆做篩選（依溢價排序，確保top20是全域最高）
   const allFiltered = flow
     .filter(f=>fFilter==="全部"||(fFilter==="CALL"&&f.type==="CALL")||(fFilter==="PUT"&&f.type==="PUT"))
     .filter(f=>!fUnusual||f.unusual)
+    .filter(f=>activePreset.id==="all"||activePreset.filter(f))
     .sort((a,b)=>b.prem-a.prem)  // 先全排序
     .slice(0,100);
 
@@ -769,7 +1568,7 @@ function App(){
     return{price:"$"+p.price.toFixed(2),pct:(chg>=0?"+":"")+cp.toFixed(2)+"%",color:chg>=0?"#10b981":"#ef4444"};
   };
 
-  // 儲存報告
+  // 儲存報告（localStorage 快取）
   useEffect(()=>{
     try{localStorage.setItem("ddh_reports",JSON.stringify(reports));}catch{}
   },[reports]);
@@ -885,39 +1684,65 @@ function App(){
 
   // ── 從報告內文取標題：跳過作者名/日期行，找第一個有意義的標題行 ──
   const extractTitle = (aiText, reportText, ts) => {
-    if(reportText){
-      var lines = reportText.trim().split("\n").map(function(l){
-        return l.trim().replace(/^[#*>\-=`]+\s*/,"").replace(/\*\*/g,"").trim();
-      }).filter(function(l){ return l.length>4; });
+    if(!reportText) return null;
+    var lines = reportText.trim().split("\n").map(function(l){
+      return l.trim().replace(/^[#*>\-=`]+\s*/,"").replace(/\*\*/g,"").trim();
+    }).filter(function(l){ return l.length>0; });
 
-      for(var i=0;i<Math.min(lines.length,8);i++){
-        var l = lines[i];
-        // 跳過：作者名行（無標點、無空格且短）、純日期行、純英文名字行
-        var isAuthor = l.length<30 && !/[，。？！：「」【】、]/.test(l) && !/\s{2,}/.test(l) && /^[A-Za-z一-鿿\s]+$/.test(l) && i>0;
-        var isDate   = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4}|\d{1,2}[\/\-])/i.test(l);
-        var isShort  = l.length<6;
-        if(!isAuthor && !isDate && !isShort){
-          return l.length>55 ? l.slice(0,55)+"…" : l;
-        }
+    // Substack / blog junk line patterns to skip
+    var skipPatterns = [
+      /^[\d\s]*$/,
+      /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s/i,
+      /^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/,
+      /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/,
+      /^20\d{6,8}$/,
+      /^\u2219\s*(Paid|Free|Preview)/i,
+      /^(Like|Reply|Share|Restack|Comment|Discussion|Write a comment)/i,
+      /^\u00a9\s*\d{4}/,
+      /^(Privacy|Terms|Collection notice)/i,
+      /^(Start your|Get the app|Substack is)/i,
+      /^\d+\s*(Likes?|Restacks?|comments?)$/i,
+      /^(Source|Image|Photo|\u5716\u7247\u4f86\u6e90|\u8cc7\u6599\u4f86\u6e90)\s*[:\uff1a]/i,
+    ];
+    var isAuthorLine = function(l, idx){
+      if(l.length>40 || l.length<2) return false;
+      if(/^[A-Za-z][A-Za-z\s]{0,30}$/.test(l) && l.split(/\s+/).length<=5 && !/\b(the|and|for|how|why|what|this|that|from|with|into|will|can|are|not|all|but|has|its|our|was|you|top)\b/i.test(l)) return true;
+      if(idx>0 && lines[idx-1] && lines[idx-1].trim()===l) return true;
+      return false;
+    };
+    var isCategoryLine = function(l){
+      if(l.length>25 || l.length<2) return false;
+      if(/^[A-Za-z\u4e00-\u9fff\s\/\u00b7\-]+$/.test(l) && !/[\uff0c\u3002\uff1f\uff01\uff1a\u300c\u300d\u3010\u3011\u3001]/.test(l) && l.length<20) return true;
+      return false;
+    };
+
+    for(var i=0; i<Math.min(lines.length, 15); i++){
+      var l = lines[i];
+      if(l.length<5) continue;
+      var skip = false;
+      for(var p=0; p<skipPatterns.length; p++){
+        if(skipPatterns[p].test(l)){ skip=true; break; }
       }
+      if(skip) continue;
+      if(isAuthorLine(l, i)) continue;
+      if(i<5 && isCategoryLine(l)) continue;
+      return l.length>55 ? l.slice(0,55)+"\u2026" : l;
     }
     return null;
   };
 
-  // ── 從文章內容萃取作者日期 ──
   const extractArticleDate = (text) => {
     if(!text) return null;
+    var header = text.substring(0, 2000);
     var patterns = [
-      // Mar 04, 2026 / March 4, 2026
       /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s.]+([0-9]{1,2})[,\s]+([0-9]{4})\b/i,
-      // 2026/03/04 or 2026-03-04
-      /\b(20[0-9]{2})[\/-](0?[1-9]|1[0-2])[\/-](0?[1-9]|[12][0-9]|3[01])\b/,
-      // 03/04/2026 or 3-4-2026
-      /\b(0?[1-9]|1[0-2])[\/-](0?[1-9]|[12][0-9]|3[01])[\/-](20[0-9]{2})\b/,
+      /\b(20[0-9]{2})[\/\-](0?[1-9]|1[0-2])[\/\-](0?[1-9]|[12][0-9]|3[01])\b/,
+      /\b(0?[1-9]|1[0-2])[\/\-](0?[1-9]|[12][0-9]|3[01])[\/\-](20[0-9]{2})\b/,
+      /\b(20[2-3][0-9])(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])\b/,
     ];
     var monthMap = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
     for(var i=0;i<patterns.length;i++){
-      var m = text.match(patterns[i]);
+      var m = header.match(patterns[i]);
       if(m){
         try{
           var d;
@@ -926,10 +1751,12 @@ function App(){
             d = new Date(parseInt(m[3]), mo, parseInt(m[2]));
           } else if(i===1){
             d = new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]));
-          } else {
+          } else if(i===2){
             d = new Date(parseInt(m[3]), parseInt(m[1])-1, parseInt(m[2]));
+          } else {
+            d = new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]));
           }
-          if(!isNaN(d.getTime()) && d.getFullYear()>=2020) return d;
+          if(!isNaN(d.getTime()) && d.getFullYear()>=2020 && d.getFullYear()<=2030) return d;
         }catch(e){}
       }
     }
@@ -955,6 +1782,8 @@ function App(){
         else if(/提醒/.test(title)){icon="🔔";color="#1a1505";border="#d9770640";accent="#d97706";}
         else if(/驗證|準確|印證/.test(title)){icon="✅";color="#140d22";border="#ab47bc40";accent="#7c3aed";}
         else if(/風險/.test(title)){icon="⚠️";color="#1a0808";border="#ff4d6d40";accent="#ef4444";}
+        else if(/鄉民|網路|討論|情緒|Reddit|散戶/.test(title)){icon="🌐";color="#0d1520";border="#38bdf840";accent="#38bdf8";}
+        else if(/技術面|技術/.test(title)){icon="📊";color="#0a1a10";border="#22c55e40";accent="#22c55e";}
         current={title,icon,color,border,accent,lines:[]};
       } else if(trimmed){
         if(!current) current={title:"分析摘要",icon:"📋",color:"#161616",border:"#ffffff15",accent:"#ffffff60",lines:[]};
@@ -1042,10 +1871,45 @@ function App(){
         return ["["+dateTag+"]",d.time,d.sym,d.type,"$"+d.price,fmtM(d.notional),d.side].join(" ");
       }).join(NL);
 
+      // ── 技術面數據 ──
+      var techLines = "（無法取得技術面數據）";
+      try{
+        var tickerRe2 = /\b([A-Z]{2,5})\b/g;
+        var techTickers = [];
+        var m2;
+        while((m2 = tickerRe2.exec(reportText)) !== null){
+          if(techTickers.indexOf(m2[1])<0 && techTickers.length<5) techTickers.push(m2[1]);
+        }
+        var techArr = [];
+        for(var ti=0; ti<techTickers.length; ti++){
+          var sym = techTickers[ti];
+          var p = prices[sym];
+          if(p && p.price){
+            var price52wHigh = p.yearHigh ? "$"+Number(p.yearHigh).toFixed(2) : "N/A";
+            var price52wLow  = p.yearLow  ? "$"+Number(p.yearLow).toFixed(2)  : "N/A";
+            var ma50  = p.ma50  ? "$"+Number(p.ma50).toFixed(2)  : "N/A";
+            var ma200 = p.ma200 ? "$"+Number(p.ma200).toFixed(2) : "N/A";
+            var rsi   = p.rsi   ? Number(p.rsi).toFixed(1)  : "N/A";
+            var currentPct52 = (p.yearHigh && p.yearLow) ?
+              ((p.price - p.yearLow)/(p.yearHigh - p.yearLow)*100).toFixed(1)+"%" : "N/A";
+            var trendVsMA50  = p.ma50  ? (p.price > p.ma50  ? "站上MA50↑"  : "跌破MA50↓")  : "";
+            var trendVsMA200 = p.ma200 ? (p.price > p.ma200 ? "站上MA200↑" : "跌破MA200↓") : "";
+            techArr.push(sym+" 現價:$"+p.price.toFixed(2)
+              +" 52W區間:["+price52wLow+"~"+price52wHigh+"] 52W位置:"+currentPct52
+              +" MA50:"+ma50+" MA200:"+ma200
+              +" "+trendVsMA50+" "+trendVsMA200
+              +(rsi!=="N/A"?" RSI:"+rsi+(Number(rsi)>70?"[超買]":Number(rsi)<30?"[超賣]":""):""));
+          } else {
+            techArr.push(sym+": 技術面數據暫無");
+          }
+        }
+        if(techArr.length) techLines = techArr.join(NL);
+      }catch(te){ techLines = "技術面數據取得失敗"; }
+
       // ── 3個月歷史快照統計 ──
       var threeMonthsAgo = Date.now() - 90*24*3600*1000;
       var recentSnaps = flowSnaps.filter(function(s){ return s.ts > threeMonthsAgo; });
-      var tickerRe = /([A-Z]{2,5})/g;
+      var tickerRe = /\b([A-Z]{2,5})\b/g;
       var tickers = [];
       var m;
       while((m = tickerRe.exec(reportText)) !== null){
@@ -1071,26 +1935,34 @@ function App(){
         });
       });
       var dateRangeStart = recentSnaps.length ? new Date(recentSnaps[recentSnaps.length-1].ts).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}) : "";
-      var dateRangeEnd = recentSnaps.length ? new Date(recentSnaps[0].ts).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}) : "";
+      var dateRangeEnd   = recentSnaps.length ? new Date(recentSnaps[0].ts).toLocaleDateString("zh-TW",{month:"2-digit",day:"2-digit"}) : "";
       var histLines = Object.keys(histMap).map(function(sym){
         var h = histMap[sym];
         var bias = h.callPrem > h.putPrem ? "偏多" : h.putPrem > h.callPrem ? "偏空" : "中性";
         return sym+" 出現"+h.count+"次（"+dateRangeStart+"～"+dateRangeEnd+"）CALL溢價:"+fmtM(h.callPrem)+" PUT溢價:"+fmtM(h.putPrem)+" 異常:"+h.unusual+"筆 掃單:"+h.sweep+"筆 機構方向:"+bias;
       }).join(NL) || "無相關歷史記錄（快照數："+recentSnaps.length+"）";
 
-      // ── 舊報告驗證模式 ──
+      // ── 驗證模式強化 ──
       var validationSection = "";
       if(existingReport && existingReport.ts){
         var reportDate = new Date(existingReport.ts).toLocaleString("zh-TW");
         var daysPassed = Math.floor((Date.now()-existingReport.ts)/86400000);
+        // 提取原始報告中的具體預測（找帶 YYYY-MM-DD 的行）
+        var origPredictions = (existingReport.aiAnalysis||"").split("\n")
+          .filter(function(l){ return /\d{4}-\d{2}-\d{2}|進場|出場|目標|止損/.test(l); })
+          .slice(0,10).join(NL);
         validationSection = [
-          "","【⚠️ 報告驗證模式】",
+          "","【⚠️ 報告驗證模式 - 強化版】",
           "原始報告時間："+reportDate+"（距今"+daysPassed+"天）",
           "原始報告內容："+existingReport.content,
-          "原始AI分析："+(existingReport.aiAnalysis||"無"),
+          "原始AI策略預測（含日期）："+NL+(origPredictions||"無具體日期預測"),
+          "現在市場狀態（期權流、暗池、技術面均已更新）",
           ""
         ].join(NL);
       }
+
+      var isValidation = !!(existingReport && existingReport.ts);
+      var daysPassed2 = isValidation ? Math.floor((Date.now()-(existingReport.ts||Date.now()))/86400000) : 0;
 
       var parts = [
         "你是專業美股期權分析師。分析時間："+nowStr,
@@ -1098,30 +1970,52 @@ function App(){
         validationSection,
         "【即時期權流（前15筆）】",flowLines||"暫無數據","",
         "【即時暗池（前10筆）】",darkLines||"暫無數據","",
+        "【技術面數據】",techLines,"",
         "【3個月歷史期權流統計】",histLines,"",
-        "請依序完成：",
-        "1. 【交叉比對】報告提到的股票在即時與歷史期權流/暗池中的機構資金方向是否與報告觀點一致？",
-        "2. 【策略推薦】根據報告觀點＋市場情緒，推薦2-3個期權策略。每個策略須明確標示：操作日期建議、行使價、到期日（YYYY-MM-DD格式）、建議持有天數",
+        "請依序完成（每項都要有具體數字，不能含糊）：",
+        "1. 【交叉比對】報告提到的股票在即時與歷史期權流/暗池中的機構資金方向是否與報告觀點一致？技術面（MA50/MA200/RSI）是否支撐？",
+        "2. 【策略推薦】根據報告觀點＋市場情緒＋技術面，推薦2-3個期權策略。每個策略須明確標示：操作日期建議、行使價、到期日（YYYY-MM-DD格式）、建議持有天數、最大虧損承受金額",
         "3. 【時間點建議】給出具體操作時間窗口：進場日期範圍、出場條件、最晚止損日期（均用YYYY-MM-DD標示）",
-        existingReport ? "4. 【報告驗證】距原始報告"+Math.floor((Date.now()-(existingReport.ts||Date.now()))/86400000)+"天後，原報告觀點是否被市場數據印證？準確度評估（0-100分）並說明原因。" : "4. 【提醒建議】給出1-2個提醒（格式：[提醒] 條件 | 建議操作）",
+        isValidation
+          ? "4. 【報告驗證 - 詳細版】距原始報告"+daysPassed2+"天後：(a)原始各項預測是否準確（逐條對比）(b)技術面是否按預期走 (c)機構方向是否如預測 (d)整體準確度：X/100分，理由是... (e)若當時照策略操作，現在損益估算"
+          : "4. 【提醒建議】給出1-2個提醒（格式：[提醒] 條件 | 建議操作）",
+        "5. 【網路鄉民看法】請搜尋並總結目前市場上對報告提到的主要標的之討論熱度與主流觀點（Reddit WallStreetBets/options、Twitter/X、主流財經論壇），分析：(a)散戶情緒（看多%/看空%估算）(b)近期最熱討論點 (c)鄉民觀點是否與機構方向一致或背離 (d)極端情緒警示（過度樂觀/悲觀）",
         "","⚠️ 每項分析都必須標明分析時間："+nowStr,
-        "用繁體中文回答，結構清晰，重點突出。"
+        "用繁體中文回答，結構清晰，重點突出，每個section都要有標題【XXX】。"
       ];
       var prompt = parts.join(NL);
 
-      var resp = await fetch(UW_WORKER+"/ai/analyze",{
+      // ── 呼叫 Anthropic API（透過 Cloudflare Worker 代理）──
+      var apiResp = await fetch(UW_WORKER + "/api/ai", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({prompt:prompt})
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:4096,
+          tools:[{type:"web_search_20250305",name:"web_search"}],
+          messages:[{role:"user",content:prompt}]
+        })
       });
-      var data = await resp.json();
-      var text = (data&&data.result)||"分析失敗，請重試";
+      if(!apiResp.ok){
+        var errBody = "";
+        try{ errBody = await apiResp.text(); }catch(ignored){}
+        throw new Error("Worker HTTP " + apiResp.status + (errBody ? ": " + errBody.slice(0,200) : ""));
+      }
+      var apiData = await apiResp.json();
+      // 組合所有 text blocks
+      var text = "";
+      if(apiData && apiData.content){
+        apiData.content.forEach(function(block){
+          if(block.type==="text") text += block.text;
+        });
+      }
+      if(!text) text = "分析失敗，請重試";
       setAiResult(text);
+
       // ── 自動儲存 ──
       if(!existingReport && reportInput.trim()){
         var now2 = new Date();
         var timeStr2 = now2.toLocaleString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
-        // 自動分類：從報告文字判斷類別
         var cat = "其他";
         var rt = reportText.toLowerCase();
         if(/財報|earnings|revenue|eps|q[1-4]/.test(rt)) cat = "財報";
@@ -1130,28 +2024,23 @@ function App(){
         else if(/產業|sector|晶片|ai|半導體|cloud|藥|生技/.test(rt)) cat = "產業";
         else if(/期權|option|call|put|iv|delta|gamma/.test(rt)) cat = "期權";
 
-        // 從 AI 分析結果萃取標題：找第一個有意義的行
         var autoTitle = reportTitle.trim();
         if(!autoTitle){
-          // 先嘗試從 AI 結果第一行抓主題
           var aiLines = text.split("\n").map(function(l){return l.trim().replace(/^#+\s*/,"").replace(/\*\*/g,"").trim();}).filter(Boolean);
           var titleFromAI = "";
           for(var ai=0; ai<Math.min(aiLines.length,5); ai++){
             var al = aiLines[ai];
-            // 跳過太短或只是分類標題的行
             if(al.length>8 && !/^[1-5][.、]$/.test(al) && !/^【.{1,4}】$/.test(al)){
               titleFromAI = al.length>45 ? al.slice(0,45)+"…" : al;
               break;
             }
           }
-          // 若 AI 結果沒有，從報告本文抓
           if(!titleFromAI){
             var firstLines = reportText.trim().split("\n").map(function(l){
               return l.trim().replace(/^[#*>\-=_~`]+\s*/,"").replace(/\*\*/g,"").replace(/^\[.+\]\s*/,"").trim();
             }).filter(function(l){ return l.length>6; });
             titleFromAI = firstLines.length>0 ? (firstLines[0].length>45?firstLines[0].slice(0,45)+"…":firstLines[0]) : "";
           }
-          // 加上日期前綴：優先用文章內的作者日期
           var articleDate = extractArticleDate(reportText);
           var prefixDate = articleDate || now2;
           var datePrefix = (prefixDate.getMonth()+1).toString().padStart(2,"0")+"/"+(prefixDate.getDate()).toString().padStart(2,"0");
@@ -1163,6 +2052,7 @@ function App(){
           content:reportInput.trim(), aiAnalysis:text
         };
         setReports(function(prev){ return [newR,...prev]; });
+        cloudSaveReport(newR);
       }
     }catch(e){
       setAiResult("AI 分析失敗："+e.message);
@@ -1199,6 +2089,7 @@ function App(){
       aiAnalysis:aiResult,
     };
     setReports(prev=>[r,...prev]);
+    cloudSaveReport(r);
     setReportInput(""); setReportTitle(""); setAiResult(null);
   };
 
@@ -1223,8 +2114,10 @@ function App(){
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   .anim{animation:fadeIn .15s ease}
-  .tr:hover{background:#ffffff06!important}
-  .chip:hover{opacity:.8}
+  .tr{transition:filter .08s}
+  .tr:hover{filter:brightness(1.6) !important;outline:1px solid #ffffff18;outline-offset:-1px}
+  .nb:hover{background:rgba(217,119,6,.12)!important;transition:background .1s}
+  .chip:hover{opacity:1;filter:brightness(1.4)}
   input,textarea{outline:none}
   input::placeholder,textarea::placeholder{color:#444}
   button,input,textarea,select{font-family:inherit}
@@ -1297,13 +2190,15 @@ function App(){
 
         {/* 導覽 */}
         {NAV_ITEMS.map(n=>(
-          <div key={n.id} className="nb" onClick={()=>setTab(n.id)} style={{
-            display:"flex",alignItems:"center",gap:10,padding:"12px 14px",cursor:"pointer",
+          <div key={n.id} className={n.disabled?"":"nb"} onClick={()=>!n.disabled&&setTab(n.id)} style={{
+            display:"flex",alignItems:"center",gap:10,padding:"12px 14px",cursor:n.disabled?"default":"pointer",
             background:tab===n.id?"#ffa72612":"transparent",
             borderLeft:tab===n.id?"2px solid #ffa726":"2px solid transparent",
+            opacity:n.disabled?0.35:1,
             transition:"all .15s"}}>
             <span style={{fontSize:16,color:tab===n.id?"#d97706":"#ffffff28",width:20,textAlign:"center"}}>{n.icon}</span>
             <span style={{fontSize:14,color:tab===n.id?"#fff":"#ffffff50"}}>{n.label}</span>
+            {n.disabled&&<span style={{fontSize:9,color:"#666",background:"#1a1a1a",border:"1px solid #333",borderRadius:3,padding:"1px 4px",marginLeft:"auto",letterSpacing:0.5}}>建置中</span>}
             {n.id==="flow"&&<div style={{marginLeft:"auto",fontSize:11,padding:"1px 6px",borderRadius:3,
               background:"#00e5a015",color:"#10b981",border:"1px solid #00e5a030"}}>{flow.filter(f=>f.unusual).length}</div>}
             {n.id==="signals"&&<div style={{marginLeft:"auto",fontSize:11,padding:"1px 6px",borderRadius:3,
@@ -1379,11 +2274,403 @@ function App(){
           {/* ══════ 指揮中心 ══════ */}
           {tab==="command"&&(
             <div className="anim" style={{display:"flex",flexDirection:"column",gap:16}}>
+
+              {/* ── CSV 匯入 Modal ── */}
+              {csvImportOpen&&(
+                <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <div onClick={()=>{setCsvImportOpen(false);setCsvPreview(null);}} style={{position:"absolute",inset:0,background:"#000000bb"}}/>
+                  <div style={{position:"relative",width:640,maxHeight:"85vh",background:"#111",border:"1px solid #222",borderRadius:8,
+                    display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+                    {/* Header */}
+                    <div style={{padding:"18px 24px",borderBottom:"1px solid #1e1e2e",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+                      <div>
+                        <div style={{fontSize:15,fontWeight:700,color:"#fff",marginBottom:3}}>📂 匯入 Firstrade CSV</div>
+                        <div style={{fontSize:11,color:"#444"}}>Accounts → Tax Center → Download Account Information → Excel CSV Files</div>
+                      </div>
+                      <div onClick={()=>{setCsvImportOpen(false);setCsvPreview(null);}} style={{fontSize:18,color:"#555",cursor:"pointer",padding:"2px 6px"}}>✕</div>
+                    </div>
+
+                    <div style={{flex:1,overflowY:"auto",padding:24}}>
+                      {!csvPreview?(
+                        <div>
+                          {/* 拖拉上傳區 */}
+                          <div
+                            onDragOver={function(e){e.preventDefault();setCsvDragging(true);}}
+                            onDragLeave={function(){setCsvDragging(false);}}
+                            onDrop={function(e){
+                              e.preventDefault(); setCsvDragging(false);
+                              var file=e.dataTransfer.files[0];
+                              if(!file) return;
+                              var reader=new FileReader();
+                              reader.onload=function(ev){
+                                var result=parseFirstradeCSV(ev.target.result);
+                                setCsvPreview({raw:ev.target.result.slice(0,500),parsed:result.parsed,errors:result.errors,headers:result.headers,rawCount:result.rawCount});
+                              };
+                              reader.readAsText(file);
+                            }}
+                            style={{border:"2px dashed "+(csvDragging?"#3b82f6":"#2a2a3a"),borderRadius:8,padding:"48px 24px",
+                              textAlign:"center",cursor:"pointer",background:csvDragging?"#3b82f608":"#0d0d0d",transition:"all .2s"}}>
+                            <div style={{fontSize:36,marginBottom:12}}>📄</div>
+                            <div style={{fontSize:14,color:"#888",marginBottom:6}}>將 CSV 拖拉至此</div>
+                            <div style={{fontSize:12,color:"#444",marginBottom:16}}>或</div>
+                            <label style={{padding:"8px 20px",background:"#3b82f618",border:"1px solid #3b82f640",borderRadius:4,
+                              cursor:"pointer",fontSize:13,color:"#3b82f6",fontWeight:600}}>
+                              選擇檔案
+                              <input type="file" accept=".csv,.txt" style={{display:"none"}}
+                                onChange={function(e){
+                                  var file=e.target.files[0]; if(!file) return;
+                                  var reader=new FileReader();
+                                  reader.onload=function(ev){
+                                    var result=parseFirstradeCSV(ev.target.result);
+                                    setCsvPreview({raw:ev.target.result.slice(0,500),parsed:result.parsed,errors:result.errors,headers:result.headers,rawCount:result.rawCount});
+                                  };
+                                  reader.readAsText(file);
+                                }}/>
+                            </label>
+                          </div>
+
+                          {/* 說明 */}
+                          <div style={{marginTop:20,padding:16,background:"#0d1520",border:"1px solid #1e3a5f",borderRadius:6}}>
+                            <div style={{fontSize:12,color:"#3b82f6",fontWeight:600,marginBottom:10}}>📋 如何從 Firstrade 匯出 CSV</div>
+                            {[
+                              "登入 Firstrade → 上方選單點「Accounts」",
+                              "選「Tax Center」",
+                              "往下捲到「Download Account Information」",
+                              "選「Excel CSV Files」",
+                              "選擇帳戶和日期範圍（建議選最近一年）",
+                              "點「Download」，下載完成後拖拉到上方框"
+                            ].map(function(s,i){
+                              return React.createElement("div",{key:i,style:{display:"flex",gap:10,marginBottom:5,fontSize:12,color:"#888"}},
+                                React.createElement("span",{style:{color:"#3b82f650",minWidth:16}},i+1+"."),
+                                React.createElement("span",null,s)
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ):(
+                        <div>
+                          {/* 解析結果預覽 */}
+                          {csvPreview.errors.length>0&&(
+                            <div style={{padding:12,background:"#1a0808",border:"1px solid #ef444440",borderRadius:6,marginBottom:14}}>
+                              <div style={{fontSize:12,color:"#ef4444",fontWeight:600,marginBottom:6}}>⚠️ 解析警告</div>
+                              {csvPreview.errors.map(function(e,i){return React.createElement("div",{key:i,style:{fontSize:11,color:"#ef4444aa"}},e);})}
+                            </div>
+                          )}
+
+                          <div style={{padding:12,background:"#0a1a12",border:"1px solid #10b98130",borderRadius:6,marginBottom:14}}>
+                            <div style={{display:"flex",gap:20,fontSize:12}}>
+                              <span style={{color:"#888"}}>原始列數：<span style={{color:"#10b981",fontWeight:600}}>{csvPreview.rawCount}</span></span>
+                              <span style={{color:"#888"}}>有效交易：<span style={{color:"#10b981",fontWeight:600}}>{csvPreview.parsed.length}</span></span>
+                              <span style={{color:"#888"}}>識別欄位：<span style={{color:"#10b981",fontWeight:600}}>{(csvPreview.headers||[]).length}</span></span>
+                            </div>
+                          </div>
+
+                          {/* 偵測到的欄位 */}
+                          <div style={{marginBottom:14}}>
+                            <div style={{fontSize:11,color:"#555",marginBottom:6}}>偵測到的欄位</div>
+                            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                              {(csvPreview.headers||[]).map(function(h,i){
+                                return React.createElement("span",{key:i,style:{padding:"2px 8px",background:"#1a1a2e",border:"1px solid #252738",borderRadius:3,fontSize:10,color:"#666c84"}},h);
+                              })}
+                            </div>
+                          </div>
+
+                          {/* 交易預覽表 */}
+                          <div style={{marginBottom:14}}>
+                            <div style={{fontSize:11,color:"#555",marginBottom:6}}>交易紀錄預覽（前10筆）</div>
+                            <div style={{background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:4,overflow:"hidden"}}>
+                              <div style={{display:"grid",gridTemplateColumns:"80px 1fr 70px 70px 80px",
+                                padding:"6px 10px",background:"#161616",fontSize:10,color:"#555",gap:8}}>
+                                {["日期","標的","類型","數量","價格"].map(function(h){return React.createElement("span",{key:h},h);})}
+                              </div>
+                              {csvPreview.parsed.slice(0,10).map(function(t,i){
+                                var actionColor = t.action==="BUY"?"#10b981":t.action==="SELL"?"#ef4444":"#888";
+                                return React.createElement("div",{key:i,
+                                  style:{display:"grid",gridTemplateColumns:"80px 1fr 70px 70px 80px",
+                                    padding:"6px 10px",borderTop:"1px solid #141414",fontSize:11,color:"#888",gap:8,
+                                    background:i%2===0?"#0d0d0d":"#0a0a0a"}},
+                                  React.createElement("span",null,t.date),
+                                  React.createElement("span",{style:{color:"#fff",fontWeight:600}},
+                                    t.isOption?(t.sym+" "+t.optType+" $"+t.optStrike):t.sym),
+                                  React.createElement("span",{style:{color:actionColor}},t.action),
+                                  React.createElement("span",null,t.qty),
+                                  React.createElement("span",null,"$"+t.price.toFixed(2))
+                                );
+                              })}
+                            </div>
+                            {csvPreview.parsed.length>10&&(
+                              <div style={{fontSize:11,color:"#444",marginTop:6}}>...還有 {csvPreview.parsed.length-10} 筆</div>
+                            )}
+                          </div>
+
+                          {/* 聚合後持倉預覽 */}
+                          {(function(){
+                            var result = csvToPositions(csvPreview.parsed);
+                            return React.createElement("div", null,
+                              React.createElement("div", {style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:6}},
+                                React.createElement("span", {style:{fontSize:11,color:"#555"}},
+                                  "已實現 ",
+                                  React.createElement("span", {style:{color:result.realizedPnl>=0?"#10b981":"#ef4444",fontWeight:700}},
+                                    (result.realizedPnl>=0?"+":"")+"$"+Math.abs(result.realizedPnl).toLocaleString()
+                                  )
+                                ),
+                                React.createElement("span", {style:{fontSize:11,color:"#555"}},
+                                  "勝率 ",
+                                  React.createElement("span", {style:{color:"#d97706",fontWeight:700}}, result.winRate+"%"),
+                                  React.createElement("span", {style:{color:"#444"}}, " ("+result.tradeCount+"筆)")
+                                ),
+                                React.createElement("span", {style:{fontSize:11,color:"#555"}},
+                                  "手續費 ",
+                                  React.createElement("span", {style:{color:"#ef4444aa"}}, "$"+result.totalFees)
+                                )
+                              ),
+                              React.createElement("div", {style:{background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:4,overflow:"hidden",marginBottom:8}},
+                                result.positions.slice(0,8).map(function(p,i){
+                                  return React.createElement("div", {key:i, style:{display:"flex",justifyContent:"space-between",alignItems:"center",
+                                    padding:"7px 12px",borderTop:i>0?"1px solid #141414":"none",fontSize:12}},
+                                    React.createElement("span", {style:{color:"#fff",fontWeight:600}},
+                                      (p.type==="CALL"||p.type==="PUT") ? (p.sym+" "+p.type+" $"+p.strike) : p.sym
+                                    ),
+                                    React.createElement("span", {style:{color:"#888"}}, p.type),
+                                    React.createElement("span", {style:{color:"#d97706"}}, "x"+p.qty),
+                                    React.createElement("span", {style:{color:"#555"}}, "$"+p.entry)
+                                  );
+                                }),
+                                result.positions.length===0 && React.createElement("div", {style:{padding:"20px",textAlign:"center",color:"#444",fontSize:12}},
+                                  "無未平倉部位"
+                                )
+                              ),
+                              result.positions.length>0 && React.createElement("div", {
+                                onClick: function(){
+                                  var res = csvToPositions(csvPreview.parsed);
+                                  // ── 合併模式：CSV 新持倉 merge 進現有持倉，不覆蓋手動新增/刪除 ──
+                                  var existing = JSON.parse(localStorage.getItem("ddh_positions")||"[]");
+                                  var merged = existing.slice(); // 從現有持倉開始
+                                  res.positions.forEach(function(np){
+                                    // 用 sym + type + strike + exp 作為 key
+                                    var key = np.sym+"_"+np.type+"_"+np.strike+"_"+np.exp;
+                                    var found = false;
+                                    for(var i=0;i<merged.length;i++){
+                                      var ep = merged[i];
+                                      var ekey = ep.sym+"_"+ep.type+"_"+ep.strike+"_"+ep.exp;
+                                      if(ekey===key){
+                                        // 已存在 → 更新數量和成本（保留其他欄位）
+                                        merged[i] = Object.assign({},ep,{qty:np.qty,entry:np.entry,note:ep.note||np.note});
+                                        found = true;
+                                        break;
+                                      }
+                                    }
+                                    if(!found) merged.push(np); // 新持倉 → 新增
+                                  });
+                                  saveUserPositions(merged);
+                                  setPnl(function(p){ return {total:p.total+res.realizedPnl, day:p.day}; });
+                                  setCsvImportOpen(false);
+                                  setCsvPreview(null);
+                                },
+                                style:{padding:"10px",background:"#10b98118",border:"1px solid #10b98140",borderRadius:4,
+                                  cursor:"pointer",textAlign:"center",fontSize:13,color:"#10b981",fontWeight:600}
+                              },
+                                "確認匯入 "+result.positions.length+" 筆持倉"
+                              )
+                            );
+                          })()}
+
+                          <div style={{marginTop:12}}>
+                            <div onClick={()=>setCsvPreview(null)}
+                              style={{padding:"7px",background:"#222",border:"1px solid #333",borderRadius:4,
+                                cursor:"pointer",textAlign:"center",fontSize:12,color:"#555"}}>
+                              ← 重新上傳
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── 持倉 Drawer ── */}
+              {posDrawerOpen&&(
+                <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
+                  <div onClick={()=>setPosDrawerOpen(false)} style={{flex:1,background:"#000000aa"}}/>
+                  <div style={{width:460,background:"#111",borderLeft:"1px solid #222",display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden"}}>
+                    {/* Drawer Header */}
+                    <div style={{padding:"18px 20px",borderBottom:"1px solid #1e1e2e",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+                      <div style={{fontSize:14,fontWeight:700,color:"#fff",letterSpacing:1}}>📋 持倉管理</div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <div onClick={()=>{setPosForm({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});setPosEditRow("new");}}
+                          style={{padding:"5px 14px",background:"#d9770618",border:"1px solid #d9770640",borderRadius:4,cursor:"pointer",fontSize:12,color:"#d97706",fontWeight:600}}>
+                          ＋ 新增持倉
+                        </div>
+                        <div onClick={()=>setPosDrawerOpen(false)} style={{fontSize:18,color:"#555",cursor:"pointer",lineHeight:1,padding:"2px 6px"}}>✕</div>
+                      </div>
+                    </div>
+
+                    {/* 表單：新增或編輯 */}
+                    {posEditRow!==null&&(
+                      <div style={{padding:"14px 20px",borderBottom:"1px solid #1a1a2e",background:"#0d0d1a",flexShrink:0}}>
+                        <div style={{fontSize:12,color:"#666c84",marginBottom:10,letterSpacing:1}}>{posEditRow==="new"?"新增持倉":"編輯持倉"}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                          {[
+                            {key:"sym",   label:"標的",   ph:"TSLA"},
+                            {key:"qty",   label:"數量",   ph:"100"},
+                            {key:"entry", label:"成本價", ph:"250.00"},
+                          ].map(function(f){
+                            return React.createElement("div",{key:f.key},
+                              React.createElement("div",{style:{fontSize:11,color:"#555",marginBottom:3}},f.label),
+                              React.createElement("input",{
+                                value:posForm[f.key],
+                                onChange:function(e){var v=e.target.value; if(f.key==="sym") v=v.toUpperCase(); setPosForm(function(p){return {...p,[f.key]:v};});},
+                                placeholder:f.ph,
+                                style:{width:"100%",background:"#161616",border:"1px solid #2a2a3a",borderRadius:4,
+                                  padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}
+                              })
+                            );
+                          })}
+                          <div>
+                            <div style={{fontSize:11,color:"#555",marginBottom:3}}>類型</div>
+                            <select value={posForm.type} onChange={function(e){setPosForm(function(p){return {...p,type:e.target.value};});}}
+                              style={{width:"100%",background:"#161616",border:"1px solid #2a2a3a",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none"}}>
+                              {["股票","CALL","PUT","ETF","Covered Call","Cash-Secured PUT","Bull Call Spread","Bear Put Spread","PMCC","Diagonal Spread","Calendar Spread","Iron Condor","Straddle","Strangle","LEAPS","期貨","加密貨幣","其他"].map(function(t){return React.createElement("option",{key:t,value:t},t);})}
+                            </select>
+                          </div>
+                          <div>
+                            <div style={{fontSize:11,color:"#555",marginBottom:3}}>方向</div>
+                            <select value={posForm.side} onChange={function(e){setPosForm(function(p){return {...p,side:e.target.value};});}}
+                              style={{width:"100%",background:"#161616",border:"1px solid #2a2a3a",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none"}}>
+                              {["多頭","空頭"].map(function(t){return React.createElement("option",{key:t,value:t},t);})}
+                            </select>
+                          </div>
+                          {(posForm.type==="CALL"||posForm.type==="PUT")&&React.createElement(React.Fragment,null,
+                            React.createElement("div",null,
+                              React.createElement("div",{style:{fontSize:11,color:"#555",marginBottom:3}},"行使價"),
+                              React.createElement("input",{value:posForm.strike,onChange:function(e){setPosForm(function(p){return {...p,strike:e.target.value};});},
+                                placeholder:"250",style:{width:"100%",background:"#161616",border:"1px solid #2a2a3a",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}})
+                            ),
+                            React.createElement("div",null,
+                              React.createElement("div",{style:{fontSize:11,color:"#555",marginBottom:3}},"到期日"),
+                              React.createElement("input",{type:"date",value:posForm.exp,onChange:function(e){setPosForm(function(p){return {...p,exp:e.target.value};});},
+                                style:{width:"100%",background:"#161616",border:"1px solid #2a2a3a",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box",colorScheme:"dark"}})
+                            )
+                          )}
+                        </div>
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:11,color:"#555",marginBottom:3}}>備註（選填）</div>
+                          <input value={posForm.note} onChange={function(e){setPosForm(function(p){return {...p,note:e.target.value};});}}
+                            placeholder="例：covered call hedge"
+                            style={{width:"100%",background:"#161616",border:"1px solid #2a2a3a",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <div onClick={function(){
+                            if(!posForm.sym||!posForm.qty||!posForm.entry) return;
+                            var newItem={id:posEditRow==="new"?Date.now():posEditRow.id,
+                              sym:posForm.sym.toUpperCase(),type:posForm.type,
+                              qty:Number(posForm.qty),entry:Number(posForm.entry),
+                              strike:posForm.strike,exp:posForm.exp,
+                              side:posForm.side,note:posForm.note};
+                            var arr = posEditRow==="new"
+                              ? [...userPositions, newItem]
+                              : userPositions.map(function(u){return u.id===newItem.id?newItem:u;});
+                            saveUserPositions(arr);
+                            setPosEditRow(null);
+                          }} style={{flex:1,padding:"7px",background:"#10b98118",border:"1px solid #10b98140",borderRadius:4,cursor:"pointer",textAlign:"center",fontSize:13,color:"#10b981",fontWeight:600}}>
+                            ✓ 確認儲存
+                          </div>
+                          <div onClick={()=>setPosEditRow(null)}
+                            style={{padding:"7px 16px",background:"#222",border:"1px solid #333",borderRadius:4,cursor:"pointer",fontSize:13,color:"#555"}}>
+                            取消
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 持倉清單 */}
+                    <div style={{flex:1,overflowY:"auto",padding:"8px 20px"}}>
+                      {userPositions.length===0?(
+                        <div style={{textAlign:"center",padding:"60px 20px",color:"#444"}}>
+                          <div style={{fontSize:36,marginBottom:12}}>📭</div>
+                          <div style={{fontSize:14,marginBottom:6}}>尚未建立持倉</div>
+                          <div style={{fontSize:12,color:"#333"}}>點上方「＋ 新增持倉」開始</div>
+                        </div>
+                      ):userPositions.map(function(u){
+                        var live=prices[u.sym];
+                        var cur=live?.price||Number(u.entry);
+                        var pnlAmt=((cur-Number(u.entry))*u.qty*(u.side==="空頭"?-1:1));
+                        var pct=Number(u.entry)>0?((cur-Number(u.entry))/Number(u.entry)*100*(u.side==="空頭"?-1:1)):0;
+                        return React.createElement("div",{key:u.id,
+                          style:{padding:"11px 0",borderBottom:"1px solid #1a1a1a",display:"flex",alignItems:"center",gap:10}},
+                          React.createElement("div",{style:{flex:1}},
+                            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:3}},
+                              React.createElement("span",{style:{fontSize:14,fontWeight:700,color:"#fff"}},(u.type==="CALL"||u.type==="PUT")?(u.sym+" "+u.type+" $"+u.strike):u.sym),
+                              React.createElement("span",{style:{fontSize:10,padding:"1px 6px",borderRadius:3,background:u.side==="多頭"?"#10b98120":"#ef444420",color:u.side==="多頭"?"#10b981":"#ef4444"}},u.side),
+                              React.createElement("span",{style:{fontSize:10,color:"#444"}},u.type)
+                            ),
+                            React.createElement("div",{style:{display:"flex",gap:12,fontSize:11,color:"#555"}},
+                              React.createElement("span",null,"×"+u.qty),
+                              React.createElement("span",null,"成本 $"+Number(u.entry).toFixed(2)),
+                              live&&React.createElement("span",{style:{color:"#888"}},"現 $"+cur.toFixed(2)),
+                              u.exp&&React.createElement("span",{style:{color:"#d97706"}},"到期 "+u.exp)
+                            )
+                          ),
+                          React.createElement("div",{style:{textAlign:"right",minWidth:70}},
+                            React.createElement("div",{style:{fontSize:13,fontWeight:600,color:pnlAmt>=0?"#10b981":"#ef4444"}},
+                              (pnlAmt>=0?"+":"")+Math.round(pnlAmt).toLocaleString()
+                            ),
+                            React.createElement("div",{style:{fontSize:11,color:pct>=0?"#10b98180":"#ef444480"}},
+                              (pct>=0?"+":"")+pct.toFixed(2)+"%"
+                            )
+                          ),
+                          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4}},
+                            React.createElement("div",{onClick:function(){setPosForm({sym:u.sym,type:u.type||"股票",qty:String(u.qty),entry:String(u.entry),strike:u.strike||"",exp:u.exp||"",side:u.side||"多頭",note:u.note||""});setPosEditRow(u);},
+                              style:{fontSize:11,color:"#555",cursor:"pointer",padding:"3px 6px",borderRadius:3,border:"1px solid #2a2a2a"}},"編輯"),
+                            React.createElement("div",{onClick:function(){if(confirm("確定刪除 "+u.sym+" 持倉？")) saveUserPositions(userPositions.filter(function(x){return x.id!==u.id;}));},
+                              style:{fontSize:11,color:"#ef444470",cursor:"pointer",padding:"3px 6px",borderRadius:3,border:"1px solid #2a2a2a"}},"刪除")
+                          )
+                        );
+                      })}
+                    </div>
+
+                    {/* 底部：清空 */}
+                    {userPositions.length>0&&(
+                      <div style={{padding:"12px 20px",borderTop:"1px solid #1a1a1a",flexShrink:0}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div style={{fontSize:12,color:"#444"}}>{userPositions.length} 筆持倉・Supabase 雲端同步</div>
+                          <div onClick={function(){if(confirm("確定清空所有持倉？")) saveUserPositions([]);}}
+                            style={{fontSize:11,color:"#ef444460",cursor:"pointer"}}>清空全部</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── 指揮中心頂部工具列 ── */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:-4}}>
+                <div style={{fontSize:11,color:"#444",letterSpacing:1}}>
+                  {userPositions.length>0
+                    ? "真實持倉 · "+userPositions.length+" 筆 · 雲端同步"
+                    : "使用模擬數據 — 點右方按鈕輸入真實持倉"}
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <div onClick={()=>setCsvImportOpen(true)}
+                    style={{padding:"5px 14px",background:"#3b82f612",border:"1px solid #3b82f630",
+                      borderRadius:4,cursor:"pointer",fontSize:12,color:"#3b82f6",fontWeight:600,display:"flex",gap:5,alignItems:"center"}}>
+                    📂 匯入 Firstrade CSV
+                  </div>
+                  <div onClick={()=>setPosDrawerOpen(true)}
+                    style={{padding:"5px 14px",background:"#d9770612",border:"1px solid #d9770630",
+                      borderRadius:4,cursor:"pointer",fontSize:12,color:"#d97706",fontWeight:600,display:"flex",gap:6,alignItems:"center"}}>
+                    📋 {userPositions.length>0?"管理持倉":"＋ 手動輸入"}
+                  </div>
+                </div>
+              </div>
+
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
                 <KCard label="淨資產價值" value={fmtK(nav)} sub={`+${pnl.pct}% 本月`} spark={sparks.nav} badge="即時"/>
-                <KCard label="夏普比率"   value={metrics.sharpe.toFixed(2)} sub="▲ vs 基準 1.9" spark={sparks.sh} color="#7c3aed"/>
-                <KCard label="勝率"       value={`${metrics.wr.toFixed(1)}%`} sub={`+${(metrics.wr-58).toFixed(1)}pp 基準線`} spark={sparks.wr} color="#3b82f6"/>
-                <KCard label="最大回撤"   value={`${metrics.dd.toFixed(1)}%`} sub="近 90 日" spark={sparks.dd} color="#ef4444"/>
+                <KCard label="夏普比率"   value={metrics.sharpe!=null?metrics.sharpe.toFixed(2):"—"} sub={metrics.sharpe!=null?"▲ vs 基準 1.9":"數據累積中"} spark={sparks.sh} color="#7c3aed"/>
+                <KCard label="勝率"       value={`${metrics.wr.toFixed(1)}%`} sub={`${(metrics.wr-50).toFixed(1)}pp vs 50%`} spark={sparks.wr} color="#3b82f6"/>
+                <KCard label="最大回撤"   value={metrics.dd!=null?(metrics.dd.toFixed(1)+"%"):"—"} sub={metrics.dd!=null?"近 90 日":"數據累積中"} spark={sparks.dd} color="#ef4444"/>
               </div>
 
               {/* 曲線 + 情緒 */}
@@ -1434,11 +2721,30 @@ function App(){
                     border:"1px solid #2e3048",color:"#555555",background:"#ffffff06"}}>↻ 刷新</div>
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                  {SYMS.slice(0,8).map(sym=>{
+                  {watchSyms.map((sym,wi)=>{
                     const q=priceOf(sym);
+                    const isEditing=(watchEdit===wi);
                     return(
-                      <div key={sym} style={{padding:"8px 14px",background:"#0d0d12",border:"1px solid #ffffff0a",borderRadius:4,minWidth:96}}>
-                        <div style={{fontSize:14,fontWeight:700,color:"#ffffff"}}>{sym}</div>
+                      <div key={wi} style={{padding:"8px 14px",background:"#0d0d12",border:"1px solid "+(isEditing?"#d97706":"#ffffff0a"),borderRadius:4,minWidth:96,position:"relative",cursor:"pointer"}}
+                        title="點兩下編輯">
+                        {isEditing
+                          ? <input autoFocus defaultValue={sym}
+                              onBlur={function(e){
+                                var v=e.target.value.trim().toUpperCase();
+                                if(v){
+                                  var ns=watchSyms.slice(); ns[wi]=v;
+                                  setWatchSyms(ns);
+                                  localStorage.setItem('ddh_watch',JSON.stringify(ns));
+                                }
+                                setWatchEdit(null);
+                              }}
+                              onKeyDown={function(e){if(e.key==="Enter")e.target.blur(); if(e.key==="Escape")setWatchEdit(null);}}
+                              style={{width:"100%",background:"transparent",border:"none",outline:"none",
+                                fontSize:14,fontWeight:700,color:"#d97706",fontFamily:"Inter"}}
+                            />
+                          : <div style={{fontSize:14,fontWeight:700,color:"#ffffff"}}
+                              onDoubleClick={function(){setWatchEdit(wi);}}>{sym}</div>
+                        }
                         <div style={{fontSize:18,fontWeight:700,color:"#ffffff",fontFamily:"'IBM Plex Mono'"}}>{q.price}</div>
                         <div style={{fontSize:13,color:q.color}}>{q.pct}</div>
                       </div>
@@ -1482,15 +2788,18 @@ function App(){
                     前五大持倉 {yfOk===true&&<span style={{color:"#10b98150",fontSize:11}}>· 真實報價</span>}
                   </div>
                   {positions.slice(0,5).map(p=>(
-                    <div key={p.sym} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #ffffff06"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:7}}>
-                        <span style={{fontSize:14,fontWeight:700,color:"#ffffff",width:48}}>{p.sym}</span>
+                    <div key={p.optKey||p.sym} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #ffffff06"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:"#ffffff"}}>{p.sym}{p.isOpt?" "+p.strat:""}</div>
+                          {p.isOpt&&<div style={{fontSize:10,color:"#555"}}>${p.strike} {p.exp} ×{Math.abs(p.qty)}</div>}
+                        </div>
                         <Pill color={p.side==="多頭"?"#10b981":"#ef4444"}>{p.side}</Pill>
-                        {p.live&&<div style={{width:5,height:5,borderRadius:"50%",background:"#10b981"}}/>}
+                        {p.live&&<div style={{width:5,height:5,borderRadius:"50%",background:"#10b981",flexShrink:0}} title={p.isOpt?"UW即時":"Yahoo即時"}/>}
                       </div>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:14,fontWeight:600,color:+p.pnl>=0?"#10b981":"#ef4444"}}>{+p.pnl>=0?"+":""}{fmt$(+p.pnl)}</div>
-                        <div style={{fontSize:12,color:+p.pct>=0?"#10b98150":"#ef444450"}}>{p.pct}%</div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:+p.pnl>=0?"#10b981":"#ef4444"}}>{+p.pnl>=0?"+":""}{fmt$(+p.pnl)}</div>
+                        <div style={{fontSize:11,color:"#555"}}>現價 ${p.cur} · {+p.pct>=0?"+":""}{p.pct}%</div>
                       </div>
                     </div>
                   ))}
@@ -1522,26 +2831,427 @@ function App(){
                 {uwLoading&&<span style={{fontSize:12,color:"#d9770660"}}>⟳ 更新中</span>}
               </div>
 
-              {/* ── 篩選列 ── */}
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",flexShrink:0}}>
-                {["全部","CALL","PUT"].map(f=>(
-                  <div key={f} onClick={()=>setFFilter(f)} className="chip" style={{padding:"5px 14px",borderRadius:5,fontSize:13,
-                    background:fFilter===f?`${f==="CALL"?"#10b981":f==="PUT"?"#ef4444":"#d97706"}18`:"#ffffff08",
-                    border:`1px solid ${fFilter===f?f==="CALL"?"#10b98150":f==="PUT"?"#ef444450":"#d9770650":"#ffffff12"}`,
-                    color:fFilter===f?f==="CALL"?"#10b981":f==="PUT"?"#ef4444":"#d97706":"#ffffff40"}}>{f}</div>
-                ))}
-                <div style={{width:1,height:22,background:"#1c1c1c"}}/>
-                <div onClick={()=>setFUnusual(v=>!v)} className="chip" style={{padding:"5px 14px",borderRadius:5,fontSize:13,
-                  background:fUnusual?"#8b5cf615":"#ffffff08",border:`1px solid ${fUnusual?"#8b5cf650":"#ffffff12"}`,
-                  color:fUnusual?"#8b5cf6":"#ffffff40"}}>⚡ 僅異常</div>
-                <div style={{marginLeft:"auto",display:"flex",gap:5}}>
-                  {["時間","溢價"].map(s=>(
-                    <div key={s} onClick={()=>setFSort(s)} className="chip" style={{padding:"4px 10px",borderRadius:4,fontSize:12,
-                      background:fSort===s?"#ffffff12":"#ffffff06",border:"1px solid #282a40",
-                      color:fSort===s?"#fff":"#ffffff40"}}>{s}{fSort===s?" ↓":""}</div>
-                  ))}
+              {/* ══ 策略頁籤列 ══ */}
+              <div style={{flexShrink:0,background:"#0e0e0e",border:"1px solid #1e1e2e",borderRadius:6,overflow:"hidden"}}>
+                {/* 頁籤標題行 */}
+                <div style={{display:"flex",borderBottom:"1px solid #1a1a2a",overflowX:"auto"}}>
+                  {FLOW_PRESETS.map(function(p){
+                    var active = activePreset.id===p.id;
+                    var cnt = flow.filter(function(f){
+                      return p.id==="all" ? true : p.filter(f);
+                    }).length;
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={function(){
+                          setFPreset(p.id);
+                          setFFilter("全部");
+                          setFUnusual(false);
+                          // server-side 重新拉 API（fPreset 更新後 useEffect 也會觸發，但這裡提前呼叫）
+                          if(uwKey) loadUW(uwKey, p.id);
+                        }}
+                        style={{
+                          display:"flex",alignItems:"center",gap:6,
+                          padding:"10px 16px",cursor:"pointer",whiteSpace:"nowrap",
+                          borderBottom: active?"2px solid "+p.color:"2px solid transparent",
+                          background: active?(p.color+"0d"):"transparent",
+                          transition:"all .15s",flexShrink:0,
+                          marginBottom:active?-1:0
+                        }}>
+                        <span style={{fontSize:13,color:active?p.color:"#ffffff30",transition:"color .15s"}}>
+                          {p.icon}
+                        </span>
+                        <span style={{fontSize:13,fontWeight:active?700:400,color:active?"#fff":"#ffffff35",transition:"color .15s"}}>
+                          {p.label}
+                        </span>
+                        {p.id!=="all"&&(
+                          <span style={{fontSize:10,padding:"1px 5px",borderRadius:3,
+                            background:active?(p.color+"25"):"#ffffff08",
+                            color:active?p.color:"#ffffff20",fontWeight:600,
+                            border:"1px solid "+(active?(p.color+"40"):"transparent")}}>
+                            {cnt}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div style={{fontSize:12,color:"#444444"}}>共{filteredFlow.length}筆</div>
+
+                {/* 策略說明條 + 可編輯條件（非 all 時顯示） */}
+                {activePreset.id!=="all"&&(function(){
+                  var pid = activePreset.id;
+                  var pp  = presetParams[pid]||{};
+                  var fmtPrem = function(v){ return v>=1000000?(v/1000000).toFixed(1)+"M":(v>=1000?(v/1000).toFixed(0)+"K":v); };
+                  return (
+                    <div style={{borderBottom:"1px solid "+activePreset.color+"15"}}>
+                      {/* 說明行 + 編輯切換 */}
+                      <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 14px",
+                        background:activePreset.color+"08"}}>
+                        <span style={{fontSize:12,color:activePreset.color+"bb",flex:1}}>{activePreset.desc}</span>
+                        {uwKey&&pid!=="all"&&(
+                          <div
+                            onClick={function(){ if(uwKey) loadUW(uwKey, pid); }}
+                            title="重新用此策略條件從 UW API 拉取最新資料"
+                            style={{fontSize:11,padding:"3px 8px",borderRadius:4,cursor:"pointer",
+                              background:"#3b82f618",border:"1px solid #3b82f640",
+                              color:"#3b82f6",marginRight:4,
+                              opacity:uwLoading?0.4:1}}>
+                            {uwLoading?"⟳...":"↻ 重拉"}
+                          </div>
+                        )}
+                        <div
+                          onClick={function(){ setEditingPreset(function(v){ return v===pid?false:pid; }); }}
+                          style={{fontSize:11,padding:"3px 10px",borderRadius:4,cursor:"pointer",
+                            background:editingPreset===pid?(activePreset.color+"25"):"#ffffff08",
+                            border:"1px solid "+(editingPreset===pid?(activePreset.color+"50"):"#ffffff12"),
+                            color:editingPreset===pid?activePreset.color:"#ffffff40",
+                            display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                          <span>{editingPreset===pid?"✕ 收起":"⚙ 編輯條件"}</span>
+                        </div>
+                        <div
+                          onClick={function(){
+                            var next = Object.assign({}, presetParams);
+                            next[pid] = Object.assign({}, PRESET_DEFAULTS[pid]);
+                            savePresetParams(next);
+                          }}
+                          style={{fontSize:11,padding:"3px 10px",borderRadius:4,cursor:"pointer",
+                            background:"#ffffff06",border:"1px solid #ffffff10",color:"#ffffff30",whiteSpace:"nowrap"}}>
+                          ↺ 重置
+                        </div>
+                      </div>
+
+                      {/* 可編輯參數區 */}
+                      {editingPreset===pid&&(
+                        <div style={{padding:"12px 14px",background:"#0a0a10",
+                          display:"flex",flexWrap:"wrap",gap:16,alignItems:"flex-start"}}>
+
+                          {/* 溢價門檻 */}
+                          {activePreset.params&&activePreset.params.indexOf("premMin")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#f59e0b",letterSpacing:1,fontWeight:600}}>溢價門檻</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[50000,100000,200000,500000,1000000].map(function(v){
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{premMin:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 8px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.premMin===v?"#f59e0b25":"#ffffff08",
+                                        border:"1px solid "+(pp.premMin===v?"#f59e0b60":"#ffffff10"),
+                                        color:pp.premMin===v?"#f59e0b":"#ffffff35"}}>
+                                      {fmtPrem(v)}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* DTE 範圍 */}
+                          {activePreset.params&&activePreset.params.indexOf("dteMin")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#3b82f6",letterSpacing:1,fontWeight:600}}>DTE 最小天數</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[0,1,7,14,30,90].map(function(v){
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{dteMin:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 8px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.dteMin===v?"#3b82f625":"#ffffff08",
+                                        border:"1px solid "+(pp.dteMin===v?"#3b82f660":"#ffffff10"),
+                                        color:pp.dteMin===v?"#3b82f6":"#ffffff35"}}>
+                                      {v===0?"不限":v+"天"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {activePreset.params&&activePreset.params.indexOf("dteMax")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#3b82f6",letterSpacing:1,fontWeight:600}}>DTE 最大天數</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[3,7,14,30,90,999].map(function(v){
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{dteMax:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 8px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.dteMax===v?"#3b82f625":"#ffffff08",
+                                        border:"1px solid "+(pp.dteMax===v?"#3b82f660":"#ffffff10"),
+                                        color:pp.dteMax===v?"#3b82f6":"#ffffff35"}}>
+                                      {v===999?"不限":v+"天"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* IV 上限 */}
+                          {activePreset.params&&activePreset.params.indexOf("ivMax")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#80cbc4",letterSpacing:1,fontWeight:600}}>IV 上限</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[20,30,50,80,999].map(function(v){
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{ivMax:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 8px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.ivMax===v?"#80cbc425":"#ffffff08",
+                                        border:"1px solid "+(pp.ivMax===v?"#80cbc460":"#ffffff10"),
+                                        color:pp.ivMax===v?"#80cbc4":"#ffffff35"}}>
+                                      {v===999?"不限":v+"%"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 選擇類型 */}
+                          {activePreset.params&&activePreset.params.indexOf("optType")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#888",letterSpacing:1,fontWeight:600}}>類型</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {["全部","CALL","PUT"].map(function(v){
+                                  var vc = v==="CALL"?"#10b981":v==="PUT"?"#ef4444":"#aaa";
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{optType:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 10px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.optType===v?(vc+"25"):"#ffffff08",
+                                        border:"1px solid "+(pp.optType===v?(vc+"60"):"#ffffff10"),
+                                        color:pp.optType===v?vc:"#ffffff35"}}>
+                                      {v}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sweep / Unusual toggles */}
+                          {activePreset.params&&activePreset.params.indexOf("sweep")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#888",letterSpacing:1,fontWeight:600}}>必須掃單</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[true,false].map(function(v){
+                                  return (
+                                    <div key={String(v)}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{sweep:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 10px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.sweep===v?"#3b82f625":"#ffffff08",
+                                        border:"1px solid "+(pp.sweep===v?"#3b82f660":"#ffffff10"),
+                                        color:pp.sweep===v?"#3b82f6":"#ffffff35"}}>
+                                      {v?"是":"否"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {activePreset.params&&activePreset.params.indexOf("unusual")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#888",letterSpacing:1,fontWeight:600}}>必須異常</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[true,false].map(function(v){
+                                  return (
+                                    <div key={String(v)}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{unusual:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 10px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.unusual===v?"#8b5cf625":"#ffffff08",
+                                        border:"1px solid "+(pp.unusual===v?"#8b5cf660":"#ffffff10"),
+                                        color:pp.unusual===v?"#8b5cf6":"#ffffff35"}}>
+                                      {v?"是":"否"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Vol/OI 比率 */}
+                          {activePreset.params&&activePreset.params.indexOf("volOiMin")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#06b6d4",letterSpacing:1,fontWeight:600}}>Vol/OI 比率下限</span>
+                              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                                {[0,0.5,1,2,5].map(function(v){
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{volOiMin:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 8px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.volOiMin===v?"#06b6d425":"#ffffff08",
+                                        border:"1px solid "+(pp.volOiMin===v?"#06b6d460":"#ffffff10"),
+                                        color:pp.volOiMin===v?"#06b6d4":"#ffffff35"}}>
+                                      {v===0?"不限":"≥"+v+"x"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <span style={{fontSize:9,color:"#444"}}>Vol{">"} OI 代表今日新建倉，機構方向更明確</span>
+                            </div>
+                          )}
+
+                          {/* 合約數量下限 */}
+                          {activePreset.params&&activePreset.params.indexOf("sizeMin")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#888",letterSpacing:1,fontWeight:600}}>合約數量下限</span>
+                              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                                {[0,50,100,500,1000].map(function(v){
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{sizeMin:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 8px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.sizeMin===v?"#d9770625":"#ffffff08",
+                                        border:"1px solid "+(pp.sizeMin===v?"#d9770660":"#ffffff10"),
+                                        color:pp.sizeMin===v?"#d97706":"#ffffff35"}}>
+                                      {v===0?"不限":v+"口"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* OTM / ITM */}
+                          {activePreset.params&&activePreset.params.indexOf("otm")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#a78bfa",letterSpacing:1,fontWeight:600}}>價內/價外</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[{v:null,l:"不限"},{v:true,l:"僅OTM"},{v:false,l:"僅ITM"}].map(function(item){
+                                  return (
+                                    <div key={String(item.v)}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{otm:item.v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 10px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.otm===item.v?"#a78bfa25":"#ffffff08",
+                                        border:"1px solid "+(pp.otm===item.v?"#a78bfa60":"#ffffff10"),
+                                        color:pp.otm===item.v?"#a78bfa":"#ffffff35"}}>
+                                      {item.l}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <span style={{fontSize:9,color:"#444"}}>OTM = 價外（無內在價值），機構賭方向性更明確</span>
+                            </div>
+                          )}
+
+                          {/* 情緒要求 */}
+                          {activePreset.params&&activePreset.params.indexOf("sentReq")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#888",letterSpacing:1,fontWeight:600}}>情緒要求</span>
+                              <div style={{display:"flex",gap:4}}>
+                                {[{v:null,l:"不限",c:"#888"},{v:"bullish",l:"看多",c:"#10b981"},{v:"bearish",l:"看空",c:"#ef4444"}].map(function(item){
+                                  return (
+                                    <div key={String(item.v)}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{sentReq:item.v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 10px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.sentReq===item.v?(item.c+"25"):"#ffffff08",
+                                        border:"1px solid "+(pp.sentReq===item.v?(item.c+"60"):"#ffffff10"),
+                                        color:pp.sentReq===item.v?item.c:"#ffffff35"}}>
+                                      {item.l}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <span style={{fontSize:9,color:"#444"}}>Ask側成交 = 看多，Bid側成交 = 看空</span>
+                            </div>
+                          )}
+
+                          {/* IV 下限 */}
+                          {activePreset.params&&activePreset.params.indexOf("ivMin")>=0&&(
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <span style={{fontSize:10,color:"#80cbc4",letterSpacing:1,fontWeight:600}}>IV 下限</span>
+                              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                                {[0,20,30,50,80].map(function(v){
+                                  return (
+                                    <div key={v}
+                                      onClick={function(){
+                                        var next=Object.assign({},presetParams);
+                                        next[pid]=Object.assign({},pp,{ivMin:v});
+                                        savePresetParams(next);
+                                      }}
+                                      style={{padding:"3px 8px",borderRadius:3,fontSize:11,cursor:"pointer",
+                                        background:pp.ivMin===v?"#80cbc425":"#ffffff08",
+                                        border:"1px solid "+(pp.ivMin===v?"#80cbc460":"#ffffff10"),
+                                        color:pp.ivMin===v?"#80cbc4":"#ffffff35"}}>
+                                      {v===0?"不限":v+"%"}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* 次要篩選列 */}
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",flexWrap:"wrap"}}>
+                  {["全部","CALL","PUT"].map(f=>(
+                    <div key={f} onClick={()=>setFFilter(f)} className="chip" style={{padding:"4px 12px",borderRadius:4,fontSize:12,
+                      background:fFilter===f?`${f==="CALL"?"#10b981":f==="PUT"?"#ef4444":"#d97706"}18`:"#ffffff06",
+                      border:`1px solid ${fFilter===f?f==="CALL"?"#10b98150":f==="PUT"?"#ef444450":"#d9770650":"#ffffff0f"}`,
+                      color:fFilter===f?f==="CALL"?"#10b981":f==="PUT"?"#ef4444":"#d97706":"#ffffff30"}}>{f}</div>
+                  ))}
+                  <div style={{width:1,height:18,background:"#1c1c1c"}}/>
+                  <div onClick={()=>setFUnusual(v=>!v)} className="chip" style={{padding:"4px 12px",borderRadius:4,fontSize:12,
+                    background:fUnusual?"#8b5cf615":"#ffffff06",border:`1px solid ${fUnusual?"#8b5cf650":"#ffffff0f"}`,
+                    color:fUnusual?"#8b5cf6":"#ffffff30"}}>⚡ 僅異常</div>
+                  <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6}}>
+                    {["時間","溢價"].map(s=>(
+                      <div key={s} onClick={()=>setFSort(s)} className="chip" style={{padding:"3px 10px",borderRadius:4,fontSize:11,
+                        background:fSort===s?"#ffffff10":"#ffffff05",border:"1px solid #1e1e2e",
+                        color:fSort===s?"#fff":"#ffffff30"}}>{s}{fSort===s?" ↓":""}</div>
+                    ))}
+                    <span style={{fontSize:11,color:"#333",marginLeft:4}}>共{filteredFlow.length}筆</span>
+                  </div>
+                </div>
               </div>
 
               {/* ── 主表格：滿版、可滾動 ── */}
@@ -1562,7 +3272,14 @@ function App(){
                     flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
                     <span>⚡ 溢價前20名置頂</span>
                     <span style={{color:"#ffffff25"}}>·</span>
-                    <span style={{color:"#ffffff35"}}>即時更新 · 共{allFiltered.length}筆</span>
+                    <span style={{color:"#ffffff35"}}>
+                          即時更新 · 共{flow.length}筆原始 / 篩選{allFiltered.length}筆
+                          {fPreset&&fPreset!=="all"&&(
+                            <span style={{color:"#3b82f640",marginLeft:6,fontSize:10}}>
+                              ⚙ API已套用{activePreset.label}篩選
+                            </span>
+                          )}
+                        </span>
                   </div>
                 )}
                 {/* 資料列 */}
@@ -1594,12 +3311,27 @@ function App(){
                             transition:"width .3s"}}/>
                         </div>
                       </div>
-                      <span style={{fontSize:12,color:"#555555"}}>{Number(f.size).toLocaleString()}/{Number(f.oi)>999?(Number(f.oi)/1000).toFixed(0)+"K":f.oi}</span>
+                      <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                        <span style={{fontSize:12,color:"#555555"}}>
+                          {Number(f.size).toLocaleString()}/{Number(f.oi)>999?(Number(f.oi)/1000).toFixed(0)+"K":f.oi}
+                        </span>
+                        {f.vol_oi&&f.vol_oi!=="—"&&(
+                          <span style={{fontSize:10,color:Number(f.vol_oi)>=1?"#06b6d4":"#444",fontFamily:"'IBM Plex Mono',monospace"}}>
+                            {Number(f.vol_oi)>=1?"★":""}V/OI {f.vol_oi}
+                          </span>
+                        )}
+                      </div>
                       <span style={{fontSize:13,color:"#555555"}}>{(Number(f.iv)*100).toFixed(0)}%</span>
                       <Pill color={sentColor(f.sent)}>{sentZh(f.sent)}</Pill>
                       <div style={{display:"flex",gap:3,alignItems:"center",flexWrap:"wrap"}}>
                         {f.unusual&&<Pill color="#8b5cf6">⚡</Pill>}
                         {f.sweep&&<Pill color="#3b82f6">掃</Pill>}
+                        {f.is_ask&&<Pill color="#10b981" title="Ask側成交=主動買入">A</Pill>}
+                        {f.alert_rule&&f.alert_rule!=="RepeatedHits"&&f.alert_rule!==""&&(
+                          <Pill color="#f59e0b" title={f.alert_rule} style={{maxWidth:60,overflow:"hidden",textOverflow:"ellipsis"}}>
+                            {f.alert_rule.replace("Floor","地板").replace("Sweep","掃").replace("Repeated","重複").replace("Hits","打").replace("Golden","★").replace("Small","小").replace("Large","大").replace("Mid","中").replace("Cap","").replace(" ","").substring(0,6)}
+                          </Pill>
+                        )}
                         {isTop&&(()=>{var st=inferStrategy(f);return(
                           <span title={st.tip} style={{fontSize:12,padding:"3px 8px",borderRadius:4,
                             background:st.color+"22",color:st.color,border:"1px solid "+st.color+"40",
@@ -1619,41 +3351,114 @@ function App(){
           {/* ══════ 暗池 ══════ */}
           {tab==="darkpool"&&(
             <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-                <KCard label="暗池總成交額" value={fmtM(dark.reduce((a,d)=>a+d.notional,0))} sub="最近成交" color="#7c3aed" badge={uwKey?"UW":"模擬"}/>
-                <KCard label="大宗交易"     value={dark.filter(d=>d.type==="BLOCK").length} sub="≥1萬股" color="#d97706"/>
-                <KCard label="最大單筆"     value={fmtM(Math.max(0,...dark.map(d=>d.notional)))} sub="單筆最高" color="#ef4444"/>
-                <KCard label="買方比例"     value={`${(dark.filter(d=>d.side==="BUY").length/Math.max(1,dark.length)*100).toFixed(0)}%`} sub="暗池成交量" color="#10b981"/>
-              </div>
-              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"90px 80px 70px 90px 140px 80px 70px 80px",
-                  padding:"10px 16px",borderBottom:"1px solid #222334",fontSize:12,color:"#7a809a",letterSpacing:1}}>
-                  <span>時間</span><span>標的</span><span>類型</span><span>成交價</span><span>成交額</span><span>股數</span><span>方向</span><span>場所</span>
-                </div>
-                <div style={{maxHeight:"calc(100vh - 220px)",overflow:"auto"}}>
-                  {dark.map(d=>(
-                    <div key={d.id} className="tr" style={{display:"grid",
-                      gridTemplateColumns:"90px 80px 70px 90px 140px 80px 70px 80px",
-                      padding:"11px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
-                      background:d.notional>1e6?"#ab47bc06":"transparent",transition:"background .12s"}}>
-                      <span style={{fontSize:12,color:"#444444"}}>{String(d.time).slice(-8)}</span>
-                      <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                        <span style={{fontSize:15,fontWeight:700,color:"#ffffff",lineHeight:1.2}}>{d.sym}</span>
-                        <span style={{fontSize:11,color:priceOf(d.sym).color,fontFamily:"'IBM Plex Mono',monospace"}}>{priceOf(d.sym).price}</span>
-                      </div>
-                      <Pill color={d.type==="BLOCK"?"#d97706":"#7c3aed"}>{d.type==="BLOCK"?"大宗":"暗池"}</Pill>
-                      <span style={{fontSize:14,color:"#666666"}}>${d.price}</span>
-                      <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                        <span style={{fontSize:13,fontWeight:600,color:d.notional>1e6?"#7c3aed":"#ffffff80"}}>{fmtM(d.notional)}</span>
-                        <div style={{height:3,borderRadius:2,background:"#1c1c1c",overflow:"hidden"}}>
-                          <div style={{height:"100%",borderRadius:2,width:`${Math.min(100,d.notional/Math.max(1,...dark.map(x=>x.notional))*100)}%`,background:d.side==="BUY"?"#10b98150":"#ef444450",transition:"width .3s"}}/>
-                        </div>
-                      </div>
-                      <span style={{fontSize:13,color:"#555555"}}>{Number(d.shares).toLocaleString()}</span>
-                      <Pill color={d.side==="BUY"?"#10b981":"#ef4444"}>{d.side==="BUY"?"買":"賣"}</Pill>
-                      <Tag>{d.venue}</Tag>
+
+              {/* ── 交叉共振訊號 ── */}
+              {(function(){
+                var resonant = dark.filter(function(d){
+                  var sym = d.sym;
+                  var darkBull = d.side==="BUY";
+                  var darkBear = d.side==="SELL";
+                  return flow.some(function(f){
+                    return f.sym===sym && (
+                      (darkBull && (f.type==="CALL"||f.sentiment==="Bullish"||f.sentiment==="bullish")) ||
+                      (darkBear && (f.type==="PUT"||f.sentiment==="Bearish"||f.sentiment==="bearish"))
+                    );
+                  });
+                });
+                if(resonant.length===0) return null;
+                return (
+                  <div style={{background:"#0a1a10",border:"1px solid #10b98140",borderRadius:5,padding:"10px 14px"}}>
+                    <div style={{fontSize:11,color:"#10b981",letterSpacing:1,marginBottom:6}}>⚡ 暗池 × 期權流共振訊號（同標的同方向）</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {resonant.map(function(d,i){
+                        var matchFlows = flow.filter(function(f){
+                          return f.sym===d.sym && (
+                            (d.side==="BUY"&&(f.type==="CALL"||f.sentiment==="Bullish"||f.sentiment==="bullish"))||
+                            (d.side==="SELL"&&(f.type==="PUT"||f.sentiment==="Bearish"||f.sentiment==="bearish"))
+                          );
+                        });
+                        var isBull = d.side==="BUY";
+                        return (
+                          <div key={i} style={{background:isBull?"#10b98118":"#ef444418",border:"1px solid "+(isBull?"#10b98140":"#ef444440"),borderRadius:4,padding:"5px 10px",display:"flex",gap:8,alignItems:"center"}}>
+                            <span style={{fontWeight:700,color:"#fff",fontSize:13}}>{d.sym}</span>
+                            <Pill color={isBull?"#10b981":"#ef4444"}>{isBull?"暗池買":"暗池賣"}</Pill>
+                            <span style={{fontSize:11,color:"#888"}}>{fmtM(d.notional)}</span>
+                            <span style={{fontSize:11,color:"#555"}}>+{matchFlows.length}筆期權</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  </div>
+                );
+              })()}
+
+              {/* ── KCards ── */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+                <KCard label="暗池總成交額" value={fmtM(dark.reduce(function(a,d){return a+d.notional;},0))} sub="最近成交" color="#7c3aed" badge={uwKey?"UW":"模擬"}/>
+                <KCard label="大宗交易" value={dark.filter(function(d){return d.type==="BLOCK";}).length} sub="≥1萬股" color="#d97706"/>
+                <KCard label="最大單筆" value={fmtM(Math.max(0,...dark.map(function(d){return d.notional;})))} sub="單筆最高" color="#ef4444"/>
+                <KCard label="買方比例" value={(dark.filter(function(d){return d.side==="BUY";}).length/Math.max(1,dark.length)*100).toFixed(0)+"%" } sub="BUY佔比" color="#10b981"/>
+                <KCard label="共振訊號" value={dark.filter(function(d){return flow.some(function(f){return f.sym===d.sym&&((d.side==="BUY"&&(f.type==="CALL"||/bull/i.test(f.sentiment)))||(d.side==="SELL"&&(f.type==="PUT"||/bear/i.test(f.sentiment))));});}).length} sub="暗池×期權共振" color="#fbbf24"/>
+              </div>
+
+              {/* ── 主表格 ── */}
+              <div style={{background:"#111114",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
+                <div style={{display:"grid",gridTemplateColumns:"88px 90px 68px 80px 150px 90px 70px 70px 100px",
+                  padding:"10px 16px",borderBottom:"1px solid #222334",fontSize:11,color:"#7a809a",letterSpacing:1}}>
+                  <span>時間</span><span>標的</span><span>類型</span><span>成交價</span><span>成交額</span><span>股數</span><span>方向</span><span>占量%</span><span>場所</span>
+                </div>
+                <div style={{maxHeight:"calc(100vh - 230px)",overflow:"auto"}}>
+                  {(function(){
+                    var maxNotional = Math.max(1,...dark.map(function(x){return x.notional;}));
+                    return dark.map(function(d,di){
+                      var hasResonance = flow.some(function(f){
+                        return f.sym===d.sym && (
+                          (d.side==="BUY"&&(f.type==="CALL"||/bull/i.test(f.sentiment)))||
+                          (d.side==="SELL"&&(f.type==="PUT"||/bear/i.test(f.sentiment)))
+                        );
+                      });
+                      var resonanceFlowCount = flow.filter(function(f){
+                        return f.sym===d.sym && (
+                          (d.side==="BUY"&&(f.type==="CALL"||/bull/i.test(f.sentiment)))||
+                          (d.side==="SELL"&&(f.type==="PUT"||/bear/i.test(f.sentiment)))
+                        );
+                      }).length;
+                      var isBull = d.side==="BUY";
+                      // 估算暗池佔日成交量比例：以 notional / 假設日均成交額估算
+                      // 如果有 prices，用 price * avgVol 估算；否則只顯示相對比
+                      var pObj = prices[d.sym];
+                      var estDayVol = pObj && pObj.price ? pObj.price * 5000000 : 0; // 粗估500萬股日均
+                      var volPct = estDayVol > 0 ? (d.notional/estDayVol*100).toFixed(1)+"%" : "—";
+                      return (
+                        <div key={d.id||di} className="tr" style={{display:"grid",
+                          gridTemplateColumns:"88px 90px 68px 80px 150px 90px 70px 70px 100px",
+                          padding:"10px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
+                          background:hasResonance?(isBull?"#10b98110":"#ef444410"):d.notional>1e6?"#7c3aed08":"transparent",
+                          borderLeft:hasResonance?"2px solid "+(isBull?"#10b981":"#ef4444"):"2px solid transparent"}}>
+                          <span style={{fontSize:12,color:"#555"}}>{String(d.time).slice(-8)}</span>
+                          <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:4}}>
+                              <span style={{fontSize:14,fontWeight:700,color:"#fff"}}>{d.sym}</span>
+                              {hasResonance&&<span style={{fontSize:9,color:isBull?"#10b981":"#ef4444",fontWeight:700}}>⚡{resonanceFlowCount}</span>}
+                            </div>
+                            <span style={{fontSize:11,color:priceOf(d.sym).color,fontFamily:"'IBM Plex Mono',monospace"}}>{priceOf(d.sym).price}</span>
+                          </div>
+                          <Pill color={d.type==="BLOCK"?"#d97706":"#7c3aed"}>{d.type==="BLOCK"?"大宗":"暗池"}</Pill>
+                          <span style={{fontSize:13,color:"#888"}}>${d.price}</span>
+                          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                            <span style={{fontSize:13,fontWeight:600,color:d.notional>1e6?"#a78bfa":"#fff9"}}>{fmtM(d.notional)}</span>
+                            <div style={{height:3,borderRadius:2,background:"#1c1c1c",overflow:"hidden"}}>
+                              <div style={{height:"100%",borderRadius:2,width:Math.min(100,d.notional/maxNotional*100)+"%",background:isBull?"#10b98150":"#ef444450",transition:"width .3s"}}/>
+                            </div>
+                          </div>
+                          <span style={{fontSize:12,color:"#555"}}>{Number(d.shares).toLocaleString()}</span>
+                          <Pill color={isBull?"#10b981":"#ef4444"}>{isBull?"買":"賣"}</Pill>
+                          <span style={{fontSize:11,color:"#4fc3f7"}}>{volPct}</span>
+                          <Tag>{venueLabel(d.venue)}</Tag>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             </div>
@@ -1707,118 +3512,7 @@ function App(){
               ))}
             </div>
           )}
-          {/* ══════ 策略 ══════ */}
-          {tab==="strategies"&&(
-            <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-                <KCard label="啟用策略" value={strats.filter(s=>s.on).length} sub={`共 ${strats.length} 個`}/>
-                <KCard label="平均夏普" value={(strats.filter(s=>s.on).reduce((a,s)=>a+s.sharpe,0)/Math.max(1,strats.filter(s=>s.on).length)).toFixed(2)} sub="僅統計啟用" color="#7c3aed"/>
-                <KCard label="累計成交" value={strats.reduce((a,s)=>a+s.trades,0).toLocaleString()} sub="全部時間" color="#3b82f6"/>
-                <KCard label="最佳夏普" value={Math.max(...strats.map(s=>s.sharpe)).toFixed(2)} sub={strats.find(s=>s.sharpe===Math.max(...strats.map(s=>s.sharpe)))?.name} color="#10b981"/>
-              </div>
-              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"1.5fr 80px 90px 55px 75px 90px 90px 55px",
-                  padding:"10px 18px",borderBottom:"1px solid #222334",fontSize:12,color:"#7a809a",letterSpacing:1}}>
-                  <span>策略名稱</span><span>類型</span><span>股票池</span><span>週期</span><span>夏普</span><span>最大回撤</span><span>成交次數</span><span>開關</span>
-                </div>
-                {strats.map(s=>(
-                  <div key={s.id} className="tr" style={{display:"grid",
-                    gridTemplateColumns:"1.5fr 80px 90px 55px 75px 90px 90px 55px",
-                    padding:"15px 18px",borderBottom:"1px solid #ffffff05",alignItems:"center",
-                    opacity:s.on?1:.45,transition:"all .12s"}}>
-                    <div style={{fontSize:15,fontWeight:600,color:s.on?"#fff":"#ffffff55"}}>{s.name}</div>
-                    <Tag color="#ffa72680">{s.type}</Tag>
-                    <span style={{fontSize:14,color:"#555555"}}>{s.uni}</span>
-                    <span style={{fontSize:14,fontFamily:"'IBM Plex Mono',monospace",color:"#555555"}}>{s.tf}</span>
-                    <span style={{fontSize:15,fontWeight:600,color:"#10b981"}}>{s.sharpe}</span>
-                    <span style={{fontSize:15,color:"#ef4444"}}>{s.dd}%</span>
-                    <span style={{fontSize:14,color:"#555555"}}>{s.trades.toLocaleString()}</span>
-                    <Toggle on={s.on} onChange={()=>setStrats(st=>st.map(x=>x.id===s.id?{...x,on:!x.on}:x))}/>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* ══════ 訊號 ══════ */}
-          {tab==="signals"&&(
-            <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{fontSize:13,color:"#444444",letterSpacing:1}}>即時訊號串流（量化策略輸出）</div>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",animation:"pulse 1.5s infinite"}}/>
-                  <span style={{fontSize:13,color:"#10b981"}}>串流中 · {sigs.filter(s=>!s.filled).length} 筆待成交</span>
-                </div>
-              </div>
-              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
-                <div style={{display:"grid",gridTemplateColumns:"110px 75px 65px 100px 160px 1fr 100px",
-                  padding:"10px 16px",borderBottom:"1px solid #222334",fontSize:12,color:"#7a809a",letterSpacing:1}}>
-                  <span>時間</span><span>標的</span><span>訊號</span><span>價格</span><span>策略</span><span></span><span>狀態</span>
-                </div>
-                <div style={{maxHeight:"calc(100vh - 220px)",overflow:"auto"}}>
-                  {sigs.map((s,i)=>(
-                    <div key={`${s.id}-${tick}`} className="sig tr" style={{display:"grid",
-                      gridTemplateColumns:"110px 75px 65px 100px 160px 1fr 100px",
-                      padding:"13px 16px",borderBottom:"1px solid #ffffff05",alignItems:"center",
-                      opacity:i>10?.3:1,transition:"background .12s"}}>
-                      <span style={{fontSize:13,fontFamily:"'IBM Plex Mono',monospace",color:"#7a809a"}}>{s.time}</span>
-                      <span style={{fontSize:16,fontWeight:700,color:"#ffffff"}}>{s.sym}</span>
-                      <span style={{fontSize:14,fontWeight:700,color:s.color}}>{s.type}</span>
-                      <span style={{fontSize:15,fontFamily:"'IBM Plex Mono',monospace",color:"#555555"}}>${s.price}</span>
-                      <Tag color="#d9770660">{s.strat}</Tag>
-                      <span/>
-                      <span style={{fontSize:13,color:s.filled?"#10b981":"#d97706"}}>{s.filled?"✓ 已成交":"⟳ 待成交"}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════ 風控 ══════ */}
-          {tab==="risk"&&(
-            <div className="anim" style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
-                {[
-                  {label:"VaR (95%)",    value:"-$12,400",sub:"1日歷史模擬",  color:"#ef4444"},
-                  {label:"組合 Beta",    value:metrics.beta.toFixed(2),sub:"對比 SPY",color:"#d97706"},
-                  {label:"SPY 相關係數", value:"0.28",    sub:"30日滾動",     color:"#3b82f6"},
-                  {label:"板塊集中度",   value:"34%",     sub:"科技類",       color:"#7c3aed"},
-                  {label:"槓桿倍數",     value:"1.2×",   sub:"總曝險/NAV",   color:"#d97706"},
-                  {label:"流動性評級",   value:"A+",      sub:"清倉天數 <1",  color:"#10b981"},
-                ].map(c=><KCard key={c.label} {...c}/>)}
-              </div>
-              <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:5,padding:20}}>
-                <div style={{fontSize:13,color:"#444444",letterSpacing:1,marginBottom:16}}>風控限額監控</div>
-                {[
-                  {l:"單一持倉上限",   used:4.2,        limit:10,  u:"% NAV"},
-                  {l:"總曝險上限",     used:metrics.exp, limit:120, u:"% NAV"},
-                  {l:"板塊集中度上限", used:34,          limit:40,  u:"%"},
-                  {l:"日虧損上限",     used:.8,          limit:2,   u:"% NAV"},
-                  {l:"期權Delta曝險",  used:12.3,        limit:25,  u:"% NAV"},
-                  {l:"掛單數量上限",   used:3,           limit:20,  u:"筆"},
-                ].map(r=>{
-                  const p=limPct(r.used,r.limit);
-                  const c=p>85?"#ef4444":p>65?"#d97706":"#10b981";
-                  return(
-                    <div key={r.l} style={{marginBottom:16}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                        <span style={{fontSize:15,color:"#666666"}}>{r.l}</span>
-                        <span style={{fontSize:14,fontFamily:"'IBM Plex Mono',monospace"}}>
-                          <span style={{color:c}}>{r.used}{r.u}</span>
-                          <span style={{color:"#666c84"}}> / {r.limit}{r.u}</span>
-                        </span>
-                      </div>
-                      <div style={{height:5,background:"#222222",borderRadius:3}}>
-                        <div style={{width:`${p}%`,height:"100%",background:c,borderRadius:3,
-                          transition:"width .5s",boxShadow:`0 0 8px ${c}45`}}/>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
 
           {tab==="research"&&(
@@ -1954,8 +3648,25 @@ function App(){
                 <div style={{background:"#1a1a1a",border:"1px solid #00e5a020",borderRadius:6,padding:20}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
                     <div style={{fontSize:13,color:"#10b981",letterSpacing:1,fontWeight:600}}>⚡ AI 分析結果</div>
-                    <div style={{fontSize:11,color:"#666c84"}}>基於最新期權流 + 暗池數據</div>
+                    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                      <div style={{fontSize:11,color:"#666c84"}}>期權流 + 暗池 + 技術面 + 網路輿情</div>
+                    </div>
                   </div>
+                  {(function(){
+                    var scoreMatch = aiResult.match(/準確度[：:]*\s*(\d{1,3})[\s/]*100|整體準確度[：:]*\s*(\d{1,3})|評分[：:]*\s*(\d{1,3})\/100/);
+                    var score = scoreMatch ? parseInt(scoreMatch[1]||scoreMatch[2]||scoreMatch[3]) : null;
+                    if(!score) return null;
+                    var scoreColor = score>=80?"#10b981":score>=60?"#d97706":"#ef4444";
+                    return React.createElement("div",{style:{background:"#111",border:"1px solid #252738",borderRadius:5,padding:"12px 16px",marginBottom:12}},
+                      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
+                        React.createElement("span",{style:{fontSize:12,color:"#888"}},"驗證準確度"),
+                        React.createElement("span",{style:{fontSize:20,fontWeight:700,color:scoreColor,fontFamily:"'IBM Plex Mono',monospace"}},score+"/100")
+                      ),
+                      React.createElement("div",{style:{height:6,background:"#222",borderRadius:3,overflow:"hidden"}},
+                        React.createElement("div",{style:{height:"100%",width:score+"%",background:scoreColor,borderRadius:3,transition:"width .6s"}})
+                      )
+                    );
+                  })()}
                   <div>{renderAiCards(aiResult)}</div>
                   {/* 快速新增提醒按鈕 */}
                   <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #222334"}}>
@@ -1992,7 +3703,7 @@ function App(){
               ):(
                 <div style={{background:"#1a1a1a",border:"1px solid #252738",borderRadius:6,padding:20}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                    <div style={{fontSize:13,color:"#444444"}}>已儲存報告（{reports.length}份）</div>
+                    <div style={{fontSize:13,color:"#444444"}}>已儲存報告（{reports.length}份）{db&&<span style={{fontSize:10,color:"#10b98180",marginLeft:6}}>☁️ 雲端同步</span>}</div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       {["全部","財報","總經","技術","產業","期權","其他"].map(function(c){
                         return(
@@ -2024,13 +3735,13 @@ function App(){
                               <div style={{display:"flex",alignItems:"center",gap:6,flex:1}} onClick={e=>e.stopPropagation()}>
                                 <input value={editingTitle} onChange={e=>setEditingTitle(e.target.value)}
                                   onKeyDown={e=>{
-                                    if(e.key==="Enter"){setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}
+                                    if(e.key==="Enter"){cloudUpdateTitle(r.id,editingTitle);setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}
                                     if(e.key==="Escape"){setEditingReportId(null);}
                                   }}
                                   autoFocus
                                   style={{flex:1,background:"#1a1a1a",border:"1px solid #d97706",borderRadius:4,
                                     padding:"4px 8px",fontSize:14,color:"#fff",minWidth:200}}/>
-                                <span onClick={()=>{setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}}
+                                <span onClick={()=>{cloudUpdateTitle(r.id,editingTitle);setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}}
                                   style={{fontSize:12,color:"#10b981",cursor:"pointer",padding:"2px 8px",
                                     background:"#10b98115",border:"1px solid #10b98140",borderRadius:4}}>✓</span>
                                 <span onClick={()=>setEditingReportId(null)}
@@ -2061,7 +3772,7 @@ function App(){
                             <span style={{fontSize:11,color:"#444444"}}>
                               （{Math.floor((Date.now()-r.ts)/86400000)}天前）
                             </span>
-                            <span onClick={e=>{e.stopPropagation();setReports(prev=>prev.filter(x=>x.id!==r.id));}}
+                            <span onClick={e=>{e.stopPropagation();cloudDeleteReport(r.id);setReports(prev=>prev.filter(x=>x.id!==r.id));}}
                               style={{color:"#666c84",cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</span>
                           </div>
                         </div>
@@ -2076,7 +3787,7 @@ function App(){
                                 <div onClick={e=>{e.stopPropagation();setSelectedReport(null);setReportInput(r.content);setReportTitle(r.title+" [驗證]");analyzeReport(r.content,r);}}
                                   style={{fontSize:11,color:"#d97706",background:"#d9770612",border:"1px solid #ffa72630",
                                     padding:"3px 10px",borderRadius:4,cursor:"pointer"}}>
-                                  🔄 重新驗證
+                                  {"🔄 重新驗證 "+(r.ts?"(距今"+Math.floor((Date.now()-r.ts)/86400000)+"天)":"")}
                                 </div>
                               </div>
                                 <div>{renderAiCards(r.aiAnalysis)}</div>
@@ -2189,9 +3900,61 @@ function App(){
               </div>
             )}
 
-            {/* 跳過 */}
+            {/* ☁️ Supabase 雲端報告庫 */}
+            <div style={{marginTop:16,borderTop:"1px solid #222",paddingTop:14}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{fontSize:11,color:"#888",fontWeight:600}}>☁️ Supabase 雲端報告庫</div>
+                <div style={{fontSize:10,padding:"2px 7px",borderRadius:3,
+                  background:db?"#10b98118":"#ff4d6d12",
+                  border:"1px solid "+(db?"#10b98140":"#ef444430"),
+                  color:db?"#10b981":"#ef4444",fontWeight:600}}>
+                  {db?"✅ 已連線":"⚠ 未連線"}
+                </div>
+              </div>
+              <div style={{fontSize:10,color:"#555",marginTop:2,fontFamily:"monospace",
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {window.location.hostname}
+              </div>
+              {db&&(
+                <div
+                  onClick={async function(){
+                    try{
+                      var res=await db.from("reports").select("id",{count:"exact",head:true});
+                      if(res.error) throw res.error;
+                      alert("✅ 連線正常！reports table 存在，共 "+(res.count||0)+" 筆記錄");
+                    }catch(e){
+                      alert("❌ 連線失敗："+e.message+"\n\n可能原因：\n1. reports table 未建立\n2. RLS 政策阻擋\n3. anon key 錯誤");
+                    }
+                  }}
+                  style={{marginTop:6,padding:"5px 10px",fontSize:11,borderRadius:4,cursor:"pointer",
+                    background:"#10b98115",border:"1px solid #10b98130",color:"#10b981",textAlign:"center"}}>
+                  🔌 測試連線
+                </div>
+              )}
+              {!db&&(
+                <div style={{marginTop:8,padding:"10px 12px",background:"#0a0a0d",borderRadius:4,border:"1px solid #ffffff0d"}}>
+                  <div style={{fontSize:10,color:"#666",lineHeight:1.7}}>
+                    <div style={{color:"#888",fontWeight:600,marginBottom:4}}>📋 設定步驟：</div>
+                    <div>1. 前往 <span style={{color:"#ffa726"}}>supabase.com</span> → 你的專案</div>
+                    <div>2. Project Settings → API → 複製 <span style={{color:"#ffa726"}}>anon public</span> key</div>
+                    <div>3. 貼上後離開輸入框（自動儲存重載）</div>
+                    <div style={{marginTop:6,color:"#888",fontWeight:600}}>🗃 首次使用請先建立 table：</div>
+                  </div>
+                  <div
+                    onClick={function(){
+                      var sql="create table if not exists reports (\n  id text primary key,\n  title text,\n  category text,\n  content text,\n  ai_analysis text,\n  ts bigint,\n  time_str text,\n  created_at timestamptz default now()\n);\nalter table reports enable row level security;\ncreate policy \"allow all\" on reports for all using (true) with check (true);";
+                      navigator.clipboard.writeText(sql).then(function(){alert("✅ SQL 已複製！\n\n請到 Supabase → SQL Editor → New query → 貼上執行");});
+                    }}
+                    style={{marginTop:6,padding:"6px 10px",fontSize:10,borderRadius:4,cursor:"pointer",
+                      background:"#1a1a2e",border:"1px solid #ffa72630",color:"#ffa726",
+                      textAlign:"center",fontWeight:600}}>
+                    📋 複製建表 SQL
+                  </div>
+                </div>
+              )}
+            </div>
             <div onClick={()=>setLoginOpen(false)}
-              style={{marginTop:16,textAlign:"center",fontSize:12,color:"#666c84",cursor:"pointer"}}>
+              style={{marginTop:12,textAlign:"center",fontSize:12,color:"#666c84",cursor:"pointer"}}>
               略過，使用模擬數據
             </div>
           </div>
