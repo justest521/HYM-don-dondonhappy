@@ -1354,30 +1354,22 @@ function App(){
     setPositions(mapped.slice().sort(function(a,b){return b.exposure-a.exposure;}));
   },[prices]);
 
-  // ── 股票代號即時驗證 ──
+  // ── 股票代號即時驗證（用 fetchYahoo 全域函數，跟主程式同通道）──
   const validateTicker = React.useCallback(async function(sym){
     if(!sym || sym.length<1){ setPosSymStatus(null); setPosSymPrice(null); return; }
     sym = sym.toUpperCase().trim();
-    // 先查 cache
+    // 先查已載入的 prices cache
     if(prices[sym] && prices[sym].price > 0){
       setPosSymStatus("ok"); setPosSymPrice(prices[sym].price); return;
     }
     setPosSymStatus("checking"); setPosSymPrice(null);
     try {
-      var proxies = buildProxies(sym);
-      var found = false;
-      for(var pi=0; pi<Math.min(proxies.length,3); pi++){
-        try {
-          var resp = await fetch(proxies[pi].url, {signal:AbortSignal.timeout(4000)});
-          if(!resp.ok) continue;
-          var j = await resp.json();
-          var parsed = proxies[pi].type==="v8" ? parseV8(j,sym) : parseV7(j,sym);
-          if(parsed && parsed.price > 0){
-            setPosSymStatus("ok"); setPosSymPrice(parsed.price); found=true; break;
-          }
-        }catch(ignored){}
+      var result = await fetchYahoo(sym);
+      if(result && result.price > 0){
+        setPosSymStatus("ok"); setPosSymPrice(result.price);
+      } else {
+        setPosSymStatus("notfound"); setPosSymPrice(null);
       }
-      if(!found){ setPosSymStatus("notfound"); setPosSymPrice(null); }
     }catch(e){ setPosSymStatus("notfound"); setPosSymPrice(null); }
   },[prices]);
 
