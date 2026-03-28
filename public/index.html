@@ -993,12 +993,54 @@ function App(){
     try{ return localStorage.getItem("sop_confirmed")===new Date().toDateString(); }catch(e){ return false; }
   });
   const [sopRecordForm, setSopRecordForm] = useState({ticker:"",strike:"",expiry:"",contracts:"",cost:"",catalyst:""});
+  const [sopSelectedPos, setSopSelectedPos] = useState(null); // selected position index for auto-fill
   const SOP_RULES = {
     OTM_CALL:{color:"#3b82f6",stop:40,hard:70,profit:null,label:"OTM Call",sub:"博大漲"},
     OTM_PUT:{color:"#f59e0b",stop:40,hard:70,profit:25,label:"OTM Put",sub:"博大跌"},
     ATM:{color:"#22c55e",stop:30,hard:60,profit:50,label:"ATM",sub:"Call / Put"},
     SPREAD:{color:"#a78bfa",stop:50,hard:80,profit:60,label:"Spread",sub:"組合策略"}
   };
+
+  // ── 持倉風險掃描 helper ──
+  function scanPositionRisk(pos, curPrice, totalNav) {
+    var checks = [];
+    var isOption = pos.type === "CALL" || pos.type === "PUT";
+    if (!isOption) return { checks: checks, score: 100, isOption: false };
+    var strikeNum = Number(pos.strike) || 0;
+    var costNum = Number(pos.entry) || 0;
+    var qtyNum = Math.abs(Number(pos.qty) || 0);
+    var totalCost = costNum * qtyNum * 100;
+    // DTE
+    var dte = 999;
+    if (pos.exp) {
+      var expDate = new Date(pos.exp + "T00:00:00");
+      dte = Math.round((expDate - new Date()) / (1000 * 60 * 60 * 24));
+    }
+    // OTM distance
+    var otmPct = curPrice > 0 && strikeNum > 0 ? Math.abs(strikeNum - curPrice) / curPrice * 100 : 0;
+    // P&L
+    // We don't have live option price, so skip P&L for now
+    // Check 1: OTM within 20%
+    var otmOk = otmPct <= 20;
+    checks.push({ label: "OTM " + otmPct.toFixed(1) + "%", ok: otmOk, detail: otmOk ? "行權價距現價 20% 以內" : "超過 20% OTM，勝率低" });
+    // Check 2: DTE >= 45
+    var dteOk = dte >= 45;
+    checks.push({ label: dte + " 天", ok: dteOk, detail: dteOk ? "距到期 45+ 天" : (dte < 0 ? "已過期！" : "距到期不足 45 天，theta 加速") });
+    // Check 3: position size < 10%
+    var sizePct = totalNav > 0 ? totalCost / totalNav * 100 : 0;
+    var sizeOk = sizePct < 10;
+    checks.push({ label: sizePct.toFixed(1) + "%", ok: sizeOk, detail: sizeOk ? "佔總資金 < 10%" : "佔總資金 " + sizePct.toFixed(1) + "%，過重！" });
+    // Check 4: DTE < 30 warning
+    var dteCritical = dte < 30 && dte >= 0;
+    if (dteCritical) checks.push({ label: "快到期", ok: false, detail: "距到期 < 30 天，考慮減倉或滾倉" });
+    // Score
+    var score = 100;
+    if (!otmOk) score -= 30;
+    if (!dteOk) score -= 25;
+    if (!sizeOk) score -= 25;
+    if (dteCritical) score -= 20;
+    return { checks: checks, score: Math.max(0, score), isOption: true, dte: dte, otmPct: otmPct, sizePct: sizePct };
+  }
 
   // ── Dev/Mock 模式 ──
   const [devMode, setDevMode] = useState(false);
@@ -3979,6 +4021,50 @@ function App(){
               {/* ── 開倉清單 ── */}
               {sopTab==="checklist"&&(
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                  {/* 從持倉帶入 */}
+                  {(function(){
+                    var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+                    if(optPos.length===0) return null;
+                    return React.createElement("div",{style:{background:"#0f172a",border:"1px solid #1e3a5f",borderRadius:10,padding:"12px 16px"}},
+                      React.createElement("div",{style:{fontSize:11,color:"#60a5fa",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"從持倉帶入"),
+                      React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},
+                        optPos.map(function(p,i){
+                          var curP = prices[p.sym] ? prices[p.sym].price : 0;
+                          var scan = scanPositionRisk(p, curP, nav);
+                          var scoreColor = scan.score >= 80 ? "#22c55e" : scan.score >= 50 ? "#EAB308" : "#ef4444";
+                          var isSelected = sopSelectedPos === i;
+                          return React.createElement("div",{key:i,onClick:function(){
+                            setSopSelectedPos(isSelected ? null : i);
+                            if(!isSelected){
+                              // Auto-fill form
+                              var typeMap = {"CALL":"OTM_CALL","PUT":"OTM_PUT"};
+                              var newType = typeMap[p.type] || "OTM_CALL";
+                              if(p.strike && curP && Math.abs(Number(p.strike)-curP)/curP < 0.05) newType = "ATM";
+                              setSopType(newType);
+                              setSopRecordForm({ticker:p.sym||"",strike:p.strike||"",expiry:p.exp||"",
+                                contracts:String(Math.abs(Number(p.qty))||""),cost:p.entry||"",catalyst:""});
+                              // Auto-check items based on data
+                              var autoChecks = [false,false,false,false,false];
+                              // [1] OTM within 20%
+                              if(curP>0 && Number(p.strike)>0){ autoChecks[1] = Math.abs(Number(p.strike)-curP)/curP<=0.20; }
+                              // [2] DTE >= 45
+                              if(p.exp){ var d=Math.round((new Date(p.exp+"T00:00:00")-new Date())/(86400000)); autoChecks[2]=d>=45; }
+                              // [3] cost < 10%
+                              var tc=Number(p.entry||0)*Math.abs(Number(p.qty)||0)*100;
+                              if(nav>0) autoChecks[3]=tc/nav<0.10;
+                              setSopChecks(autoChecks);
+                            }
+                          },style:{padding:"6px 12px",background:isSelected?"#1e3a5f":"#1a1a2e",
+                            border:"1px solid "+(isSelected?"#3b82f6":"#2d2d4e"),borderRadius:6,cursor:"pointer",
+                            display:"flex",alignItems:"center",gap:8}},
+                            React.createElement("span",{style:{fontSize:12,fontWeight:600,color:"#e5e7eb"}},p.sym),
+                            React.createElement("span",{style:{fontSize:10,color:"#9ca3af"}},p.type+" "+p.strike),
+                            React.createElement("span",{style:{fontSize:10,fontWeight:700,color:scoreColor}},scan.score+"%")
+                          );
+                        })
+                      )
+                    );
+                  })()}
                   {/* 期權類型選擇 */}
                   <div>
                     <div style={{fontSize:11,color:"#6b7280",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:10}}>期權類型</div>
@@ -4169,6 +4255,62 @@ function App(){
               {/* ── 持倉自查 ── */}
               {sopTab==="hold"&&(
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                  {/* 自動掃描持倉風險 */}
+                  {(function(){
+                    var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+                    if(optPos.length===0) return React.createElement("div",{style:{padding:20,textAlign:"center",color:"#6b7280",fontSize:13,
+                      background:"#1a1a1a",border:"1px solid #2d2d2d",borderRadius:10}},"尚無期權持倉，新增持倉後自動掃描");
+                    var alerts = [];
+                    optPos.forEach(function(p){
+                      var curP = prices[p.sym] ? prices[p.sym].price : 0;
+                      var scan = scanPositionRisk(p, curP, nav);
+                      scan.checks.forEach(function(c){
+                        if(!c.ok) alerts.push({sym:p.sym,type:p.type,strike:p.strike,exp:p.exp,detail:c.detail,label:c.label});
+                      });
+                    });
+                    return React.createElement("div",{style:{background:"#1a1a1a",border:"1px solid #2d2d2d",borderRadius:10,overflow:"hidden"}},
+                      React.createElement("div",{style:{padding:"12px 16px",borderBottom:"1px solid #1f2937",
+                        display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                        React.createElement("div",{style:{fontSize:11,color:"#6b7280",fontWeight:700,textTransform:"uppercase",letterSpacing:1}},
+                          "持倉風險掃描 — "+optPos.length+" 筆期權"),
+                        React.createElement("span",{style:{fontSize:12,fontWeight:700,
+                          color:alerts.length===0?"#22c55e":"#ef4444"}},
+                          alerts.length===0?"✓ 全部通過":alerts.length+" 項警告")
+                      ),
+                      /* 每筆持倉的風險卡片 */
+                      optPos.map(function(p,pi){
+                        var curP = prices[p.sym] ? prices[p.sym].price : 0;
+                        var scan = scanPositionRisk(p, curP, nav);
+                        var scoreColor = scan.score>=80?"#22c55e":scan.score>=50?"#EAB308":"#ef4444";
+                        return React.createElement("div",{key:pi,style:{padding:"10px 16px",borderBottom:pi<optPos.length-1?"1px solid #1f2937":"none",
+                          display:"flex",alignItems:"center",gap:12}},
+                          /* Score circle */
+                          React.createElement("div",{style:{width:36,height:36,borderRadius:"50%",border:"2px solid "+scoreColor,
+                            display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
+                            React.createElement("span",{style:{fontSize:11,fontWeight:700,color:scoreColor}},scan.score)
+                          ),
+                          /* Info */
+                          React.createElement("div",{style:{flex:1,minWidth:0}},
+                            React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+                              React.createElement("span",{style:{fontSize:13,fontWeight:600,color:"#e5e7eb"}},p.sym),
+                              React.createElement("span",{style:{fontSize:10,padding:"1px 6px",borderRadius:3,
+                                background:p.type==="CALL"?"#22c55e22":"#ef444422",
+                                color:p.type==="CALL"?"#22c55e":"#ef4444"}},p.type),
+                              React.createElement("span",{style:{fontSize:11,color:"#6b7280"}},"$"+p.strike),
+                              p.exp&&React.createElement("span",{style:{fontSize:11,color:"#6b7280"}},p.exp)
+                            ),
+                            React.createElement("div",{style:{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}},
+                              scan.checks.map(function(c,ci){
+                                return React.createElement("span",{key:ci,style:{fontSize:10,padding:"2px 6px",borderRadius:3,
+                                  background:c.ok?"#16a34a22":"#ef444422",color:c.ok?"#22c55e":"#ef4444"}},
+                                  (c.ok?"✓":"✗")+" "+c.label);
+                              })
+                            )
+                          )
+                        );
+                      })
+                    );
+                  })()}
                   <div>
                     <div style={{fontSize:11,color:"#6b7280",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>每日三問</div>
                     <div style={{background:"#1a1a1a",border:"1px solid #2d2d2d",borderRadius:10,overflow:"hidden"}}>
