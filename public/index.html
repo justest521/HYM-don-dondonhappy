@@ -906,6 +906,8 @@ function App(){
   const [posEditRow,setPosEditRow]       = useState(null); // null=新增, obj=編輯中
   const [posBatchMode,setPosBatchMode]   = useState(false); // 多筆刪除模式
   const [posBatchSel,setPosBatchSel]     = useState({}); // { id: true/false }
+  const [posSymStatus,setPosSymStatus]   = useState(null); // null | "checking" | "ok" | "notfound"
+  const [posSymPrice,setPosSymPrice]     = useState(null); // 驗證到的即時價格
   const [posForm,setPosForm]             = useState({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});
   const [csvImportOpen,setCsvImportOpen] = useState(false);
   const [csvPreview,setCsvPreview]       = useState(null);  // {raw, parsed, errors}
@@ -1350,6 +1352,33 @@ function App(){
     });
     // 前五大按曝險金額排序
     setPositions(mapped.slice().sort(function(a,b){return b.exposure-a.exposure;}));
+  },[prices]);
+
+  // ── 股票代號即時驗證 ──
+  const validateTicker = React.useCallback(async function(sym){
+    if(!sym || sym.length<1){ setPosSymStatus(null); setPosSymPrice(null); return; }
+    sym = sym.toUpperCase().trim();
+    // 先查 cache
+    if(prices[sym] && prices[sym].price > 0){
+      setPosSymStatus("ok"); setPosSymPrice(prices[sym].price); return;
+    }
+    setPosSymStatus("checking"); setPosSymPrice(null);
+    try {
+      var proxies = buildProxies(sym);
+      var found = false;
+      for(var pi=0; pi<Math.min(proxies.length,3); pi++){
+        try {
+          var resp = await fetch(proxies[pi].url, {signal:AbortSignal.timeout(4000)});
+          if(!resp.ok) continue;
+          var j = await resp.json();
+          var parsed = proxies[pi].type==="v8" ? parseV8(j,sym) : parseV7(j,sym);
+          if(parsed && parsed.price > 0){
+            setPosSymStatus("ok"); setPosSymPrice(parsed.price); found=true; break;
+          }
+        }catch(ignored){}
+      }
+      if(!found){ setPosSymStatus("notfound"); setPosSymPrice(null); }
+    }catch(e){ setPosSymStatus("notfound"); setPosSymPrice(null); }
   },[prices]);
 
   // ── Firstrade CSV 解析器（真實格式）──
@@ -2811,7 +2840,7 @@ function App(){
                           </div>
                         )}
                         {!posBatchMode&&(
-                          <div onClick={()=>{setPosForm({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});setPosEditRow("new");}}
+                          <div onClick={()=>{setPosForm({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});setPosEditRow("new");setPosSymStatus(null);setPosSymPrice(null);}}
                             style={{padding:"5px 14px",background:"#d9770618",border:"1px solid #d9770640",borderRadius:4,cursor:"pointer",fontSize:12,color:"#d97706",fontWeight:600}}>
                             ＋ 新增持倉
                           </div>
@@ -2825,8 +2854,25 @@ function App(){
                       <div style={{padding:"14px 20px",borderBottom:"1px solid #1a1a2e",background:"#0d0d1a",flexShrink:0}}>
                         <div style={{fontSize:12,color:"#666c84",marginBottom:10,letterSpacing:1}}>{posEditRow==="new"?"新增持倉":"編輯持倉"}</div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                          {/* 標的（含即時驗證） */}
+                          <div>
+                            <div style={{fontSize:11,color:"#555",marginBottom:3}}>標的</div>
+                            <div style={{position:"relative"}}>
+                              <input value={posForm.sym}
+                                onChange={function(e){var v=e.target.value.toUpperCase();setPosForm(function(p){return {...p,sym:v};});setPosSymStatus(null);setPosSymPrice(null);}}
+                                onBlur={function(){validateTicker(posForm.sym);}}
+                                placeholder="TSLA"
+                                style={{width:"100%",background:"#161616",
+                                  border:"1px solid "+(posSymStatus==="notfound"?"#ef4444":posSymStatus==="ok"?"#22c55e":"#2a2a3a"),
+                                  borderRadius:4,padding:"6px 10px",paddingRight:posSymStatus?60:10,
+                                  color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                              {posSymStatus==="checking"&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#888"}}>查詢中</span>}
+                              {posSymStatus==="ok"&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#22c55e",fontWeight:600}}>{"$"+(posSymPrice||0).toFixed(2)}</span>}
+                              {posSymStatus==="notfound"&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#ef4444",fontWeight:600}}>查無此標的</span>}
+                            </div>
+                          </div>
+                          {/* 數量、成本價 */}
                           {[
-                            {key:"sym",   label:"標的",   ph:"TSLA"},
                             {key:"qty",   label:"數量",   ph:"100"},
                             {key:"entry", label:"成本價", ph:"250.00"},
                           ].map(function(f){
@@ -2834,7 +2880,7 @@ function App(){
                               React.createElement("div",{style:{fontSize:11,color:"#555",marginBottom:3}},f.label),
                               React.createElement("input",{
                                 value:posForm[f.key],
-                                onChange:function(e){var v=e.target.value; if(f.key==="sym") v=v.toUpperCase(); setPosForm(function(p){return {...p,[f.key]:v};});},
+                                onChange:function(e){setPosForm(function(p){return {...p,[f.key]:e.target.value};});},
                                 placeholder:f.ph,
                                 style:{width:"100%",background:"#161616",border:"1px solid #2a2a3a",borderRadius:4,
                                   padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}
@@ -2877,6 +2923,7 @@ function App(){
                         <div style={{display:"flex",gap:8}}>
                           <div onClick={function(){
                             if(!posForm.sym||!posForm.qty||!posForm.entry) return;
+                            if(posSymStatus==="notfound"&&!confirm(posForm.sym+" 查無即時報價，可能是打錯代號。確定要儲存？")) return;
                             var newItem={id:posEditRow==="new"?Date.now():posEditRow.id,
                               sym:posForm.sym.toUpperCase(),type:posForm.type,
                               qty:Number(posForm.qty),entry:Number(posForm.entry),
