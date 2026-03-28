@@ -904,6 +904,8 @@ function App(){
   });
   const [posDrawerOpen,setPosDrawerOpen] = useState(false);
   const [posEditRow,setPosEditRow]       = useState(null); // null=新增, obj=編輯中
+  const [posBatchMode,setPosBatchMode]   = useState(false); // 多筆刪除模式
+  const [posBatchSel,setPosBatchSel]     = useState({}); // { id: true/false }
   const [posForm,setPosForm]             = useState({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});
   const [csvImportOpen,setCsvImportOpen] = useState(false);
   const [csvPreview,setCsvPreview]       = useState(null);  // {raw, parsed, errors}
@@ -2800,11 +2802,21 @@ function App(){
                     <div style={{padding:"18px 20px",borderBottom:"1px solid #1e1e2e",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
                       <div style={{fontSize:14,fontWeight:700,color:"#fff",letterSpacing:1}}>📋 持倉管理</div>
                       <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        <div onClick={()=>{setPosForm({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});setPosEditRow("new");}}
-                          style={{padding:"5px 14px",background:"#d9770618",border:"1px solid #d9770640",borderRadius:4,cursor:"pointer",fontSize:12,color:"#d97706",fontWeight:600}}>
-                          ＋ 新增持倉
-                        </div>
-                        <div onClick={()=>setPosDrawerOpen(false)} style={{fontSize:18,color:"#555",cursor:"pointer",lineHeight:1,padding:"2px 6px"}}>✕</div>
+                        {userPositions.length>1&&(
+                          <div onClick={function(){setPosBatchMode(!posBatchMode);setPosBatchSel({});}}
+                            style={{padding:"5px 12px",background:posBatchMode?"#ef444418":"#ffffff08",
+                              border:"1px solid "+(posBatchMode?"#ef444440":"#333"),borderRadius:4,cursor:"pointer",fontSize:12,
+                              color:posBatchMode?"#ef4444":"#666",fontWeight:600}}>
+                            {posBatchMode?"取消選取":"多筆刪除"}
+                          </div>
+                        )}
+                        {!posBatchMode&&(
+                          <div onClick={()=>{setPosForm({sym:"",type:"股票",qty:"",entry:"",strike:"",exp:"",side:"多頭",note:""});setPosEditRow("new");}}
+                            style={{padding:"5px 14px",background:"#d9770618",border:"1px solid #d9770640",borderRadius:4,cursor:"pointer",fontSize:12,color:"#d97706",fontWeight:600}}>
+                            ＋ 新增持倉
+                          </div>
+                        )}
+                        <div onClick={()=>{setPosDrawerOpen(false);setPosBatchMode(false);setPosBatchSel({});}} style={{fontSize:18,color:"#555",cursor:"pointer",lineHeight:1,padding:"2px 6px"}}>✕</div>
                       </div>
                     </div>
 
@@ -2899,8 +2911,17 @@ function App(){
                         var cur=live?.price||Number(u.entry);
                         var pnlAmt=((cur-Number(u.entry))*u.qty*(u.side==="空頭"?-1:1));
                         var pct=Number(u.entry)>0?((cur-Number(u.entry))/Number(u.entry)*100*(u.side==="空頭"?-1:1)):0;
+                        var batchChecked = !!posBatchSel[u.id];
                         return React.createElement("div",{key:u.id,
-                          style:{padding:"11px 0",borderBottom:"1px solid #1a1a1a",display:"flex",alignItems:"center",gap:10}},
+                          onClick:posBatchMode?function(){setPosBatchSel(function(prev){var n=Object.assign({},prev);if(n[u.id])delete n[u.id];else n[u.id]=true;return n;});}:undefined,
+                          style:{padding:"11px 0",borderBottom:"1px solid #1a1a1a",display:"flex",alignItems:"center",gap:10,
+                            cursor:posBatchMode?"pointer":"default",background:batchChecked?"#ef444410":"transparent"}},
+                          /* 多筆刪除 checkbox */
+                          posBatchMode&&React.createElement("div",{style:{width:20,height:20,borderRadius:4,flexShrink:0,
+                            border:"2px solid "+(batchChecked?"#ef4444":"#444"),background:batchChecked?"#ef4444":"transparent",
+                            display:"flex",alignItems:"center",justifyContent:"center"}},
+                            batchChecked&&React.createElement("span",{style:{color:"#fff",fontSize:12,lineHeight:1}},"✓")
+                          ),
                           React.createElement("div",{style:{flex:1}},
                             React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:3}},
                               React.createElement("span",{style:{fontSize:14,fontWeight:700,color:"#fff"}},(u.type==="CALL"||u.type==="PUT")?(u.sym+" "+u.type+" $"+u.strike):u.sym),
@@ -2922,7 +2943,7 @@ function App(){
                               (pct>=0?"+":"")+pct.toFixed(2)+"%"
                             )
                           ),
-                          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4}},
+                          !posBatchMode&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4}},
                             React.createElement("div",{onClick:function(){setPosForm({sym:u.sym,type:u.type||"股票",qty:String(u.qty),entry:String(u.entry),strike:u.strike||"",exp:u.exp||"",side:u.side||"多頭",note:u.note||""});setPosEditRow(u);},
                               style:{fontSize:11,color:"#555",cursor:"pointer",padding:"3px 6px",borderRadius:3,border:"1px solid #2a2a2a"}},"編輯"),
                             React.createElement("div",{onClick:function(){if(confirm("確定刪除 "+u.sym+" 持倉？")) saveUserPositions(userPositions.filter(function(x){return x.id!==u.id;}));},
@@ -2932,14 +2953,47 @@ function App(){
                       })}
                     </div>
 
-                    {/* 底部：清空 */}
+                    {/* 底部：多筆刪除 or 清空 */}
                     {userPositions.length>0&&(
                       <div style={{padding:"12px 20px",borderTop:"1px solid #1a1a1a",flexShrink:0}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div style={{fontSize:12,color:"#444"}}>{userPositions.length} 筆持倉・Supabase 雲端同步</div>
-                          <div onClick={function(){if(confirm("確定清空所有持倉？")) saveUserPositions([]);}}
-                            style={{fontSize:11,color:"#ef444460",cursor:"pointer"}}>清空全部</div>
-                        </div>
+                        {posBatchMode?(
+                          <div>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                              <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                                <div onClick={function(){
+                                  var allSelected = Object.keys(posBatchSel).length===userPositions.length;
+                                  if(allSelected){ setPosBatchSel({}); }
+                                  else{ var sel={}; userPositions.forEach(function(u){sel[u.id]=true;}); setPosBatchSel(sel); }
+                                }} style={{fontSize:12,color:"#a78bfa",cursor:"pointer",textDecoration:"underline"}}>
+                                  {Object.keys(posBatchSel).length===userPositions.length?"取消全選":"全選"}
+                                </div>
+                                <div style={{fontSize:12,color:"#888"}}>
+                                  {"已選 "+Object.keys(posBatchSel).length+" / "+userPositions.length+" 筆"}
+                                </div>
+                              </div>
+                            </div>
+                            <div onClick={function(){
+                              var count=Object.keys(posBatchSel).length;
+                              if(count===0) return;
+                              if(!confirm("確定刪除選取的 "+count+" 筆持倉？")) return;
+                              saveUserPositions(userPositions.filter(function(u){return !posBatchSel[u.id];}));
+                              setPosBatchSel({});
+                              setPosBatchMode(false);
+                            }} style={{padding:"10px",background:Object.keys(posBatchSel).length>0?"#dc262620":"#1a1a1a",
+                              border:"1px solid "+(Object.keys(posBatchSel).length>0?"#dc2626":"#333"),
+                              borderRadius:6,cursor:Object.keys(posBatchSel).length>0?"pointer":"not-allowed",
+                              textAlign:"center",fontSize:13,fontWeight:700,
+                              color:Object.keys(posBatchSel).length>0?"#ef4444":"#444"}}>
+                              {"🗑 刪除選取（"+Object.keys(posBatchSel).length+" 筆）"}
+                            </div>
+                          </div>
+                        ):(
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div style={{fontSize:12,color:"#444"}}>{userPositions.length} 筆持倉・Supabase 雲端同步</div>
+                            <div onClick={function(){if(confirm("確定清空所有持倉？")) saveUserPositions([]);}}
+                              style={{fontSize:11,color:"#ef444460",cursor:"pointer"}}>清空全部</div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
