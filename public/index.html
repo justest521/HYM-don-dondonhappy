@@ -4923,8 +4923,15 @@ function App(){
                     // 計算概覽數據
                     var totalLong=0, totalShort=0, totalVal=0, tickerMap={};
                     allPos.forEach(function(p){
-                      var curP = prices[p.sym]?prices[p.sym].price:0;
-                      var pv = Math.abs((curP||Number(p.entry))*Number(p.qty||1)*(isOptionType(p.type)?100:1));
+                      var isOpt=isOptionType(p.type);
+                      var curP=0;
+                      if(isOpt){
+                        var pm=positions.find(function(pp){return pp.sym===p.sym&&pp.strat===p.type&&pp.strike===p.strike&&pp.exp===p.exp;});
+                        curP=pm?Number(pm.cur)||0:Number(p.entry)||0;
+                      } else {
+                        curP=prices[p.sym]?prices[p.sym].price:0;
+                      }
+                      var pv = Math.abs((curP||Number(p.entry))*Number(p.qty||1)*(isOpt?100:1));
                       totalVal+=pv;
                       var side=(p.side||"").toUpperCase();
                       if(side==="SHORT"||side==="SELL") totalShort+=pv; else totalLong+=pv;
@@ -4992,8 +4999,16 @@ function App(){
                           React.createElement("div",{style:{textAlign:"center"}},"分析")
                         ),
                         allPos.map(function(p,pi){
-                          var curP=prices[p.sym]?prices[p.sym].price:0;
                           var isOpt=isOptionType(p.type);
+                          /* 期權現價：從 positions（已含3-tier定價）查找，股票用 prices */
+                          var curP=0;
+                          if(isOpt){
+                            var posMatch=positions.find(function(pp){return pp.sym===p.sym&&pp.strat===p.type&&pp.strike===p.strike&&pp.exp===p.exp;});
+                            if(posMatch) curP=Number(posMatch.cur)||0;
+                            else curP=Number(p.entry)||0;
+                          } else {
+                            curP=prices[p.sym]?prices[p.sym].price:0;
+                          }
                           var pnl=curP>0?((curP-Number(p.entry))/Number(p.entry)*100):"N/A";
                           var pnlStr=typeof pnl==="number"?(pnl>=0?"+":"")+pnl.toFixed(1)+"%":"N/A";
                           var pnlColor=typeof pnl==="number"?(pnl>=0?"#22c55e":"#ef4444"):"#6b7280";
