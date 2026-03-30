@@ -17,7 +17,7 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
-    html,body,#root{height:100%;margin:0;padding:0;background:linear-gradient(160deg,#040d10 0%,#081418 25%,#0a1628 50%,#0d0f1a 75%,#080810 100%)}
+    html,body,#root{height:100%;margin:0;padding:0;background:linear-gradient(160deg,#020a0e 0%,#061216 20%,#0a1a2e 45%,#0e1228 65%,#0c0a1e 85%,#060610 100%)}
   </style>
 <script type="application/json" id="guide-data">
 [
@@ -737,30 +737,33 @@ function Spark({data=[],color="#d97706",w=100,h=36}){
 
 function KCard({label,value,sub,spark,color="#d97706",badge,dim=false}){
   return(
-    <div className="kcard" style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",
-      borderRadius:16,padding:"18px 20px",
-      display:"flex",flexDirection:"column",gap:6,position:"relative",overflow:"hidden",opacity:dim?.5:1,
-      backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
-      boxShadow:`0 4px 24px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.03), inset 0 1px 0 rgba(255,255,255,.05)`,
+    <div className="kcard" style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",
+      borderRadius:18,padding:"20px 22px",
+      display:"flex",flexDirection:"column",gap:7,position:"relative",overflow:"hidden",opacity:dim?.5:1,
+      backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
+      boxShadow:`0 4px 30px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.04), inset 0 1px 0 rgba(255,255,255,.08), 0 0 40px ${color}10`,
       transition:"all .3s cubic-bezier(.4,0,.2,1)",cursor:"default"}}>
-      {/* 頂部彩色邊 */}
+      {/* 頂部彩色邊 — 更粗更亮 */}
       <div style={{position:"absolute",top:0,left:0,right:0,height:3,
-        background:`linear-gradient(90deg,${color},${color}80,transparent)`,
-        boxShadow:`0 0 12px ${color}40`}}/>
-      {/* 背景光暈 */}
-      <div style={{position:"absolute",top:-30,right:-30,width:100,height:100,borderRadius:"50%",
+        background:`linear-gradient(90deg,${color},${color}aa,${color}40,transparent)`,
+        boxShadow:`0 0 20px ${color}50, 0 2px 12px ${color}30`}}/>
+      {/* 背景光暈 — 更大更飽和 */}
+      <div style={{position:"absolute",top:-50,right:-50,width:160,height:160,borderRadius:"50%",
+        background:`radial-gradient(circle,${color}15,transparent 70%)`,pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-40,left:-40,width:120,height:120,borderRadius:"50%",
         background:`radial-gradient(circle,${color}08,transparent 70%)`,pointerEvents:"none"}}/>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-        <span style={{fontSize:12,letterSpacing:1.5,color:"rgba(255,255,255,.35)",fontFamily:"'IBM Plex Mono',monospace",textTransform:"uppercase"}}>{label}</span>
+        <span style={{fontSize:11,letterSpacing:1.8,color:"rgba(255,255,255,.4)",fontFamily:"'IBM Plex Mono',monospace",textTransform:"uppercase",fontWeight:500}}>{label}</span>
         {badge&&<span style={{fontSize:10,padding:"3px 10px",borderRadius:20,fontWeight:600,
-          background:badge==="即時"?"rgba(16,185,129,.1)":badge==="UW"?"rgba(139,92,246,.1)":"rgba(255,255,255,.05)",
+          background:badge==="即時"?"rgba(16,185,129,.15)":badge==="UW"?"rgba(139,92,246,.15)":"rgba(255,255,255,.06)",
           color:badge==="即時"?"#10b981":badge==="UW"?"#8b5cf6":"rgba(255,255,255,.4)",
-          border:`1px solid ${badge==="即時"?"rgba(16,185,129,.2)":badge==="UW"?"rgba(139,92,246,.2)":"rgba(255,255,255,.08)"}`}}>{badge}</span>}
+          border:`1px solid ${badge==="即時"?"rgba(16,185,129,.25)":badge==="UW"?"rgba(139,92,246,.25)":"rgba(255,255,255,.1)"}`,
+          boxShadow:badge==="即時"?"0 0 12px rgba(16,185,129,.1)":badge==="UW"?"0 0 12px rgba(139,92,246,.1)":"none"}}>{badge}</span>}
       </div>
       <div style={{fontSize:28,fontWeight:700,color:"#ffffff",letterSpacing:-0.5,fontFamily:"'IBM Plex Mono',monospace",lineHeight:1.1,
-        textShadow:`0 0 20px ${color}15`}}>{value}</div>
+        textShadow:`0 0 30px ${color}25, 0 0 60px ${color}10`}}>{value}</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginTop:2}}>
-        <span style={{fontSize:13,fontWeight:500,color:sub?.startsWith("+")||sub?.startsWith("▲")?"#10b981":sub?.startsWith("-")||sub?.startsWith("▼")?"#ef4444":"rgba(255,255,255,.3)"}}>{sub}</span>
+        <span style={{fontSize:13,fontWeight:500,color:sub?.startsWith("+")||sub?.startsWith("▲")?"#10b981":sub?.startsWith("-")||sub?.startsWith("▼")?"#ef4444":"rgba(255,255,255,.35)"}}>{sub}</span>
         {spark&&<Spark data={spark} color={color}/>}
       </div>
     </div>
@@ -2444,20 +2447,21 @@ function App(){
   ::-webkit-scrollbar-track{background:transparent}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
   @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  @keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(16,185,129,.05)}50%{box-shadow:0 0 30px rgba(16,185,129,.12)}}
+  @keyframes glowPulse{0%,100%{box-shadow:0 0 25px rgba(16,185,129,.08)}50%{box-shadow:0 0 40px rgba(16,185,129,.18)}}
+  @keyframes subtleFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
   @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
   .anim{animation:fadeIn .25s ease}
-  .glass{background:rgba(255,255,255,.03)!important;backdrop-filter:blur(20px)!important;-webkit-backdrop-filter:blur(20px)!important;border:1px solid rgba(255,255,255,.06)!important;border-radius:16px!important}
-  .glass-sm{background:rgba(255,255,255,.04)!important;backdrop-filter:blur(12px)!important;-webkit-backdrop-filter:blur(12px)!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:12px!important}
-  .glass-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04);transition:all .2s ease}
-  .glass-card:hover{border-color:rgba(255,255,255,.12);box-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06)}
-  .glass-sidebar{background:rgba(8,8,16,.85);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-right:1px solid rgba(255,255,255,.05)}
-  .glass-input{background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:10px!important;transition:border-color .2s,box-shadow .2s}
-  .glass-input:focus{border-color:rgba(217,119,6,.4)!important;box-shadow:0 0 16px rgba(217,119,6,.1)!important}
-  .glass-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;transition:all .15s;cursor:pointer}
-  .glass-btn:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.18);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
-  .glow-green{box-shadow:0 0 20px rgba(16,185,129,.08),inset 0 1px 0 rgba(16,185,129,.05)}
-  .glow-orange{box-shadow:0 0 20px rgba(217,119,6,.08),inset 0 1px 0 rgba(217,119,6,.05)}
+  .glass{background:rgba(255,255,255,.06)!important;backdrop-filter:blur(24px)!important;-webkit-backdrop-filter:blur(24px)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:18px!important;box-shadow:0 4px 30px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06)!important}
+  .glass-sm{background:rgba(255,255,255,.06)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:14px!important;box-shadow:0 2px 16px rgba(0,0,0,.3)!important}
+  .glass-card{background:rgba(255,255,255,.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:18px;box-shadow:0 4px 30px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.07);transition:all .25s cubic-bezier(.4,0,.2,1)}
+  .glass-card:hover{border-color:rgba(255,255,255,.18);box-shadow:0 8px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1);transform:translateY(-1px)}
+  .glass-sidebar{background:rgba(6,10,20,.88);backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);border-right:1px solid rgba(255,255,255,.07)}
+  .glass-input{background:rgba(255,255,255,.06)!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:12px!important;transition:border-color .2s,box-shadow .2s}
+  .glass-input:focus{border-color:rgba(14,165,233,.5)!important;box-shadow:0 0 20px rgba(14,165,233,.15)!important}
+  .glass-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:12px;transition:all .2s cubic-bezier(.4,0,.2,1);cursor:pointer}
+  .glass-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.22);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.35)}
+  .glow-green{box-shadow:0 0 30px rgba(16,185,129,.12),inset 0 1px 0 rgba(16,185,129,.08)}
+  .glow-orange{box-shadow:0 0 30px rgba(217,119,6,.12),inset 0 1px 0 rgba(217,119,6,.08)}
   .tr{transition:all .15s ease}
   .tr:hover{filter:brightness(1.3)!important;border-color:rgba(255,255,255,.12)!important}
   .nb:hover{background:rgba(217,119,6,.08)!important;transition:all .15s}
@@ -2467,18 +2471,19 @@ function App(){
   button,input,textarea,select{font-family:inherit}
   .tr:hover .edit-btn{opacity:1!important}
   select{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#fff}
-  .kcard:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.12)!important;box-shadow:0 8px 32px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.06),inset 0 1px 0 rgba(255,255,255,.08)!important}
+  .kcard:hover{transform:translateY(-3px) scale(1.01);border-color:rgba(255,255,255,.18)!important;box-shadow:0 12px 40px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08),inset 0 1px 0 rgba(255,255,255,.1)!important}
   @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
   @keyframes meshMove{0%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.1)}66%{transform:translate(-20px,15px) scale(.95)}100%{transform:translate(0,0) scale(1)}}
-  .mesh-orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.035;animation:meshMove 20s ease-in-out infinite;pointer-events:none}
+  .mesh-orb{position:absolute;border-radius:50%;filter:blur(120px);opacity:.15;animation:meshMove 25s ease-in-out infinite;pointer-events:none}
 `}</style>
 
       {/* ═══ 背景 Mesh 光暈 ═══ */}
       <div style={{position:"fixed",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0}}>
-        <div className="mesh-orb" style={{width:600,height:600,top:"-10%",left:"-5%",background:"radial-gradient(circle,#10b981,transparent 70%)",animationDelay:"0s"}}/>
-        <div className="mesh-orb" style={{width:500,height:500,top:"50%",right:"-10%",background:"radial-gradient(circle,#3b82f6,transparent 70%)",animationDelay:"-7s"}}/>
-        <div className="mesh-orb" style={{width:400,height:400,bottom:"-5%",left:"30%",background:"radial-gradient(circle,#7c3aed,transparent 70%)",animationDelay:"-14s"}}/>
-        <div className="mesh-orb" style={{width:350,height:350,top:"20%",left:"50%",background:"radial-gradient(circle,#d97706,transparent 70%)",animationDelay:"-10s",opacity:.02}}/>
+        <div className="mesh-orb" style={{width:800,height:800,top:"-15%",left:"-10%",background:"radial-gradient(circle,#0d9488,transparent 65%)",animationDelay:"0s"}}/>
+        <div className="mesh-orb" style={{width:700,height:700,top:"45%",right:"-15%",background:"radial-gradient(circle,#2563eb,transparent 65%)",animationDelay:"-8s"}}/>
+        <div className="mesh-orb" style={{width:600,height:600,bottom:"-10%",left:"25%",background:"radial-gradient(circle,#7c3aed,transparent 65%)",animationDelay:"-16s"}}/>
+        <div className="mesh-orb" style={{width:500,height:500,top:"15%",left:"55%",background:"radial-gradient(circle,#0ea5e9,transparent 65%)",animationDelay:"-12s",opacity:.1}}/>
+        <div className="mesh-orb" style={{width:400,height:400,top:"60%",left:"10%",background:"radial-gradient(circle,#10b981,transparent 65%)",animationDelay:"-20s",opacity:.08}}/>
       </div>
 
       {/* ════════════════ 側欄 ════════════════ */}
@@ -2488,10 +2493,10 @@ function App(){
         {/* Logo */}
         <div style={{padding:"0 14px 18px"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:38,height:38,borderRadius:12,
+            <div style={{width:40,height:40,borderRadius:14,
               background:"linear-gradient(135deg,#ffa726,#ff6d00)",
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:900,color:"#000",
-              boxShadow:"0 4px 16px rgba(255,167,38,.25)"}}>D</div>
+              boxShadow:"0 4px 20px rgba(255,167,38,.35), 0 0 40px rgba(255,167,38,.15)"}}>D</div>
             <div>
               <div style={{fontFamily:"'Inter',sans-serif",fontSize:14,fontWeight:900,letterSpacing:-.5,color:"#ffffff"}}>DONDONHAPPY</div>
               <div style={{fontSize:10,color:"rgba(255,255,255,.25)",letterSpacing:1.5}}>期權 · 量化 · 暗池</div>
@@ -2500,9 +2505,10 @@ function App(){
         </div>
 
         {/* 連線狀態 */}
-        <div style={{margin:"0 12px 14px",padding:"10px 12px",background:"rgba(255,255,255,.03)",
-          border:"1px solid rgba(255,255,255,.06)",borderRadius:12,display:"flex",flexDirection:"column",gap:8,
-          backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
+        <div style={{margin:"0 12px 14px",padding:"12px 14px",background:"rgba(255,255,255,.05)",
+          border:"1px solid rgba(255,255,255,.08)",borderRadius:14,display:"flex",flexDirection:"column",gap:8,
+          backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
+          boxShadow:"0 2px 16px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05)"}}>
           {/* Yahoo Finance */}
           <div style={{display:"flex",alignItems:"center",gap:7}}>
             <Dot ok={yfOk===true}/>
@@ -2510,7 +2516,7 @@ function App(){
               {yfOk===true?"Yahoo 報價 ✓":yfOk===false?"Yahoo 報價 失敗":yfLoading?"Yahoo 連線中…":"Yahoo 報價 待機"}
             </span>
             <div onClick={loadPrices} style={{fontSize:12,padding:"3px 8px",borderRadius:4,cursor:"pointer",
-              background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",color:"rgba(255,255,255,.3)"}}>↻</div>
+              background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.08)",color:"rgba(255,255,255,.3)"}}>↻</div>
           </div>
           {/* 失敗提示 */}
           {yfOk===false&&(
@@ -2551,17 +2557,17 @@ function App(){
         {NAV_ITEMS.map(n=>(
           <div key={n.id} className={n.disabled?"":"nb"} onClick={()=>!n.disabled&&setTab(n.id)} style={{
             display:"flex",alignItems:"center",gap:10,padding:"11px 14px",margin:"2px 8px",cursor:n.disabled?"default":"pointer",
-            background:tab===n.id?"rgba(255,167,38,.1)":"transparent",
-            borderRadius:12,
+            background:tab===n.id?"rgba(255,167,38,.12)":"transparent",
+            borderRadius:14,
             borderLeft:tab===n.id?"3px solid #ffa726":"3px solid transparent",
             opacity:n.disabled?0.35:1,
-            boxShadow:tab===n.id?"0 0 20px rgba(255,167,38,.08), inset 0 0 12px rgba(255,167,38,.04)":"none",
+            boxShadow:tab===n.id?"0 0 30px rgba(255,167,38,.12), 0 0 60px rgba(255,167,38,.06), inset 0 0 16px rgba(255,167,38,.06)":"none",
             transition:"all .25s cubic-bezier(.4,0,.2,1)"}}>
-            <span style={{fontSize:17,color:tab===n.id?"#ffa726":"rgba(255,255,255,.18)",width:22,textAlign:"center",
-              filter:tab===n.id?"drop-shadow(0 0 8px rgba(255,167,38,.5))":"none",
+            <span style={{fontSize:17,color:tab===n.id?"#ffa726":"rgba(255,255,255,.22)",width:22,textAlign:"center",
+              filter:tab===n.id?"drop-shadow(0 0 12px rgba(255,167,38,.6))":"none",
               transition:"all .25s"}}>{n.icon}</span>
-            <span style={{fontSize:13,fontWeight:tab===n.id?700:400,color:tab===n.id?"#fff":"rgba(255,255,255,.35)",letterSpacing:.3,
-              textShadow:tab===n.id?"0 0 12px rgba(255,167,38,.2)":"none"}}>{n.label}</span>
+            <span style={{fontSize:13,fontWeight:tab===n.id?700:400,color:tab===n.id?"#fff":"rgba(255,255,255,.4)",letterSpacing:.3,
+              textShadow:tab===n.id?"0 0 16px rgba(255,167,38,.3)":"none"}}>{n.label}</span>
             {n.disabled&&<span style={{fontSize:9,color:"rgba(255,255,255,.25)",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",borderRadius:6,padding:"2px 6px",marginLeft:"auto",letterSpacing:0.5}}>建置中</span>}
             {n.id==="flow"&&<div style={{marginLeft:"auto",fontSize:10,padding:"2px 8px",borderRadius:8,fontWeight:600,
               background:"rgba(16,185,129,.1)",color:"#10b981",border:"1px solid rgba(16,185,129,.15)"}}>{flow.filter(f=>f.unusual).length}</div>}
@@ -2654,7 +2660,7 @@ function App(){
               {csvImportOpen&&(
                 <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <div onClick={()=>{setCsvImportOpen(false);setCsvPreview(null);}} style={{position:"absolute",inset:0,background:"#000000bb"}}/>
-                  <div style={{position:"relative",width:640,maxHeight:"85vh",background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.04)",borderRadius:8,
+                  <div style={{position:"relative",width:640,maxHeight:"85vh",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.04)",borderRadius:8,
                     display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
                     {/* Header */}
@@ -2746,7 +2752,7 @@ function App(){
                             <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:6}}>偵測到的欄位</div>
                             <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
                               {(csvPreview.headers||[]).map(function(h,i){
-                                return React.createElement("span",{key:i,style:{padding:"2px 8px",background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:3,fontSize:10,color:"rgba(255,255,255,.3)"}},h);
+                                return React.createElement("span",{key:i,style:{padding:"2px 8px",background:"rgba(255,255,255,.06)",border:"1px solid #252738",borderRadius:3,fontSize:10,color:"rgba(255,255,255,.3)"}},h);
                               })}
                             </div>
                           </div>
@@ -2754,7 +2760,7 @@ function App(){
                           {/* 交易預覽表 */}
                           <div style={{marginBottom:14}}>
                             <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:6}}>交易紀錄預覽（前10筆）</div>
-                            <div style={{background:"#0d0d0d",border:"1px solid rgba(255,255,255,.03)",borderRadius:4,overflow:"hidden"}}>
+                            <div style={{background:"#0d0d0d",border:"1px solid rgba(255,255,255,.06)",borderRadius:4,overflow:"hidden"}}>
                               <div style={{display:"grid",gridTemplateColumns:"80px 1fr 70px 70px 80px",
                                 padding:"6px 10px",background:"rgba(255,255,255,.04)",fontSize:10,color:"rgba(255,255,255,.3)",gap:8}}>
                                 {["日期","標的","類型","數量","價格"].map(function(h){return React.createElement("span",{key:h},h);})}
@@ -2800,7 +2806,7 @@ function App(){
                                   React.createElement("span", {style:{color:"#ef4444aa"}}, "$"+result.totalFees)
                                 )
                               ),
-                              React.createElement("div", {style:{background:"#0d0d0d",border:"1px solid rgba(255,255,255,.03)",borderRadius:4,overflow:"hidden",marginBottom:8}},
+                              React.createElement("div", {style:{background:"#0d0d0d",border:"1px solid rgba(255,255,255,.06)",borderRadius:4,overflow:"hidden",marginBottom:8}},
                                 result.positions.slice(0,8).map(function(p,i){
                                   return React.createElement("div", {key:i, style:{display:"flex",justifyContent:"space-between",alignItems:"center",
                                     padding:"7px 12px",borderTop:i>0?"1px solid #141414":"none",fontSize:12}},
@@ -2895,7 +2901,7 @@ function App(){
 
                     {/* 表單：新增或編輯 */}
                     {posEditRow!==null&&(
-                      <div style={{padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,.04)",background:"rgba(255,255,255,.02)",flexShrink:0}}>
+                      <div style={{padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,.04)",background:"rgba(255,255,255,.04)",flexShrink:0}}>
                         <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:10,letterSpacing:1}}>{posEditRow==="new"?"新增持倉":"編輯持倉"}</div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                           {/* 標的（含即時驗證） */}
@@ -3030,7 +3036,7 @@ function App(){
                         var batchChecked = !!posBatchSel[u.id];
                         return React.createElement("div",{key:u.id,
                           onClick:posBatchMode?function(){setPosBatchSel(function(prev){var n=Object.assign({},prev);if(n[u.id])delete n[u.id];else n[u.id]=true;return n;});}:undefined,
-                          style:{padding:"11px 0",borderBottom:"1px solid rgba(255,255,255,.03)",display:"flex",alignItems:"center",gap:10,
+                          style:{padding:"11px 0",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",alignItems:"center",gap:10,
                             cursor:posBatchMode?"pointer":"default",background:batchChecked?"#ef444410":isExpired?"rgba(255,60,60,.04)":"transparent",
                             opacity:isExpired?0.5:1}},
                           /* 多筆刪除 checkbox */
@@ -3077,7 +3083,7 @@ function App(){
 
                     {/* 底部：多筆刪除 or 清空 */}
                     {userPositions.length>0&&(
-                      <div style={{padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,.03)",flexShrink:0}}>
+                      <div style={{padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,.06)",flexShrink:0}}>
                         {posBatchMode?(
                           <div>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -3152,7 +3158,7 @@ function App(){
 
               {/* 曲線 + 情緒 */}
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:18}}>
+                <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:18}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <div>
                       <div style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1}}>權益曲線 — 90 日</div>
@@ -3169,7 +3175,7 @@ function App(){
                   </div>
                   <EqChart data={equity}/>
                 </div>
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:18,display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:18,display:"flex",flexDirection:"column",gap:10}}>
                   <div style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1}}>
                     期權情緒 {!uwKey&&<span style={{color:"#d9770660",fontSize:11}}>（模擬）</span>}
                   </div>
@@ -3188,7 +3194,7 @@ function App(){
               </div>
 
               {/* 即時報價列 */}
-              <div style={{background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:"16px 18px",
+              <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:"16px 18px",
                 backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                   <span style={{fontSize:11,color:"rgba(255,255,255,.3)",letterSpacing:1.5,textTransform:"uppercase",fontWeight:600}}>
@@ -3307,7 +3313,7 @@ function App(){
               </div>
 
               {/* ── 情緒條 ── */}
-              <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:4,padding:"10px 16px",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
+              <div style={{background:"rgba(255,255,255,.06)",border:"1px solid #252738",borderRadius:4,padding:"10px 16px",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
                 <span style={{fontSize:13,color:"#10b981",minWidth:80}}>買權 {sentBull.toFixed(1)}%</span>
                 <div style={{flex:1,height:7,background:"#ef444430",borderRadius:4,overflow:"hidden"}}>
                   <div style={{width:`${sentBull}%`,height:"100%",background:"linear-gradient(90deg,#00e5a0,#00e5a060)",borderRadius:4,transition:"width .6s"}}/>
@@ -3987,7 +3993,7 @@ function App(){
                   <div style={{fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:900,marginBottom:10,paddingBottom:8,borderBottom:"1px solid #ffffff0c"}}>{ch.t}</div>
                   <div style={{display:"flex",flexDirection:"column",gap:7}}>
                     {ch.items.map((item,i)=>(
-                      <div key={i} style={{background:"rgba(255,255,255,.03)",borderRadius:12,padding:"12px 14px",border:"1px solid rgba(255,255,255,.04)",borderLeft:"3px solid "+ch.c+"40"}}>
+                      <div key={i} style={{background:"rgba(255,255,255,.06)",borderRadius:12,padding:"12px 14px",border:"1px solid rgba(255,255,255,.04)",borderLeft:"3px solid "+ch.c+"40"}}>
                         <div style={{fontSize:13,fontWeight:700,color:ch.c,marginBottom:5}}>{item[0]}</div>
                         <div style={{fontSize:13,color:"rgba(255,255,255,.3)",lineHeight:1.8,whiteSpace:"pre-line"}}>{item[1]}</div>
                       </div>
@@ -4093,7 +4099,7 @@ function App(){
               <React.Fragment>
 
               {/* 輸入區 */}
-              <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:6,padding:20}}>
+              <div style={{background:"rgba(255,255,255,.06)",border:"1px solid #252738",borderRadius:6,padding:20}}>
                 <div style={{fontSize:13,color:"rgba(255,255,255,.25)",letterSpacing:1,marginBottom:12}}>貼上研究報告</div>
                 <input value={reportTitle} onChange={e=>setReportTitle(e.target.value)}
                   placeholder="報告標題（選填）"
@@ -4130,7 +4136,7 @@ function App(){
 
               {/* AI 分析結果 */}
               {aiResult&&(
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #00e5a020",borderRadius:6,padding:20}}>
+                <div style={{background:"rgba(255,255,255,.06)",border:"1px solid #00e5a020",borderRadius:6,padding:20}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
                     <div style={{fontSize:13,color:"#10b981",letterSpacing:1,fontWeight:600}}>⚡ AI 分析結果</div>
                     <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -4142,7 +4148,7 @@ function App(){
                     var score = scoreMatch ? parseInt(scoreMatch[1]||scoreMatch[2]||scoreMatch[3]) : null;
                     if(!score) return null;
                     var scoreColor = score>=80?"#10b981":score>=60?"#d97706":"#ef4444";
-                    return React.createElement("div",{style:{background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:"12px 16px",marginBottom:12}},
+                    return React.createElement("div",{style:{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:"12px 16px",marginBottom:12}},
                       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
                         React.createElement("span",{style:{fontSize:12,color:"rgba(255,255,255,.4)"}},"驗證準確度"),
                         React.createElement("span",{style:{fontSize:20,fontWeight:700,color:scoreColor,fontFamily:"'IBM Plex Mono',monospace"}},score+"/100")
@@ -4186,7 +4192,7 @@ function App(){
                   <div style={{fontSize:13,marginTop:8,color:"rgba(255,255,255,.2)"}}>分析完成後會自動儲存</div>
                 </div>
               ):(
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:6,padding:20}}>
+                <div style={{background:"rgba(255,255,255,.06)",border:"1px solid #252738",borderRadius:6,padding:20}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
                     <div style={{fontSize:13,color:"rgba(255,255,255,.25)"}}>已儲存報告（{reports.length}份）{db&&<span style={{fontSize:10,color:"#10b98180",marginLeft:6}}>☁️ 雲端同步</span>}</div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -4224,7 +4230,7 @@ function App(){
                                     if(e.key==="Escape"){setEditingReportId(null);}
                                   }}
                                   autoFocus
-                                  style={{flex:1,background:"rgba(255,255,255,.03)",border:"1px solid #d97706",borderRadius:4,
+                                  style={{flex:1,background:"rgba(255,255,255,.06)",border:"1px solid #d97706",borderRadius:4,
                                     padding:"4px 8px",fontSize:14,color:"#fff",minWidth:200}}/>
                                 <span onClick={()=>{cloudUpdateTitle(r.id,editingTitle);setReports(prev=>prev.map(x=>x.id===r.id?{...x,title:editingTitle}:x));setEditingReportId(null);}}
                                   style={{fontSize:12,color:"#10b981",cursor:"pointer",padding:"2px 8px",
@@ -4404,7 +4410,7 @@ function App(){
                     </div>
                   </div>
                   {/* 停損提示 */}
-                  <div style={{display:"flex",gap:16,alignItems:"center",padding:"12px 16px",background:"rgba(255,255,255,.03)",
+                  <div style={{display:"flex",gap:16,alignItems:"center",padding:"12px 16px",background:"rgba(255,255,255,.06)",
                     borderLeft:"3px solid "+SOP_RULES[sopType].color,borderRadius:"0 6px 6px 0"}}>
                     <span style={{fontSize:13,fontWeight:600,color:SOP_RULES[sopType].color}}>{"停損線：-"+SOP_RULES[sopType].stop+"%"}</span>
                     <span style={{fontSize:12,color:"#9ca3af"}}>{"硬停損：-"+SOP_RULES[sopType].hard+"%"}</span>
@@ -4421,7 +4427,7 @@ function App(){
                         width:Math.round(sopChecks.filter(Boolean).length/5*100)+"%",
                         background:sopChecks.every(Boolean)?"#22c55e":"#EAB308"}}/>
                     </div>
-                    <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
+                    <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
                       {[
                         {text:"到期前有明確催化劑？（財報 / 政策 / 產品）",sub:"沒有催化劑就不開倉，這條不能妥協",fatal:true},
                         {text:"行權價距現價在 20% 以內？",sub:"超過 20% OTM 勝率接近零"},
@@ -4463,7 +4469,7 @@ function App(){
 
                   {/* 開倉表單（全過後顯示） */}
                   {sopChecks.every(Boolean)&&(
-                    <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
+                    <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
                       <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
                         <div style={{fontSize:11,color:"#6b7280",fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>部位資訊</div>
                       </div>
@@ -4549,7 +4555,7 @@ function App(){
                       if(k==="OTM_CALL") rules.push({label:"到期 <30天",val:"-25% 立即出",color:"#ef4444"});
                       if(k==="ATM") rules.push({label:"行權價範圍",val:"現價 ±5%",color:"#EAB308"});
                       if(k==="SPREAD") rules.push({label:"注意",val:"整組同進同出",color:"#EAB308"});
-                      return React.createElement("div",{key:k,style:{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",
+                      return React.createElement("div",{key:k,style:{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",
                         borderRadius:10,padding:16,borderTop:"2px solid "+r.color}},
                         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:12}},
                           React.createElement("span",{style:{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:3,
@@ -4566,7 +4572,7 @@ function App(){
                       );
                     })}
                   </div>
-                  <div style={{background:"rgba(255,255,255,.02)",borderLeft:"3px solid #EAB308",padding:"14px 18px",borderRadius:"0 8px 8px 0",
+                  <div style={{background:"rgba(255,255,255,.04)",borderLeft:"3px solid #EAB308",padding:"14px 18px",borderRadius:"0 8px 8px 0",
                     fontSize:13,color:"#9ca3af",lineHeight:1.8}}>
                     {"時間是敵人，不是朋友。虧損 -50% 需要漲 +100% 才回本。"}
                     <br/>{"虧損 -80% 需要漲 +400%。剩下的天數夠嗎？"}
@@ -4582,7 +4588,7 @@ function App(){
                   {(function(){
                     var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
                     if(optPos.length===0) return React.createElement("div",{style:{padding:20,textAlign:"center",color:"#6b7280",fontSize:13,
-                      background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無期權持倉，新增持倉後自動掃描");
+                      background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無期權持倉，新增持倉後自動掃描");
                     var alerts = [];
                     optPos.forEach(function(p){
                       var curP = prices[p.sym] ? prices[p.sym].price : 0;
@@ -4591,7 +4597,7 @@ function App(){
                         if(!c.ok) alerts.push({sym:p.sym,type:p.type,strike:p.strike,exp:p.exp,detail:c.detail,label:c.label});
                       });
                     });
-                    return React.createElement("div",{style:{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}},
+                    return React.createElement("div",{style:{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}},
                       React.createElement("div",{style:{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,.05)",
                         display:"flex",justifyContent:"space-between",alignItems:"center"}},
                         React.createElement("div",{style:{fontSize:11,color:"#6b7280",fontWeight:700,textTransform:"uppercase",letterSpacing:1}},
@@ -4636,7 +4642,7 @@ function App(){
                   })()}
                   <div>
                     <div style={{fontSize:11,color:"#6b7280",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>每日三問</div>
-                    <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
+                    <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
                       {[
                         "催化劑還在嗎？還是已經發生了（事件過了就出場）",
                         "現在虧損%是多少？有沒有觸及停損線？",
@@ -4651,7 +4657,7 @@ function App(){
                   </div>
                   <div>
                     <div style={{fontSize:11,color:"#6b7280",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>出場警示條件（符合任一項就考慮出場）</div>
-                    <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
+                    <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
                       {[
                         {text:"虧損超過停損線",sub:"OTM -40%、ATM -30%、Spread -50%"},
                         {text:"催化劑已發生但股票沒移動",sub:"事件過了，IV crush 繼續吃你"},
@@ -4679,7 +4685,7 @@ function App(){
                   {(function(){
                     var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
                     if(optPos.length===0) return React.createElement("div",{style:{padding:24,textAlign:"center",color:"#6b7280",fontSize:13,
-                      background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無期權持倉，新增持倉後可使用 AI 建議");
+                      background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無期權持倉，新增持倉後可使用 AI 建議");
                     return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:12}},
                       /* 標題 */
                       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
@@ -4691,7 +4697,7 @@ function App(){
                           riskAdviceLoading?"⟳ AI 分析中...":"⚡ 全部分析")
                       ),
                       /* 持倉卡片列表 */
-                      React.createElement("div",{style:{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}},
+                      React.createElement("div",{style:{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}},
                         optPos.map(function(p, pi){
                           var curP = prices[p.sym] ? prices[p.sym].price : 0;
                           var scan = scanPositionRisk(p, curP, nav);
@@ -4763,7 +4769,7 @@ function App(){
 
                   {/* AI 分析結果 */}
                   {riskAdviceLoading&&(
-                    <div style={{padding:24,textAlign:"center",background:"rgba(255,255,255,.03)",border:"1px solid #7c3aed30",borderRadius:10}}>
+                    <div style={{padding:24,textAlign:"center",background:"rgba(255,255,255,.06)",border:"1px solid #7c3aed30",borderRadius:10}}>
                       <div style={{fontSize:14,color:"#a78bfa",fontWeight:600,marginBottom:6}}>⟳ AI 正在整合分析...</div>
                       <div style={{fontSize:12,color:"#6b7280"}}>結合持倉風險掃描 + 研究報告 + 期權流 + 暗池數據</div>
                     </div>
@@ -4802,7 +4808,7 @@ function App(){
                   )}
 
                   {/* 底部提示 */}
-                  <div style={{background:"rgba(255,255,255,.02)",borderLeft:"3px solid #7c3aed",padding:"14px 18px",borderRadius:"0 8px 8px 0",
+                  <div style={{background:"rgba(255,255,255,.04)",borderLeft:"3px solid #7c3aed",padding:"14px 18px",borderRadius:"0 8px 8px 0",
                     fontSize:13,color:"#9ca3af",lineHeight:1.8}}>
                     {"AI 會整合你的持倉風險掃描、研究報告、期權流與暗池數據。"}
                     <br/>{"點擊 ⚡ 分析單一持倉，或點「全部分析」一次檢查所有部位。"}
@@ -4815,7 +4821,7 @@ function App(){
               {sopTab==="tree"&&(
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
                   <div style={{fontSize:12,color:"#6b7280",marginBottom:4}}>每天開盤前跑一遍，每個問題只有兩個答案</div>
-                  <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
+                  <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}}>
                     {[
                       "催化劑事件已發生，股票卻沒如預期移動？",
                       "虧損是否超過停損線？",
@@ -4882,7 +4888,7 @@ function App(){
                     {sopTreeState.some(Boolean)?"確認（有警示，請先處理）":"確認完成，開始交易"}
                   </div>
 
-                  <div style={{background:"rgba(255,255,255,.02)",borderLeft:"3px solid #EAB308",padding:"14px 18px",borderRadius:"0 8px 8px 0",
+                  <div style={{background:"rgba(255,255,255,.04)",borderLeft:"3px solid #EAB308",padding:"14px 18px",borderRadius:"0 8px 8px 0",
                     fontSize:13,color:"#9ca3af",lineHeight:1.8}}>
                     {"沒有催化劑就不開倉。"}
                     <br/>{"有催化劑但觸及停損就出場。"}
@@ -4946,7 +4952,7 @@ function App(){
                   onKeyDown={e=>e.key==="Enter"&&handleLogin()}
                   placeholder="密碼" autoFocus
                   style={{padding:"10px 12px",fontSize:14,borderRadius:4,
-                    background:"rgba(255,255,255,.03)",border:"1px solid #ffffff20",color:"#ffffff"}}/>
+                    background:"rgba(255,255,255,.06)",border:"1px solid #ffffff20",color:"#ffffff"}}/>
                 <div onClick={handleLogin}
                   style={{padding:"11px",borderRadius:10,cursor:"pointer",textAlign:"center",
                     background:loginLoading?"#ffffff10":"#d9770620",
@@ -4962,14 +4968,14 @@ function App(){
                   onChange={e=>setSetupKey(e.target.value)}
                   placeholder="UW API 金鑰 (UUID 格式)"
                   style={{padding:"10px 12px",fontSize:13,borderRadius:4,
-                    background:"rgba(255,255,255,.03)",border:"1px solid #ffffff20",color:"#ffffff"}}/>
+                    background:"rgba(255,255,255,.06)",border:"1px solid #ffffff20",color:"#ffffff"}}/>
                 <input
                   type="password" value={setupPwd}
                   onChange={e=>setSetupPwd(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&handleSetup()}
                   placeholder="設定密碼（至少 6 字元）"
                   style={{padding:"10px 12px",fontSize:14,borderRadius:4,
-                    background:"rgba(255,255,255,.03)",border:"1px solid #ffffff20",color:"#ffffff"}}/>
+                    background:"rgba(255,255,255,.06)",border:"1px solid #ffffff20",color:"#ffffff"}}/>
                 <div onClick={handleSetup}
                   style={{padding:"11px",borderRadius:10,cursor:"pointer",textAlign:"center",
                     background:loginLoading?"#ffffff10":"#d9770620",
@@ -5020,7 +5026,7 @@ function App(){
                 </div>
               )}
               {!db&&(
-                <div style={{marginTop:8,padding:"10px 12px",background:"rgba(255,255,255,.03)",borderRadius:4,border:"1px solid #ffffff0d"}}>
+                <div style={{marginTop:8,padding:"10px 12px",background:"rgba(255,255,255,.06)",borderRadius:4,border:"1px solid #ffffff0d"}}>
                   <div style={{fontSize:10,color:"rgba(255,255,255,.3)",lineHeight:1.7}}>
                     <div style={{color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:4}}>📋 設定步驟：</div>
                     <div>1. 前往 <span style={{color:"#ffa726"}}>supabase.com</span> → 你的專案</div>
@@ -5034,7 +5040,7 @@ function App(){
                       navigator.clipboard.writeText(sql).then(function(){alert("✅ SQL 已複製！\n\n請到 Supabase → SQL Editor → New query → 貼上執行");});
                     }}
                     style={{marginTop:6,padding:"6px 10px",fontSize:10,borderRadius:4,cursor:"pointer",
-                      background:"rgba(255,255,255,.03)",border:"1px solid #ffa72630",color:"#ffa726",
+                      background:"rgba(255,255,255,.06)",border:"1px solid #ffa72630",color:"#ffa726",
                       textAlign:"center",fontWeight:600}}>
                     📋 複製建表 SQL
                   </div>
