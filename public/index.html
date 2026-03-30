@@ -3111,6 +3111,7 @@ function App(){
                       ):userPositions.map(function(u){
                         var live=prices[u.sym];
                         var isOpt=(isOptionType(u.type));
+                        var isSimpleOpt=(u.type==="CALL"||u.type==="PUT"||u.type==="LEAPS");
                         var isExpired=false;
                         if(u.exp){
                           var parts=u.exp.split(/[\/\-]/);
@@ -3121,16 +3122,36 @@ function App(){
                           }
                           if(expDate && expDate < new Date()) isExpired=true;
                         }
-                        // 期權已到期 → 歸零（OTM 到期歸零，ITM 應已行權）
-                        var cur;
+                        var cur, noLivePrice=false;
                         if(isExpired){
                           cur=0;
-                        } else if(isOpt){
-                          // 嘗試用已載入的持倉報價，否則 fallback 到成本
+                        } else if(isSimpleOpt){
+                          // 單腿期權：用 UW API 報價
                           var posMatch=positions.find(function(pp){return pp.sym===u.sym&&pp.strat===u.type&&pp.strike===u.strike&&pp.exp===u.exp;});
                           cur=(posMatch&&posMatch.live)?Number(posMatch.cur):Number(u.entry);
+                          if(!posMatch||!posMatch.live) noLivePrice=true;
+                        } else if(isOpt){
+                          // 複合策略（Spread/Condor 等）：用股票現價估算方向性損益
+                          var stockP = live?.price || 0;
+                          var strike = Number(u.strike) || 0;
+                          if(stockP > 0 && strike > 0){
+                            // 用標的股價相對行使價的距離來估算價值變化
+                            var intrinsic = 0;
+                            if(u.type.indexOf("Call")!==-1 || u.type==="Straddle" || u.type==="Strangle"){
+                              intrinsic = Math.max(0, stockP - strike);
+                            } else if(u.type.indexOf("Put")!==-1){
+                              intrinsic = Math.max(0, strike - stockP);
+                            }
+                            // 估算現價 = max(內在價值, 成本價的一部分) — 僅供參考
+                            cur = Math.max(intrinsic > 0 ? Number(u.entry) * (1 + (intrinsic / strike)) : Number(u.entry) * 0.8, 0.01);
+                            noLivePrice = true;
+                          } else {
+                            cur = Number(u.entry);
+                            noLivePrice = true;
+                          }
                         } else {
                           cur=live?.price||Number(u.entry);
+                          if(!live) noLivePrice=true;
                         }
                         var qty=Number(u.qty)||0;
                         var entry=Number(u.entry)||0;
@@ -3156,16 +3177,20 @@ function App(){
                               React.createElement("span",{style:{fontSize:10,color:"rgba(255,255,255,.25)"}},u.type),
                               isExpired&&React.createElement("span",{style:{fontSize:9,padding:"1px 5px",borderRadius:3,background:"#ef444430",color:"#ef4444",fontWeight:600}},"已到期")
                             ),
-                            React.createElement("div",{style:{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,.3)"}},
+                            React.createElement("div",{style:{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,.3)",flexWrap:"wrap"}},
                               React.createElement("span",null,"×"+u.qty+(isOpt?" (×100)":"")),
                               React.createElement("span",null,"成本 $"+entry.toFixed(2)),
-                              (!isExpired&&(live||cur!==entry))&&React.createElement("span",{style:{color:"rgba(255,255,255,.4)"}},"現 $"+cur.toFixed(2)),
-                              u.exp&&React.createElement("span",{style:{color:isExpired?"#ef4444":"#d97706"}},(isExpired?"已到期 ":"到期 ")+u.exp)
+                              (!isExpired&&live)&&React.createElement("span",{style:{color:"rgba(255,255,255,.4)"}},"股價 $"+(live.price||0).toFixed(2)),
+                              u.exp&&React.createElement("span",{style:{color:isExpired?"#ef4444":"#d97706"}},(isExpired?"已到期 ":"到期 ")+u.exp),
+                              noLivePrice&&!isExpired&&React.createElement("span",{style:{color:"#d97706",fontSize:10}},"⚠ 無即時報價")
                             )
                           ),
-                          React.createElement("div",{style:{textAlign:"right",minWidth:70}},
+                          React.createElement("div",{style:{textAlign:"right",minWidth:80}},
                             isExpired?React.createElement("div",{style:{fontSize:12,color:"#ef4444",fontWeight:600}},
                               "−$"+(entry*Math.abs(qty)*mult).toLocaleString()
+                            ):noLivePrice?React.createElement("div",null,
+                              React.createElement("div",{style:{fontSize:12,color:"#d97706",fontWeight:500}},"待報價"),
+                              live&&React.createElement("div",{style:{fontSize:10,color:"rgba(255,255,255,.25)"}},"股 $"+(live.price||0).toFixed(2))
                             ):React.createElement(React.Fragment,null,
                               React.createElement("div",{style:{fontSize:13,fontWeight:600,color:pnlAmt>=0?"#10b981":"#ef4444"}},
                                 (pnlAmt>=0?"+":"")+Math.round(pnlAmt).toLocaleString()
