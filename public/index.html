@@ -5428,9 +5428,7 @@ function App(){
                     <div style={{fontSize:11,color:"#6b7280",marginTop:2}}>AI 深度產業鏈分析 · 從宏觀事件推導受惠/受災股</div>
                   </div>
                 </div>
-                <div onClick={function(){ scanHotTopics(); }}
-                  className="glass-btn nb" style={{padding:"8px 16px",fontSize:12,color:"#f97316",cursor:columnScanLoading?"wait":"pointer",
-                    background:"rgba(249,115,22,.08)",border:"1px solid rgba(249,115,22,.25)"}}>
+                <div onClick={function(){ scanHotTopics(); }} className="glass-btn nb" style={{padding:"8px 16px",fontSize:12,color:"#f97316",cursor:columnScanLoading?"wait":"pointer",background:"rgba(249,115,22,.08)",border:"1px solid rgba(249,115,22,.25)"}}>
                   {columnScanLoading?"⟳ 掃描中…":"🔍 掃描今日熱點"}
                 </div>
               </div>
@@ -5536,12 +5534,11 @@ function App(){
                   </div>
 
                   {/* 右側：文章閱讀 */}
-                  <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:14,
-                    overflow:"hidden",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>
-                    {columnSelected!==null&&columnArticles[columnSelected]?(function(){
+                  {React.createElement("div",{style:{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:14,
+                    overflow:"hidden",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",minHeight:400}},
+                    columnSelected!==null&&columnArticles[columnSelected]?(function(){
                       var art = columnArticles[columnSelected];
                       return React.createElement("div",null,
-                        /* 文章標題列 */
                         React.createElement("div",{style:{padding:"16px 24px",borderBottom:"1px solid rgba(255,255,255,.06)",
                           background:"linear-gradient(135deg,rgba(249,115,22,.06),rgba(239,68,68,.03))",
                           display:"flex",justifyContent:"space-between",alignItems:"center"}},
@@ -5561,78 +5558,49 @@ function App(){
                             },className:"glass-btn nb",style:{padding:"5px 12px",fontSize:11,color:"#ef444480",cursor:"pointer"}},"🗑")
                           )
                         ),
-                        /* 文章內文 */
                         React.createElement("div",{style:{padding:"20px 24px",overflowY:"auto",maxHeight:550,lineHeight:1.9}},
                           art.content.split("\n").map(function(line,li){
                             var trimmed=line.trim();
                             if(!trimmed) return React.createElement("div",{key:li,style:{height:10}});
-                            // # 大標題
                             if(/^# /.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:20,fontWeight:700,color:"#f97316",
                               marginTop:li>0?16:0,marginBottom:8,paddingBottom:8,borderBottom:"2px solid rgba(249,115,22,.2)"}},
                               trimmed.replace(/^# /,""));
-                            // ## 次標題
                             if(/^## /.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:16,fontWeight:700,color:"#e5e7eb",
-                              marginTop:16,marginBottom:6,paddingLeft:0,display:"flex",alignItems:"center",gap:8}},
+                              marginTop:16,marginBottom:6,display:"flex",alignItems:"center",gap:8}},
                               React.createElement("div",{style:{width:4,height:18,borderRadius:2,background:"#f97316"}}),
                               trimmed.replace(/^## /,""));
-                            // ### 小標題
                             if(/^### /.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:14,fontWeight:700,color:"#d1d5db",
                               marginTop:12,marginBottom:4}},trimmed.replace(/^### /,""));
-                            // 箭頭傳導鏈
-                            if(trimmed.indexOf("→")!==-1&&trimmed.split("→").length>=3){
+                            if(trimmed.indexOf("\u2192")!==-1&&trimmed.split("\u2192").length>=3){
                               return React.createElement("div",{key:li,style:{fontSize:13,color:"#f97316",fontWeight:600,
                                 padding:"10px 16px",margin:"8px 0",background:"rgba(249,115,22,.06)",borderRadius:8,
                                 borderLeft:"3px solid #f97316",lineHeight:1.6,overflowX:"auto",whiteSpace:"nowrap"}},trimmed);
                             }
-                            // 受惠股 🟢 或受災股 🔴
-                            if(/[🟢✅📈]/.test(trimmed)&&/受惠|利多|上漲/.test(trimmed)){
-                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#22c55e",fontWeight:600,
-                                padding:"6px 12px",margin:"3px 0",background:"rgba(34,197,94,.06)",borderRadius:6}},trimmed);
-                            }
-                            if(/[🔴❌📉]/.test(trimmed)&&/受災|利空|下跌/.test(trimmed)){
-                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#ef4444",fontWeight:600,
-                                padding:"6px 12px",margin:"3px 0",background:"rgba(239,68,68,.06)",borderRadius:6}},trimmed);
-                            }
-                            // **粗體** 處理
                             if(/\*\*.+?\*\*/.test(trimmed)){
                               var parts=trimmed.split(/(\*\*.+?\*\*)/g);
                               return React.createElement("div",{key:li,style:{fontSize:13,color:"#d1d5db",marginTop:3}},
                                 parts.map(function(part,pi){
-                                  if(/^\*\*(.+)\*\*$/.test(part)){
-                                    return React.createElement("span",{key:pi,style:{fontWeight:700,color:"#e5e7eb"}},part.replace(/\*\*/g,""));
-                                  }
+                                  if(/^\*\*(.+)\*\*$/.test(part)) return React.createElement("span",{key:pi,style:{fontWeight:700,color:"#e5e7eb"}},part.replace(/\*\*/g,""));
                                   return React.createElement("span",{key:pi},part);
                                 })
                               );
                             }
-                            // 股票代碼行（含 $ 或 ticker pattern）
-                            if(/\$[A-Z]{1,5}|^[A-Z]{2,5}[:：]/.test(trimmed)){
-                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#60a5fa",padding:"2px 0"}},trimmed);
-                            }
-                            // 列表 - 項
-                            if(/^[-•]/.test(trimmed)){
-                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#b0b8c4",paddingLeft:16,marginTop:2,lineHeight:1.7}},trimmed);
-                            }
-                            // 數字列表
-                            if(/^\d+[.、)）]/.test(trimmed)){
-                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#d1d5db",marginTop:4,paddingLeft:4}},trimmed);
-                            }
-                            // ⚠️ 風險提醒
-                            if(/^⚠/.test(trimmed)){
-                              return React.createElement("div",{key:li,style:{fontSize:12,color:"#EAB308",padding:"6px 12px",
-                                margin:"4px 0",background:"rgba(234,179,8,.06)",borderRadius:6,
-                                borderLeft:"3px solid #EAB30840"}},trimmed);
-                            }
-                            // 普通段落
+                            if(/^[✅🟢]/.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:13,color:"#22c55e",fontWeight:600,
+                              padding:"6px 12px",margin:"3px 0",background:"rgba(34,197,94,.06)",borderRadius:6}},trimmed);
+                            if(/^[🔴❌🚨]/.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:13,color:"#ef4444",fontWeight:600,
+                              padding:"6px 12px",margin:"3px 0",background:"rgba(239,68,68,.06)",borderRadius:6}},trimmed);
+                            if(/^[⚠]/.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:12,color:"#EAB308",padding:"6px 12px",
+                              margin:"4px 0",background:"rgba(234,179,8,.06)",borderRadius:6,borderLeft:"3px solid #EAB30840"}},trimmed);
+                            if(/^\d+[.、)）]/.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:13,color:"#d1d5db",marginTop:4,paddingLeft:4}},trimmed);
+                            if(/^[-•]/.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:13,color:"#b0b8c4",paddingLeft:16,marginTop:2,lineHeight:1.7}},trimmed);
                             return React.createElement("div",{key:li,style:{fontSize:13,color:"#9ca3af",lineHeight:1.8}},line);
                           })
                         )
                       );
                     })():React.createElement("div",{style:{padding:40,textAlign:"center"}},
-                      React.createElement("div",{style:{fontSize:40,marginBottom:12}},"📰"),
+                      React.createElement("div",{style:{fontSize:40,marginBottom:12}},"\uD83D\uDCF0"),
                       React.createElement("div",{style:{fontSize:14,color:"rgba(255,255,255,.4)"}},"選擇一篇文章閱讀"))
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
 
