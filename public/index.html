@@ -948,6 +948,7 @@ const NAV_ITEMS=[
   {id:"darkpool",  icon:"◉",label:"暗池"},
   {id:"chart",     icon:"▲",label:"K 線圖"},
   {id:"research",  icon:"📋",label:"研究"},
+  {id:"column",    icon:"🔥",label:"時事專欄"},
   {id:"sector",    icon:"🗺️",label:"板塊績效"},
   {id:"risk",      icon:"🛡",label:"風控"},
 ];
@@ -1132,6 +1133,158 @@ function App(){
   const [sectorDateTo, setSectorDateTo] = useState(function(){
     var d = new Date(); return d.toISOString().split("T")[0]; // 今天
   });
+
+  // ── 時事專欄 ──
+  const [columnArticles, setColumnArticles] = useState(function(){
+    try{ var s=localStorage.getItem("column_articles"); return s?JSON.parse(s):[]; }catch(e){return [];}
+  });
+  const [columnLoading, setColumnLoading] = useState(false);
+  const [columnTopic, setColumnTopic] = useState("");
+  const [columnSelected, setColumnSelected] = useState(null); // 選中查看的文章 index
+  const [columnScanLoading, setColumnScanLoading] = useState(false);
+  const [columnHotTopics, setColumnHotTopics] = useState([]);
+
+  // 掃描時事熱點
+  const scanHotTopics = async function(){
+    if(columnScanLoading) return;
+    setColumnScanLoading(true);
+    try{
+      var resp = await fetch(UW_WORKER + "/api/ai", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514", max_tokens:2000,
+          tools:[{type:"web_search_20250305",name:"web_search"}],
+          messages:[{role:"user",content:[
+            "你是美股市場分析師。請用 web_search 搜尋今天最新的美股相關重大新聞。",
+            "搜尋關鍵字：US stock market news today, breaking market news, geopolitics market impact",
+            "找出 5 個當前最重要的、會影響美股市場的時事主題。",
+            "每個主題用以下 JSON 格式回傳（不要 markdown code block，直接回傳 JSON array）：",
+            '[{"title":"主題標題","summary":"一句話摘要","impact":"高/中/低","sectors":["受影響板塊"],"keywords":"搜尋關鍵字"}]',
+            "用繁體中文回答。只回傳 JSON array，不要其他文字。"
+          ].join("\n")}]
+        })
+      });
+      var data = await resp.json();
+      var text="";
+      if(data&&data.content) data.content.forEach(function(b){if(b.type==="text") text+=b.text;});
+      // 嘗試解析 JSON
+      var jsonMatch = text.match(/\[[\s\S]*\]/);
+      if(jsonMatch){
+        var topics = JSON.parse(jsonMatch[0]);
+        setColumnHotTopics(topics);
+      }
+    }catch(e){ console.warn("scanHotTopics error:",e); }
+    setColumnScanLoading(false);
+  };
+
+  // 生成時事分析專欄文章
+  const generateColumnArticle = async function(topic){
+    if(columnLoading||!topic) return;
+    setColumnLoading(true);
+    try{
+      var NL="\n";
+      // 帶入使用者持倉作為上下文
+      var posContext="";
+      if(userPositions.length>0){
+        posContext = "【使用者當前持倉】"+NL+userPositions.map(function(p){
+          return p.sym+" "+p.type+(p.strike?" $"+p.strike:"")+(p.exp?" exp:"+p.exp:"");
+        }).join(", ")+NL+NL;
+      }
+
+      var prompt = [
+        "你是頂級財經專欄作家兼產業分析師，擅長從宏觀事件推導產業鏈傳導效應。",
+        "你的風格：邏輯清晰、有深度、能從一個事件推導出三到四層的產業鏈連鎖反應。",
+        "你要寫一篇深度時事分析專欄，主題是：",
+        "",
+        "【"+topic+"】",
+        "",
+        posContext,
+        "請先用 web_search 工具大量搜尋以下內容：",
+        "1. 這個事件/主題的最新發展和具體數據",
+        "2. 受影響的產業鏈上下游關係",
+        "3. 相關公司的最新財報數據、股價表現、分析師評級",
+        "4. 歷史上類似事件的市場反應",
+        "",
+        "然後依以下結構撰寫完整分析文章（用繁體中文）：",
+        "",
+        "# 標題（要有吸引力，像財經專欄標題）",
+        "",
+        "## 事件概述",
+        "- 發生了什麼？最新數據是什麼？",
+        "- 為什麼這件事重要？",
+        "",
+        "## 傳導路線圖",
+        "像供應鏈分析一樣，用箭頭（→）畫出這個事件如何一步步影響到各個產業：",
+        "事件 → 第一層影響（直接受衝擊的產業）→ 第二層（間接傳導）→ 第三層（最終受惠/受損的公司）",
+        "每一層都要有具體的邏輯和數據支撐",
+        "",
+        "## 受惠股分析",
+        "列出 3-5 檔最受惠的股票，每檔包含：",
+        "- 股票代碼和公司名",
+        "- 為什麼受惠（產業鏈邏輯）",
+        "- 目前股價 vs 分析師目標價",
+        "- 關鍵催化劑（財報日期、政策時間點等）",
+        "- 風險提醒",
+        "",
+        "## 受災股分析",
+        "列出 3-5 檔最受衝擊的股票，同樣分析格式",
+        "",
+        "## 時間軸與交易節奏",
+        "像你提供的「三階段」分析：",
+        "- 第一階段（短期）：已經發生的，是否還有追漲空間？",
+        "- 第二階段（中期）：正在傳導中的，現在佈局來得及嗎？",
+        "- 第三階段（長期）：還沒反映在財報的，什麼時候會爆發？",
+        "",
+        "## 操作建議",
+        "- 具體的進場策略（股票 or 期權）",
+        "- 行使價、到期日建議",
+        "- 停損設定",
+        "- 倉位建議（佔總資金%）",
+        "",
+        "## 風險與反面論點",
+        "- 什麼情況下這個分析會失敗？",
+        "- 最大的風險是什麼？",
+        "",
+        "⚠️ 重要：",
+        "- 所有數據必須來自 web_search 的最新搜尋結果",
+        "- 股價、財報數據必須是最新的",
+        "- 分析師目標價必須引用來源",
+        "- 寫作風格要像你給我看的那篇石油衝擊分析：有邏輯推導、有數據、有觀點、有態度",
+        "- 用 markdown 格式，標題用 ## ，重點用 **粗體**",
+        "- 文章長度至少 2000 字"
+      ].join(NL);
+
+      var resp = await fetch(UW_WORKER + "/api/ai", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514", max_tokens:8000,
+          tools:[{type:"web_search_20250305",name:"web_search"}],
+          messages:[{role:"user",content:prompt}]
+        })
+      });
+      if(!resp.ok) throw new Error("HTTP "+resp.status);
+      var data = await resp.json();
+      var text="";
+      if(data&&data.content) data.content.forEach(function(b){if(b.type==="text") text+=b.text;});
+      if(!text) throw new Error("empty response");
+
+      var article = {
+        id: Date.now(),
+        topic: topic,
+        content: text,
+        createdAt: new Date().toISOString(),
+        dateStr: new Date().toLocaleDateString("zh-TW")+" "+new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})
+      };
+      var updated = [article].concat(columnArticles).slice(0,20); // 保留最近 20 篇
+      setColumnArticles(updated);
+      setColumnSelected(0);
+      try{ localStorage.setItem("column_articles",JSON.stringify(updated)); }catch(e){}
+    }catch(e){
+      alert("專欄生成失敗："+e.message);
+    }
+    setColumnLoading(false);
+  };
+
   const SOP_RULES = {
     OTM_CALL:{color:"#3b82f6",stop:40,hard:70,profit:null,label:"OTM Call",sub:"博大漲"},
     OTM_PUT:{color:"#f59e0b",stop:40,hard:70,profit:25,label:"OTM Put",sub:"博大跌"},
@@ -5259,6 +5412,256 @@ function App(){
                 </div>
               )}
 
+            </div>
+          )}
+
+          {/* ══════ 時事專欄 ══════ */}
+          {tab==="column"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+              {/* 頁面標題 */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:6,height:28,borderRadius:3,background:"linear-gradient(180deg,#f97316,#ef4444)"}}/>
+                  <div>
+                    <div style={{fontSize:18,fontWeight:700,color:"#e5e7eb"}}>時事專欄</div>
+                    <div style={{fontSize:11,color:"#6b7280",marginTop:2}}>AI 深度產業鏈分析 · 從宏觀事件推導受惠/受災股</div>
+                  </div>
+                </div>
+                <div onClick={function(){ scanHotTopics(); }}
+                  className="glass-btn nb" style={{padding:"8px 16px",fontSize:12,color:"#f97316",cursor:columnScanLoading?"wait":"pointer",
+                    background:"rgba(249,115,22,.08)",border:"1px solid rgba(249,115,22,.25)"}}>
+                  {columnScanLoading?"⟳ 掃描中…":"🔍 掃描今日熱點"}
+                </div>
+              </div>
+
+              {/* 熱點主題卡片 */}
+              {columnHotTopics.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{fontSize:12,color:"#f97316",fontWeight:700}}>🔥 今日時事熱點（點擊生成深度分析）</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
+                    {columnHotTopics.map(function(t,ti){
+                      var impColor=t.impact==="高"?"#ef4444":t.impact==="中"?"#EAB308":"#22c55e";
+                      return React.createElement("div",{key:ti,onClick:function(){
+                        setColumnTopic(t.title);
+                        generateColumnArticle(t.title);
+                      },className:"glass-card nb",style:{padding:"14px 16px",cursor:columnLoading?"wait":"pointer",
+                        borderColor:"rgba(249,115,22,.15)",transition:"all .2s"}},
+                        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}},
+                          React.createElement("div",{style:{fontSize:13,fontWeight:700,color:"#e5e7eb",lineHeight:1.4}},t.title),
+                          React.createElement("span",{style:{fontSize:10,padding:"2px 8px",borderRadius:4,flexShrink:0,
+                            background:impColor+"18",color:impColor,fontWeight:600}},"影響:"+t.impact)
+                        ),
+                        React.createElement("div",{style:{fontSize:11,color:"#9ca3af",marginTop:6,lineHeight:1.4}},t.summary),
+                        t.sectors&&React.createElement("div",{style:{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}},
+                          t.sectors.map(function(s,si){
+                            return React.createElement("span",{key:si,style:{fontSize:10,padding:"2px 8px",borderRadius:3,
+                              background:"rgba(255,255,255,.06)",color:"#6b7280"}},s);
+                          })
+                        )
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 自訂主題輸入 */}
+              <div className="glass-card" style={{padding:"16px 20px"}}>
+                <div style={{fontSize:12,color:"#6b7280",fontWeight:600,marginBottom:8}}>✍️ 自訂分析主題</div>
+                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                  <input type="text" value={columnTopic} onChange={function(e){setColumnTopic(e.target.value);}}
+                    onKeyDown={function(e){if(e.key==="Enter"&&columnTopic.trim()) generateColumnArticle(columnTopic.trim());}}
+                    placeholder="輸入你想分析的時事主題，例如：美伊戰爭對石化股的影響、AI晶片禁令、Fed降息路徑…"
+                    style={{flex:1,padding:"10px 14px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",
+                      borderRadius:10,color:"#fff",fontSize:13,outline:"none"}}/>
+                  <div onClick={function(){if(columnTopic.trim()&&!columnLoading) generateColumnArticle(columnTopic.trim());}}
+                    style={{padding:"10px 24px",background:columnLoading?"#1a1a2e":"linear-gradient(135deg,#f97316,#ef4444)",
+                      border:"none",borderRadius:8,cursor:columnLoading?"wait":"pointer",
+                      fontSize:13,color:"#fff",fontWeight:700,whiteSpace:"nowrap",
+                      boxShadow:columnLoading?"none":"0 4px 16px rgba(249,115,22,.3)"}}>
+                    {columnLoading?"⟳ AI 撰文中…":"🔥 生成分析"}
+                  </div>
+                </div>
+                {/* 快捷主題 */}
+                <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
+                  {["Fed 利率決策對科技股的影響","關稅戰升級受惠與受災股","AI 算力軍備競賽產業鏈","中東地緣政治與能源股","半導體週期反轉訊號"].map(function(t){
+                    return React.createElement("div",{key:t,onClick:function(){setColumnTopic(t);},
+                      className:"glass-btn nb",style:{padding:"5px 12px",fontSize:11,color:"rgba(255,255,255,.5)",cursor:"pointer"}},t);
+                  })}
+                </div>
+              </div>
+
+              {/* Loading 動畫 */}
+              {columnLoading&&(
+                <div style={{padding:40,textAlign:"center",background:"linear-gradient(135deg,rgba(249,115,22,.06),rgba(239,68,68,.04))",
+                  border:"1px solid rgba(249,115,22,.15)",borderRadius:14,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
+                  <div style={{fontSize:36,marginBottom:10}}>🔥</div>
+                  <div style={{fontSize:16,color:"#f97316",fontWeight:700,marginBottom:6}}>AI 正在撰寫深度分析…</div>
+                  <div style={{fontSize:12,color:"#6b7280",lineHeight:1.6}}>
+                    搜尋最新新聞與數據 → 分析產業鏈傳導 → 推導受惠/受災股<br/>
+                    <span style={{color:"#f9731680"}}>約需 30-60 秒</span>
+                  </div>
+                  <div style={{marginTop:16,width:140,height:3,borderRadius:2,background:"rgba(255,255,255,.06)",margin:"16px auto 0",overflow:"hidden"}}>
+                    <div style={{width:"40%",height:"100%",borderRadius:2,background:"linear-gradient(90deg,#f97316,#ef4444)",
+                      animation:"pulse 1.5s ease-in-out infinite"}}/>
+                  </div>
+                </div>
+              )}
+
+              {/* 歷史文章列表 + 閱讀區 */}
+              {columnArticles.length>0&&!columnLoading&&(
+                <div style={{display:"grid",gridTemplateColumns:"260px 1fr",gap:14,minHeight:400}}>
+                  {/* 左側：文章列表 */}
+                  <div style={{display:"flex",flexDirection:"column",gap:0,background:"rgba(255,255,255,.03)",
+                    border:"1px solid rgba(255,255,255,.06)",borderRadius:14,overflow:"hidden",
+                    backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>
+                    <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,.06)",
+                      fontSize:12,color:"#f97316",fontWeight:700}}>📚 分析紀錄 ({columnArticles.length})</div>
+                    <div style={{overflowY:"auto",maxHeight:600}}>
+                      {columnArticles.map(function(a,ai){
+                        var isSel = columnSelected===ai;
+                        return React.createElement("div",{key:a.id,onClick:function(){setColumnSelected(ai);},
+                          style:{padding:"12px 16px",cursor:"pointer",
+                            borderBottom:"1px solid rgba(255,255,255,.04)",
+                            background:isSel?"rgba(249,115,22,.08)":"transparent",
+                            borderLeft:isSel?"3px solid #f97316":"3px solid transparent",
+                            transition:"all .15s"}},
+                          React.createElement("div",{style:{fontSize:13,fontWeight:isSel?700:500,color:isSel?"#e5e7eb":"#9ca3af",
+                            lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",
+                            display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}},a.topic),
+                          React.createElement("div",{style:{fontSize:10,color:"#6b728080",marginTop:4}},a.dateStr)
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 右側：文章閱讀 */}
+                  <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:14,
+                    overflow:"hidden",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>
+                    {columnSelected!==null&&columnArticles[columnSelected]?(function(){
+                      var art = columnArticles[columnSelected];
+                      return React.createElement("div",null,
+                        /* 文章標題列 */
+                        React.createElement("div",{style:{padding:"16px 24px",borderBottom:"1px solid rgba(255,255,255,.06)",
+                          background:"linear-gradient(135deg,rgba(249,115,22,.06),rgba(239,68,68,.03))",
+                          display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                          React.createElement("div",null,
+                            React.createElement("div",{style:{fontSize:15,fontWeight:700,color:"#e5e7eb"}},art.topic),
+                            React.createElement("div",{style:{fontSize:10,color:"#6b7280",marginTop:3}},art.dateStr+" · AI 深度分析")
+                          ),
+                          React.createElement("div",{style:{display:"flex",gap:6}},
+                            React.createElement("div",{onClick:function(){
+                              if(navigator.clipboard) navigator.clipboard.writeText(art.content);
+                            },className:"glass-btn nb",style:{padding:"5px 12px",fontSize:11,color:"#9ca3af",cursor:"pointer"}},"📋 複製"),
+                            React.createElement("div",{onClick:function(){
+                              var updated=columnArticles.filter(function(_,i){return i!==columnSelected;});
+                              setColumnArticles(updated);
+                              setColumnSelected(updated.length>0?0:null);
+                              try{localStorage.setItem("column_articles",JSON.stringify(updated));}catch(e){}
+                            },className:"glass-btn nb",style:{padding:"5px 12px",fontSize:11,color:"#ef444480",cursor:"pointer"}},"🗑")
+                          )
+                        ),
+                        /* 文章內文 */
+                        React.createElement("div",{style:{padding:"20px 24px",overflowY:"auto",maxHeight:550,lineHeight:1.9}},
+                          art.content.split("\n").map(function(line,li){
+                            var trimmed=line.trim();
+                            if(!trimmed) return React.createElement("div",{key:li,style:{height:10}});
+                            // # 大標題
+                            if(/^# /.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:20,fontWeight:700,color:"#f97316",
+                              marginTop:li>0?16:0,marginBottom:8,paddingBottom:8,borderBottom:"2px solid rgba(249,115,22,.2)"}},
+                              trimmed.replace(/^# /,""));
+                            // ## 次標題
+                            if(/^## /.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:16,fontWeight:700,color:"#e5e7eb",
+                              marginTop:16,marginBottom:6,paddingLeft:0,display:"flex",alignItems:"center",gap:8}},
+                              React.createElement("div",{style:{width:4,height:18,borderRadius:2,background:"#f97316"}}),
+                              trimmed.replace(/^## /,""));
+                            // ### 小標題
+                            if(/^### /.test(trimmed)) return React.createElement("div",{key:li,style:{fontSize:14,fontWeight:700,color:"#d1d5db",
+                              marginTop:12,marginBottom:4}},trimmed.replace(/^### /,""));
+                            // 箭頭傳導鏈
+                            if(trimmed.indexOf("→")!==-1&&trimmed.split("→").length>=3){
+                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#f97316",fontWeight:600,
+                                padding:"10px 16px",margin:"8px 0",background:"rgba(249,115,22,.06)",borderRadius:8,
+                                borderLeft:"3px solid #f97316",lineHeight:1.6,overflowX:"auto",whiteSpace:"nowrap"}},trimmed);
+                            }
+                            // 受惠股 🟢 或受災股 🔴
+                            if(/[🟢✅📈]/.test(trimmed)&&/受惠|利多|上漲/.test(trimmed)){
+                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#22c55e",fontWeight:600,
+                                padding:"6px 12px",margin:"3px 0",background:"rgba(34,197,94,.06)",borderRadius:6}},trimmed);
+                            }
+                            if(/[🔴❌📉]/.test(trimmed)&&/受災|利空|下跌/.test(trimmed)){
+                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#ef4444",fontWeight:600,
+                                padding:"6px 12px",margin:"3px 0",background:"rgba(239,68,68,.06)",borderRadius:6}},trimmed);
+                            }
+                            // **粗體** 處理
+                            if(/\*\*.+?\*\*/.test(trimmed)){
+                              var parts=trimmed.split(/(\*\*.+?\*\*)/g);
+                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#d1d5db",marginTop:3}},
+                                parts.map(function(part,pi){
+                                  if(/^\*\*(.+)\*\*$/.test(part)){
+                                    return React.createElement("span",{key:pi,style:{fontWeight:700,color:"#e5e7eb"}},part.replace(/\*\*/g,""));
+                                  }
+                                  return React.createElement("span",{key:pi},part);
+                                })
+                              );
+                            }
+                            // 股票代碼行（含 $ 或 ticker pattern）
+                            if(/\$[A-Z]{1,5}|^[A-Z]{2,5}[:：]/.test(trimmed)){
+                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#60a5fa",padding:"2px 0"}},trimmed);
+                            }
+                            // 列表 - 項
+                            if(/^[-•]/.test(trimmed)){
+                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#b0b8c4",paddingLeft:16,marginTop:2,lineHeight:1.7}},trimmed);
+                            }
+                            // 數字列表
+                            if(/^\d+[.、)）]/.test(trimmed)){
+                              return React.createElement("div",{key:li,style:{fontSize:13,color:"#d1d5db",marginTop:4,paddingLeft:4}},trimmed);
+                            }
+                            // ⚠️ 風險提醒
+                            if(/^⚠/.test(trimmed)){
+                              return React.createElement("div",{key:li,style:{fontSize:12,color:"#EAB308",padding:"6px 12px",
+                                margin:"4px 0",background:"rgba(234,179,8,.06)",borderRadius:6,
+                                borderLeft:"3px solid #EAB30840"}},trimmed);
+                            }
+                            // 普通段落
+                            return React.createElement("div",{key:li,style:{fontSize:13,color:"#9ca3af",lineHeight:1.8}},line);
+                          })
+                        )
+                      );
+                    })():React.createElement("div",{style:{padding:40,textAlign:"center"}},
+                      React.createElement("div",{style:{fontSize:40,marginBottom:12}},"📰"),
+                      React.createElement("div",{style:{fontSize:14,color:"rgba(255,255,255,.4)"}},"選擇一篇文章閱讀"))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 空狀態 */}
+              {columnArticles.length===0&&!columnLoading&&(
+                <div style={{textAlign:"center",padding:50}}>
+                  <div style={{fontSize:48,marginBottom:12}}>{"🔥"}</div>
+                  <div style={{fontSize:16,color:"rgba(255,255,255,.5)",fontWeight:600,marginBottom:6}}>從時事推導投資機會</div>
+                  <div style={{fontSize:13,color:"rgba(255,255,255,.3)",lineHeight:1.6,maxWidth:500,margin:"0 auto"}}>
+                    輸入時事主題或點擊「掃描今日熱點」，AI 會搜尋最新新聞，<br/>
+                    分析產業鏈傳導效應，找出受惠股和受災股，<br/>
+                    產出一篇完整的深度分析專欄。
+                  </div>
+                </div>
+              )}
+
+              {/* 底部說明 */}
+              <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:12,padding:"14px 18px",
+                display:"flex",gap:16,alignItems:"flex-start"}}>
+                <div style={{fontSize:20,flexShrink:0}}>💡</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,color:"#f97316",fontWeight:700,marginBottom:4}}>分析邏輯</div>
+                  <div style={{fontSize:11,color:"#6b7280",lineHeight:1.6}}>
+                    事件發生 → 直接衝擊產業 → 供應鏈傳導 → 成本/收入變化 → 財報反映 → 分析師上修/下修 → 股價反應。
+                    AI 會搜尋最新新聞、財報數據和分析師評級，以三階段時間軸來分析最佳進場時機。
+                  </div>
+                  <div style={{fontSize:11,color:"rgba(249,115,22,.5)",marginTop:4}}>⚠ 分析僅供參考，投資決策需自行判斷。</div>
+                </div>
+              </div>
             </div>
           )}
 
