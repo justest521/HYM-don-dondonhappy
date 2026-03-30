@@ -848,6 +848,28 @@ function Toggle({on,onChange}){
     </div>
   );
 }
+/* ── TradingView 嵌入式 Widget 元件 ── */
+function TVWidget({type,config,height=500}){
+  var ref = React.useRef(null);
+  React.useEffect(function(){
+    if(!ref.current) return;
+    ref.current.innerHTML = "";
+    var container = document.createElement("div");
+    container.className = "tradingview-widget-container__widget";
+    container.style.height = height + "px";
+    container.style.width = "100%";
+    ref.current.appendChild(container);
+    var script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-" + type + ".js";
+    script.async = true;
+    script.textContent = JSON.stringify(config);
+    ref.current.appendChild(script);
+    return function(){ if(ref.current) ref.current.innerHTML=""; };
+  },[type,JSON.stringify(config),height]);
+  return React.createElement("div",{ref:ref,className:"tradingview-widget-container",
+    style:{height:height,borderRadius:14,overflow:"hidden"}});
+}
+
 function Pill({children,color="#d97706"}){
   return <span style={{fontSize:12,fontWeight:700,padding:"2px 8px",borderRadius:20,
     color,background:`${color}18`,border:`1px solid ${color}35`}}>{children}</span>;
@@ -1082,9 +1104,10 @@ function App(){
   const [riskAdvicePos, setRiskAdvicePos] = useState(null); // 選中要分析的持倉 index
 
   // ── 板塊績效 ──
-  const [sectorData, setSectorData] = useState(null); // [{sym,name,icon,color,startPrice,endPrice,pct,closes}]
+  const [sectorView, setSectorView] = useState("tv"); // "tv" = TradingView, "custom" = 自訂日期
+  const [sectorData, setSectorData] = useState(null);
   const [sectorLoading, setSectorLoading] = useState(false);
-  const [sectorSort, setSectorSort] = useState("pct_desc"); // pct_desc | pct_asc | name
+  const [sectorSort, setSectorSort] = useState("pct_desc");
   const [sectorDateFrom, setSectorDateFrom] = useState(function(){
     var d = new Date(); return d.getFullYear() + "-01-01"; // 預設 YTD
   });
@@ -4900,6 +4923,86 @@ function App(){
               {/* ── 板塊績效 ── */}
               {sopTab==="sector"&&(
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                  {/* 視圖切換 */}
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    {[{id:"tv",label:"TradingView 熱力圖",icon:"🗺️"},{id:"custom",label:"自訂日期區間",icon:"📊"}].map(function(v){
+                      return React.createElement("div",{key:v.id,onClick:function(){setSectorView(v.id);},className:"glass-btn",
+                        style:{padding:"8px 18px",fontSize:13,fontWeight:sectorView===v.id?700:400,
+                          color:sectorView===v.id?"#ffa726":"rgba(255,255,255,.45)",
+                          background:sectorView===v.id?"rgba(255,167,38,.1)":"rgba(255,255,255,.04)",
+                          border:sectorView===v.id?"1px solid rgba(255,167,38,.3)":"1px solid rgba(255,255,255,.08)",
+                          boxShadow:sectorView===v.id?"0 0 20px rgba(255,167,38,.08)":"none"}},
+                        v.icon+" "+v.label);
+                    })}
+                  </div>
+
+                  {/* ── TradingView 板塊熱力圖 ── */}
+                  {sectorView==="tv"&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                      {/* 熱力圖 */}
+                      <div className="glass-card" style={{padding:0,overflow:"hidden"}}>
+                        <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)"}}>S&P 500 板塊熱力圖</span>
+                          <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>資料來源：TradingView</span>
+                        </div>
+                        <TVWidget type="stock-heatmap" height={500} config={{
+                          exchanges:[],
+                          dataSource:"SPX500",
+                          grouping:"sector",
+                          blockSize:"market_cap_basic",
+                          blockColor:"change",
+                          locale:"zh_TW",
+                          symbolUrl:"",
+                          colorTheme:"dark",
+                          hasTopBar:false,
+                          isDataSetEnabled:false,
+                          isZoomEnabled:true,
+                          hasSymbolTooltip:true,
+                          isMonoSize:false,
+                          width:"100%",
+                          height:500
+                        }}/>
+                      </div>
+                      {/* 板塊概覽 Widget */}
+                      <div className="glass-card" style={{padding:0,overflow:"hidden"}}>
+                        <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)"}}>板塊績效排行</span>
+                          <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>即時數據</span>
+                        </div>
+                        <TVWidget type="market-overview" height={460} config={{
+                          colorTheme:"dark",
+                          dateRange:"12M",
+                          showChart:true,
+                          locale:"zh_TW",
+                          largeChartUrl:"",
+                          isTransparent:true,
+                          showSymbolLogo:true,
+                          showFloatingTooltip:true,
+                          width:"100%",
+                          height:460,
+                          tabs:[
+                            {title:"板塊 ETF",symbols:[
+                              {s:"AMEX:XLK",d:"科技"},
+                              {s:"AMEX:XLF",d:"金融"},
+                              {s:"AMEX:XLE",d:"能源"},
+                              {s:"AMEX:XLV",d:"醫療保健"},
+                              {s:"AMEX:XLI",d:"工業"},
+                              {s:"AMEX:XLP",d:"消費必需品"},
+                              {s:"AMEX:XLY",d:"非必需消費"},
+                              {s:"AMEX:XLC",d:"通訊服務"},
+                              {s:"AMEX:XLU",d:"公用事業"},
+                              {s:"AMEX:XLB",d:"材料"},
+                              {s:"AMEX:XLRE",d:"不動產"}
+                            ],originalTitle:"Sector ETFs"}
+                          ]
+                        }}/>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 自訂日期區間查詢 ── */}
+                  {sectorView==="custom"&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
                   {/* 日期區間選擇 + 查詢按鈕 */}
                   <div className="glass-card" style={{padding:"18px 20px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -5064,6 +5167,8 @@ function App(){
                     <div style={{textAlign:"center",padding:40}}>
                       <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
                       <div style={{fontSize:13,color:"rgba(255,255,255,.4)"}}>查無數據，請確認日期區間是否有效（需為交易日）</div>
+                    </div>
+                  )}
                     </div>
                   )}
                 </div>
