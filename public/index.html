@@ -2976,11 +2976,12 @@ function App(){
               {posDrawerOpen&&(
                 <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
                   <div onClick={()=>setPosDrawerOpen(false)} style={{flex:1,background:"#000000aa"}}/>
-                  <div style={{width:460,background:"rgba(12,15,25,.92)",borderLeft:"1px solid rgba(255,255,255,.06)",
-                    backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden"}}>
+                  <div style={{width:580,maxWidth:"90vw",background:"rgba(12,15,25,.92)",borderLeft:"1px solid rgba(255,255,255,.08)",
+                    backdropFilter:"blur(28px)",WebkitBackdropFilter:"blur(28px)",display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden",
+                    boxShadow:"-8px 0 40px rgba(0,0,0,.5)"}}>
                     {/* Drawer Header */}
-                    <div style={{padding:"18px 20px",borderBottom:"1px solid rgba(255,255,255,.04)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-                      <div style={{fontSize:14,fontWeight:700,color:"#fff",letterSpacing:1}}>📋 持倉管理</div>
+                    <div style={{padding:"18px 24px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+                      <div style={{fontSize:15,fontWeight:700,color:"#fff",letterSpacing:1}}>📋 持倉管理</div>
                       <div style={{display:"flex",gap:8,alignItems:"center"}}>
                         {userPositions.length>1&&(
                           <div onClick={function(){setPosBatchMode(!posBatchMode);setPosBatchSel({});}}
@@ -3002,69 +3003,69 @@ function App(){
 
                     {/* 表單：新增或編輯 */}
                     {posEditRow!==null&&(
-                      <div style={{padding:"14px 20px",borderBottom:"1px solid rgba(255,255,255,.04)",background:"rgba(255,255,255,.04)",flexShrink:0}}>
-                        <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:10,letterSpacing:1}}>{posEditRow==="new"?"新增持倉":"編輯持倉"}</div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                          {/* 標的（含即時驗證） */}
+                      <div style={{padding:"16px 24px",borderBottom:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.04)",flexShrink:0}}>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginBottom:12,letterSpacing:1}}>{posEditRow==="new"?"新增持倉":"編輯持倉"}</div>
+                        {/* Row 1: 標的 + 數量 + 成本價 */}
+                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10,marginBottom:10}}>
                           <div>
-                            <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:3}}>標的</div>
+                            <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:4}}>標的</div>
                             <div style={{position:"relative"}}>
                               <input value={posForm.sym}
                                 onChange={function(e){var v=e.target.value.toUpperCase();setPosForm(function(p){return {...p,sym:v};});setPosSymStatus(null);setPosSymPrice(null);}}
                                 onBlur={function(){validateTicker(posForm.sym);}}
                                 placeholder="TSLA"
                                 style={{width:"100%",background:"rgba(255,255,255,.04)",
-                                  border:"1px solid "+(posSymStatus==="notfound"?"#ef4444":posSymStatus==="ok"?"#22c55e":posSymStatus==="unknown"?"#d97706":"#2a2a3a"),
-                                  borderRadius:4,padding:"6px 10px",paddingRight:posSymStatus?80:10,
-                                  color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
-                              {posSymStatus==="checking"&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"rgba(255,255,255,.4)"}}>查詢中...</span>}
-                              {posSymStatus==="ok"&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#22c55e",fontWeight:600}}>{"✓ $"+(posSymPrice||0).toFixed(2)}</span>}
-                              {posSymStatus==="unknown"&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#d97706",fontWeight:600}}>無法驗證</span>}
-                              {posSymStatus==="notfound"&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#ef4444",fontWeight:600}}>查無此標的</span>}
+                                  border:"1px solid "+(posSymStatus==="notfound"?"#ef4444":posSymStatus==="ok"?"#22c55e":posSymStatus==="unknown"?"#d97706":"rgba(255,255,255,.1)"),
+                                  borderRadius:8,padding:"9px 12px",paddingRight:posSymStatus?90:12,
+                                  color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+                              {posSymStatus==="checking"&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"rgba(255,255,255,.4)"}}>查詢中...</span>}
+                              {posSymStatus==="ok"&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#22c55e",fontWeight:600}}>{"✓ $"+(posSymPrice||0).toFixed(2)}</span>}
+                              {posSymStatus==="unknown"&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#d97706",fontWeight:600}}>無法驗證</span>}
+                              {posSymStatus==="notfound"&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#ef4444",fontWeight:600}}>查無此標的</span>}
                             </div>
                           </div>
-                          {/* 數量、成本價 */}
                           {[
-                            {key:"qty",   label:"數量",   ph:"100"},
-                            {key:"entry", label:"成本價", ph:"250.00"},
+                            {key:"qty",label:"數量",ph:"100"},
+                            {key:"entry",label:"成本價",ph:"250.00"},
                           ].map(function(f){
                             return React.createElement("div",{key:f.key},
-                              React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:3}},f.label),
+                              React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:4}},f.label),
                               React.createElement("input",{
                                 value:posForm[f.key],
                                 onChange:function(e){setPosForm(function(p){return {...p,[f.key]:e.target.value};});},
                                 placeholder:f.ph,
-                                style:{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:4,
-                                  padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}
+                                style:{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,
+                                  padding:"9px 12px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box"}
                               })
                             );
                           })}
+                        </div>
+                        {/* Row 2: 類型 + 方向 + (行使價 + 到期日) */}
+                        <div style={{display:"grid",gridTemplateColumns:isOptionType(posForm.type)?"2fr 1fr 1fr 1fr":"1fr 1fr",gap:10,marginBottom:10}}>
                           <div>
-                            <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:3}}>類型</div>
+                            <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:4}}>類型</div>
                             <select value={posForm.type} onChange={function(e){setPosForm(function(p){return {...p,type:e.target.value};});}}
-                              style={{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none"}}>
+                              style={{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"}}>
                               {["股票","CALL","PUT","ETF","Covered Call","Cash-Secured PUT","Bull Call Spread","Bear Put Spread","PMCC","Diagonal Spread","Calendar Spread","Iron Condor","Straddle","Strangle","LEAPS","期貨","加密貨幣","其他"].map(function(t){return React.createElement("option",{key:t,value:t},t);})}
                             </select>
                           </div>
                           <div>
-                            <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:3}}>方向</div>
+                            <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:4}}>方向</div>
                             <select value={posForm.side} onChange={function(e){setPosForm(function(p){return {...p,side:e.target.value};});}}
-                              style={{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none"}}>
+                              style={{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none"}}>
                               {["多頭","空頭"].map(function(t){return React.createElement("option",{key:t,value:t},t);})}
                             </select>
                           </div>
                           {isOptionType(posForm.type)&&React.createElement(React.Fragment,null,
-                            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
-                              React.createElement("div",null,
-                                React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:3}},"行使價 Strike"),
-                                React.createElement("input",{value:posForm.strike,onChange:function(e){setPosForm(function(p){return {...p,strike:e.target.value};});},
-                                  placeholder:"250",style:{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box"}})
-                              ),
-                              React.createElement("div",null,
-                                React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:3}},"到期日 Exp"),
-                                React.createElement("input",{type:"date",value:posForm.exp,onChange:function(e){setPosForm(function(p){return {...p,exp:e.target.value};});},
-                                  style:{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:4,padding:"6px 10px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box",colorScheme:"dark"}})
-                              )
+                            React.createElement("div",null,
+                              React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:4}},"行使價"),
+                              React.createElement("input",{value:posForm.strike,onChange:function(e){setPosForm(function(p){return {...p,strike:e.target.value};});},
+                                placeholder:"250",style:{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box"}})
+                            ),
+                            React.createElement("div",null,
+                              React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:4}},"到期日"),
+                              React.createElement("input",{type:"date",value:posForm.exp,onChange:function(e){setPosForm(function(p){return {...p,exp:e.target.value};});},
+                                style:{width:"100%",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:14,outline:"none",boxSizing:"border-box",colorScheme:"dark"}})
                             )
                           )}
                         </div>
@@ -3100,7 +3101,7 @@ function App(){
                     )}
 
                     {/* 持倉清單 */}
-                    <div style={{flex:1,overflowY:"auto",padding:"8px 20px"}}>
+                    <div style={{flex:1,overflowY:"auto",padding:"8px 24px"}}>
                       {userPositions.length===0?(
                         <div style={{textAlign:"center",padding:"60px 20px",color:"rgba(255,255,255,.25)"}}>
                           <div style={{fontSize:36,marginBottom:12}}>📭</div>
