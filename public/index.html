@@ -1392,10 +1392,26 @@ function App(){
             }
             if(expD && expD < new Date()) isExpired=true;
           }
-          // 現價：已到期→0，期權用 UW mid price，股票用 Yahoo
-          var cur = isExpired ? 0
-            : isOpt ? (optLive?.price || Number(u.entry))
-            : (stockLive?.price || Number(u.entry));
+          // 現價：已到期→0，期權優先 UW → 內在價值估算 → 成本，股票用 Yahoo
+          var cur, optPriceSource="";
+          if(isExpired){ cur=0; optPriceSource="expired"; }
+          else if(isOpt){
+            if(optLive?.price){ cur=optLive.price; optPriceSource="uw"; }
+            else if(stockLive?.price && Number(u.strike)){
+              // UW 無報價 → 用股價算內在價值
+              var stkP=stockLive.price, strk=Number(u.strike), intrin=0;
+              if(u.type==="CALL"||u.type==="LEAPS"||(u.type||"").indexOf("Call")!==-1||u.type==="Straddle"||u.type==="Strangle"){
+                intrin=Math.max(0,stkP-strk);
+              } else if(u.type==="PUT"||(u.type||"").indexOf("Put")!==-1){
+                intrin=Math.max(0,strk-stkP);
+              }
+              cur=intrin>0?intrin:Math.max(Number(u.entry)*0.15,0.01);
+              optPriceSource="intrinsic";
+            } else { cur=Number(u.entry); optPriceSource="entry"; }
+          } else {
+            cur=stockLive?.price||Number(u.entry);
+            optPriceSource=stockLive?"yahoo":"entry";
+          }
           var qty   = Number(u.qty)||0;
           var entry = Number(u.entry)||0;
           var mult  = isOpt ? 100 : 1;
@@ -2399,25 +2415,66 @@ function App(){
     setRiskAdvicePos(posIndex);
     try {
       var NL = "\n";
-      var optPos = userPositions.filter(function(p){ return isOptionType(p.type); });
+      // 全部持倉（股票+期權）
+      var allPos = userPositions;
+      var optPos = allPos.filter(function(p){ return isOptionType(p.type); });
+      var stockPos = allPos.filter(function(p){ return !isOptionType(p.type); });
 
-      // 組合所有持倉風險掃描
-      var posLines = optPos.map(function(p, i){
+      // ── Portfolio-level metrics ──
+      var totalLong=0, totalShort=0, totalVal=0;
+      var sectorMap={}, tickerExposure={};
+      allPos.forEach(function(p){
+        var curP = prices[p.sym] ? prices[p.sym].price : 0;
+        var posVal = Math.abs((curP||Number(p.entry)) * Number(p.qty||1) * (isOptionType(p.type)?100:1));
+        totalVal += posVal;
+        var side = (p.side||"").toUpperCase();
+        if(side==="SHORT"||side==="SELL") totalShort+=posVal; else totalLong+=posVal;
+        var sym = (p.sym||"").toUpperCase();
+        tickerExposure[sym] = (tickerExposure[sym]||0) + posVal;
+      });
+      var longPct = totalVal>0 ? (totalLong/totalVal*100).toFixed(1) : 0;
+      var shortPct = totalVal>0 ? (totalShort/totalVal*100).toFixed(1) : 0;
+      // 到期日分佈
+      var expiryBuckets = {thisWeek:[],nextWeek:[],thisMonth:[],later:[]};
+      var now = new Date();
+      optPos.forEach(function(p){
+        if(!p.exp) return;
+        var expD = new Date(p.exp+"T16:00:00");
+        var diff = (expD - now) / 86400000;
+        if(diff<=7) expiryBuckets.thisWeek.push(p);
+        else if(diff<=14) expiryBuckets.nextWeek.push(p);
+        else if(diff<=30) expiryBuckets.thisMonth.push(p);
+        else expiryBuckets.later.push(p);
+      });
+      // Top 3 集中標的
+      var topTickers = Object.keys(tickerExposure).sort(function(a,b){ return tickerExposure[b]-tickerExposure[a]; }).slice(0,5);
+      var concLines = topTickers.map(function(t){ return t+": $"+tickerExposure[t].toFixed(0)+" ("+(totalVal>0?(tickerExposure[t]/totalVal*100).toFixed(1):0)+"%)"; }).join(", ");
+
+      // 組合所有持倉資訊（股票）
+      var stockLines = stockPos.length>0 ? stockPos.map(function(p, i){
+        var curP = prices[p.sym] ? prices[p.sym].price : 0;
+        var pnl = curP>0 ? ((curP - Number(p.entry))/Number(p.entry)*100).toFixed(1) : "N/A";
+        return (i+1)+". "+p.sym+" "+p.type+" qty:"+p.qty+" cost:$"+p.entry+
+          " | 現價:$"+(curP||"N/A")+" | 損益:"+pnl+"%";
+      }).join(NL) : "無股票持倉";
+
+      // 組合所有持倉風險掃描（期權）
+      var optLines = optPos.map(function(p, i){
         var curP = prices[p.sym] ? prices[p.sym].price : 0;
         var scan = scanPositionRisk(p, curP, nav);
         var checksStr = scan.checks.map(function(c){ return (c.ok?"✓":"✗")+" "+c.label+": "+c.detail; }).join("; ");
         var selected = (posIndex !== null && posIndex !== undefined && posIndex === i) ? " 【← 使用者關注此持倉】" : "";
-        return (i+1)+". "+p.sym+" "+p.type+" $"+p.strike+" exp:"+p.exp+" qty:"+p.qty+" cost:$"+p.entry+
+        return (i+1)+". "+p.sym+" "+p.type+" "+(p.side||"LONG")+" $"+p.strike+" exp:"+p.exp+" qty:"+p.qty+" cost:$"+p.entry+
           " | 現價:$"+(curP||"N/A")+" | 風險分數:"+scan.score+"/100 | "+checksStr+selected;
       }).join(NL);
 
       // 找出相關研究報告（匹配持倉標的）
       var tickers = {};
-      optPos.forEach(function(p){ if(p.sym) tickers[p.sym.toUpperCase()] = true; });
+      allPos.forEach(function(p){ if(p.sym) tickers[p.sym.toUpperCase()] = true; });
       var relatedReports = reports.filter(function(r){
         var txt = ((r.content||"")+" "+(r.title||"")+" "+(r.aiAnalysis||"")).toUpperCase();
         return Object.keys(tickers).some(function(t){ return txt.indexOf(t) >= 0; });
-      }).slice(0, 5);
+      }).slice(0, 8);
 
       var reportSection = relatedReports.length > 0
         ? relatedReports.map(function(r, i){
@@ -2432,7 +2489,7 @@ function App(){
       // 即時期權流（與持倉相關）
       var relatedFlow = flow.filter(function(f){
         return tickers[f.sym && f.sym.toUpperCase()];
-      }).slice(0, 10);
+      }).slice(0, 15);
       var flowLines = relatedFlow.length > 0
         ? relatedFlow.map(function(f){ return f.sym+" "+f.type+" $"+f.strike+" exp:"+f.exp+" prem:$"+(f.prem||f.premium)+" sent:"+f.sent; }).join(NL)
         : "暫無相關期權流";
@@ -2440,7 +2497,7 @@ function App(){
       // 暗池相關
       var relatedDark = dark.filter(function(d){
         return tickers[d.sym && d.sym.toUpperCase()];
-      }).slice(0, 5);
+      }).slice(0, 8);
       var darkLines = relatedDark.length > 0
         ? relatedDark.map(function(d){ return d.sym+" $"+d.price+" size:"+d.size+" "+d.time; }).join(NL)
         : "暫無相關暗池數據";
@@ -2449,10 +2506,21 @@ function App(){
       var totalNav = nav || 0;
 
       var prompt = [
-        "你是專業美股期權風控分析師與交易策略顧問。分析時間："+nowStr,
+        "你是專業美股期權風控分析師與交易策略顧問。請產出一份完整的【投資組合綜合評估報告】。",
+        "分析時間："+nowStr,
         "",
-        "【使用者持倉概覽】（總資金 $"+totalNav.toLocaleString()+"）",
-        posLines || "尚無持倉",
+        "══════════════════════════════════════",
+        "【投資組合總覽】",
+        "總資金：$"+totalNav.toLocaleString(),
+        "總曝險：$"+totalVal.toFixed(0)+" | 做多 "+longPct+"% / 做空 "+shortPct+"%",
+        "持倉集中度："+concLines,
+        "期權到期分佈：本週 "+expiryBuckets.thisWeek.length+"筆, 下週 "+expiryBuckets.nextWeek.length+"筆, 本月 "+expiryBuckets.thisMonth.length+"筆, 之後 "+expiryBuckets.later.length+"筆",
+        "",
+        "【股票持倉】",
+        stockLines,
+        "",
+        "【期權持倉】（含風險掃描）",
+        optLines || "尚無期權持倉",
         "",
         "【相關研究報告】",
         reportSection,
@@ -2462,39 +2530,56 @@ function App(){
         "",
         "【相關暗池數據】",
         darkLines,
+        "══════════════════════════════════════",
         "",
-        "請依序完成以下分析（每項都要有具體數字，不能含糊）：",
+        "請依下列格式產出完整報告，每個section用【】標題，每項必須有具體數字：",
         "",
-        "1. 【整體風險評估】",
-        "   - 持倉組合的整體風險等級（低/中/高/危險），總曝險金額",
-        "   - 是否過度集中某個方向或標的",
-        "   - 與研究報告觀點是否一致",
+        "【一、持倉總覽與方向性分析】",
+        "- 整體組合做多/做空比例解讀",
+        "- 方向性風險評級：🟢低風險 / 🟡中風險 / 🟠高風險 / 🔴危險",
+        "- 是否有方向過度偏斜？建議的理想配置",
         "",
-        "2. 【個別持倉診斷】",
-        "   針對每個持倉給出：",
-        "   - 當前狀態（健康/注意/危險）",
-        "   - 研究報告是否支持這個方向",
-        "   - 機構資金流（期權流+暗池）是否順風",
+        "【二、集中度與曝險分析】",
+        "- 標的集中度風險（單一標的曝險是否超過20%）",
+        "- 到期日集中度風險（本週到期佔比）",
+        "- 建議的分散方式",
         "",
-        "3. 【操作建議】",
-        "   針對每個持倉明確建議（只選一個）：",
-        "   ✅ 繼續持有（說明理由）",
-        "   🔄 滾倉（建議新的到期日/行使價）",
-        "   ⚠️ 減倉（建議減多少%）",
-        "   🚨 出場（立即或限時）",
-        "   每個建議都要附帶：觸發條件、目標價位、停損價位",
+        "【三、個別持倉診斷】",
+        "對每個持倉逐一診斷，用以下格式：",
+        "▎標的名 TYPE STRIKE EXP",
+        "  狀態：🟢健康 / 🟡注意 / 🔴危險",
+        "  損益：+X% / -X%",
+        "  研究報告方向：看多/看空/中性 + 是否與持倉一致 ✓/✗",
+        "  期權流訊號：看多/看空/中性 + 大單方向",
+        "  暗池訊號：買入/賣出/中性",
+        "  綜合評判：三項數據源一致性 → 順風🌬️ / 逆風🌊 / 混合⚡",
         "",
-        "4. 【新開倉機會】",
-        "   根據研究報告+期權流+暗池，有沒有值得新開倉的機會？",
-        "   如有，明確建議：標的、方向、行使價、到期日、倉位大小（佔總資金%）",
+        "【四、操作建議】",
+        "針對每個持倉明確建議（只選一個）：",
+        "✅ 繼續持有 — 理由、目標價",
+        "🔄 滾倉 — 建議新到期日/行使價",
+        "⚠️ 減倉 — 減多少%，觸發條件",
+        "🚨 出場 — 立即或限時，停損價位",
+        "每個建議附帶：進場/加碼條件、目標價位、停損價位",
         "",
-        "5. 【風險日曆】",
-        "   未來一週內影響持倉的重要事件（財報、Fed、經濟數據等）",
-        "   每個事件標明：日期、影響的持倉、建議的應對",
+        "【五、新開倉機會】",
+        "根據研究報告+期權流+暗池綜合判斷：",
+        "- 3個以內最佳機會",
+        "- 每個標明：標的、方向、策略類型、行使價、到期日、建議倉位（佔總資金%）、預期報酬/風險比",
         "",
-        "⚠️ 每項分析都必須標明分析時間："+nowStr,
-        "用繁體中文回答，結構清晰，重點突出，每個section都要有標題【XXX】。",
-        "操作建議要具體到可執行，不要模糊的「建議觀望」。"
+        "【六、風險日曆】",
+        "未來兩週影響持倉的重要事件（財報、Fed、CPI、就業數據等）：",
+        "每個事件：📅 日期 | 事件 | 影響的持倉 | 建議應對",
+        "",
+        "【七、綜合評分與總結】",
+        "組合健康度評分：X/100",
+        "一句話總結當前組合最大風險",
+        "一句話總結最佳操作方向",
+        "",
+        "⚠️ 分析時間："+nowStr,
+        "用繁體中文回答，markdown格式，結構清晰。",
+        "操作建議要具體到可執行，每個建議要有明確的數字（價位、%、日期）。",
+        "請使用 web_search 工具搜尋最新市場新聞、財報日期與經濟數據時程來確保風險日曆的準確性。"
       ].join(NL);
 
       var apiResp = await fetch(UW_WORKER + "/api/ai", {
@@ -2502,7 +2587,7 @@ function App(){
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 4096,
+          max_tokens: 8000,
           tools: [{type: "web_search_20250305", name: "web_search"}],
           messages: [{role: "user", content: prompt}]
         })
@@ -3122,36 +3207,34 @@ function App(){
                           }
                           if(expDate && expDate < new Date()) isExpired=true;
                         }
-                        var cur, noLivePrice=false;
+                        var cur, noLivePrice=false, priceSource="";
+                        var stockP = live?.price || 0;
+                        var strike = Number(u.strike) || 0;
                         if(isExpired){
-                          cur=0;
-                        } else if(isSimpleOpt){
-                          // 單腿期權：用 UW API 報價
-                          var posMatch=positions.find(function(pp){return pp.sym===u.sym&&pp.strat===u.type&&pp.strike===u.strike&&pp.exp===u.exp;});
-                          cur=(posMatch&&posMatch.live)?Number(posMatch.cur):Number(u.entry);
-                          if(!posMatch||!posMatch.live) noLivePrice=true;
+                          cur=0; priceSource="expired";
                         } else if(isOpt){
-                          // 複合策略（Spread/Condor 等）：用股票現價估算方向性損益
-                          var stockP = live?.price || 0;
-                          var strike = Number(u.strike) || 0;
-                          if(stockP > 0 && strike > 0){
-                            // 用標的股價相對行使價的距離來估算價值變化
+                          // 先嘗試 UW API 精確報價
+                          var posMatch=positions.find(function(pp){return pp.sym===u.sym&&pp.strat===u.type&&pp.strike===u.strike&&pp.exp===u.exp;});
+                          if(posMatch&&posMatch.live){
+                            cur=Number(posMatch.cur); priceSource="uw";
+                          } else if(stockP > 0 && strike > 0){
+                            // UW 無報價 → 用股票現價算內在價值
                             var intrinsic = 0;
-                            if(u.type.indexOf("Call")!==-1 || u.type==="Straddle" || u.type==="Strangle"){
+                            if(u.type==="CALL"||u.type==="LEAPS"||u.type.indexOf("Call")!==-1||u.type==="Straddle"||u.type==="Strangle"){
                               intrinsic = Math.max(0, stockP - strike);
-                            } else if(u.type.indexOf("Put")!==-1){
+                            } else if(u.type==="PUT"||u.type.indexOf("Put")!==-1){
                               intrinsic = Math.max(0, strike - stockP);
                             }
-                            // 估算現價 = max(內在價值, 成本價的一部分) — 僅供參考
-                            cur = Math.max(intrinsic > 0 ? Number(u.entry) * (1 + (intrinsic / strike)) : Number(u.entry) * 0.8, 0.01);
-                            noLivePrice = true;
+                            // 現價 = 內在價值（ITM）或接近 0（OTM，但保留小額時間價值估算）
+                            cur = intrinsic > 0 ? intrinsic : Math.max(Number(u.entry) * 0.15, 0.01);
+                            priceSource="intrinsic"; noLivePrice=true;
                           } else {
-                            cur = Number(u.entry);
-                            noLivePrice = true;
+                            cur=Number(u.entry); noLivePrice=true; priceSource="entry";
                           }
                         } else {
-                          cur=live?.price||Number(u.entry);
+                          cur=stockP||Number(u.entry);
                           if(!live) noLivePrice=true;
+                          priceSource=live?"yahoo":"entry";
                         }
                         var qty=Number(u.qty)||0;
                         var entry=Number(u.entry)||0;
@@ -3180,24 +3263,25 @@ function App(){
                             React.createElement("div",{style:{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,.3)",flexWrap:"wrap"}},
                               React.createElement("span",null,"×"+u.qty+(isOpt?" (×100)":"")),
                               React.createElement("span",null,"成本 $"+entry.toFixed(2)),
-                              (!isExpired&&live)&&React.createElement("span",{style:{color:"rgba(255,255,255,.4)"}},"股價 $"+(live.price||0).toFixed(2)),
+                              (!isExpired&&stockP>0&&isOpt)&&React.createElement("span",{style:{color:"rgba(255,255,255,.4)"}},"股價 $"+stockP.toFixed(2)),
+                              (!isExpired&&isOpt&&priceSource==="intrinsic")&&React.createElement("span",{style:{color:"#0ea5e9"}},"估 $"+cur.toFixed(2)),
                               u.exp&&React.createElement("span",{style:{color:isExpired?"#ef4444":"#d97706"}},(isExpired?"已到期 ":"到期 ")+u.exp),
-                              noLivePrice&&!isExpired&&React.createElement("span",{style:{color:"#d97706",fontSize:10}},"⚠ 無即時報價")
+                              priceSource==="entry"&&!isExpired&&React.createElement("span",{style:{color:"#d97706",fontSize:10}},"⚠ 無報價")
                             )
                           ),
                           React.createElement("div",{style:{textAlign:"right",minWidth:80}},
                             isExpired?React.createElement("div",{style:{fontSize:12,color:"#ef4444",fontWeight:600}},
                               "−$"+(entry*Math.abs(qty)*mult).toLocaleString()
-                            ):noLivePrice?React.createElement("div",null,
-                              React.createElement("div",{style:{fontSize:12,color:"#d97706",fontWeight:500}},"待報價"),
-                              live&&React.createElement("div",{style:{fontSize:10,color:"rgba(255,255,255,.25)"}},"股 $"+(live.price||0).toFixed(2))
                             ):React.createElement(React.Fragment,null,
-                              React.createElement("div",{style:{fontSize:13,fontWeight:600,color:pnlAmt>=0?"#10b981":"#ef4444"}},
-                                (pnlAmt>=0?"+":"")+Math.round(pnlAmt).toLocaleString()
+                              React.createElement("div",{style:{fontSize:13,fontWeight:600,
+                                color:priceSource==="intrinsic"?(pnlAmt>=0?"#0ea5e9":"#f97316"):(pnlAmt>=0?"#10b981":"#ef4444")}},
+                                (pnlAmt>=0?"+":"")+Math.round(pnlAmt).toLocaleString(),
+                                priceSource==="intrinsic"?"*":""
                               ),
-                              React.createElement("div",{style:{fontSize:11,color:pct>=0?"#10b98180":"#ef444480"}},
-                                (pct>=0?"+":"")+pct.toFixed(2)+"%"
-                              )
+                              React.createElement("div",{style:{fontSize:11,
+                                color:priceSource==="intrinsic"?"#0ea5e980":(pct>=0?"#10b98180":"#ef444480")}},
+                                (pct>=0?"+":"")+pct.toFixed(2)+"%",
+                                priceSource==="intrinsic"?" 估":"")
                             )
                           ),
                           !posBatchMode&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4}},
@@ -4807,88 +4891,115 @@ function App(){
                 </div>
               )}
 
-              {/* ── AI建議（風控+研究分析+操作建議）── */}
+              {/* ── AI建議（投資組合綜合評估報告）── */}
               {sopTab==="advice"&&(
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                  {/* 持倉選擇 */}
+                  {/* 頂部概覽卡片 */}
                   {(function(){
-                    var optPos = userPositions.filter(function(p){ return isOptionType(p.type); });
-                    if(optPos.length===0) return React.createElement("div",{style:{padding:24,textAlign:"center",color:"#6b7280",fontSize:13,
-                      background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無期權持倉，新增持倉後可使用 AI 建議");
-                    return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:12}},
-                      /* 標題 */
-                      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
-                        React.createElement("div",{style:{fontSize:11,color:"#a78bfa",fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"AI 風控建議 · 研究分析 · 操作建議"),
-                        React.createElement("div",{onClick:function(){ generateRiskAdvice(null); },
-                          style:{padding:"6px 14px",background:riskAdviceLoading?"#1a1a2e":"#7c3aed20",
-                            border:"1px solid "+(riskAdviceLoading?"#333":"#7c3aed50"),borderRadius:6,cursor:riskAdviceLoading?"wait":"pointer",
-                            fontSize:12,color:riskAdviceLoading?"#888":"#a78bfa",fontWeight:700}},
-                          riskAdviceLoading?"⟳ AI 分析中...":"⚡ 全部分析")
+                    var allPos = userPositions;
+                    var optPos = allPos.filter(function(p){ return isOptionType(p.type); });
+                    var stockPos = allPos.filter(function(p){ return !isOptionType(p.type); });
+                    if(allPos.length===0) return React.createElement("div",{style:{padding:32,textAlign:"center",color:"#6b7280",fontSize:13,
+                      background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無持倉，新增持倉後可使用 AI 綜合評估");
+
+                    // 計算概覽數據
+                    var totalLong=0, totalShort=0, totalVal=0, tickerMap={};
+                    allPos.forEach(function(p){
+                      var curP = prices[p.sym]?prices[p.sym].price:0;
+                      var pv = Math.abs((curP||Number(p.entry))*Number(p.qty||1)*(isOptionType(p.type)?100:1));
+                      totalVal+=pv;
+                      var side=(p.side||"").toUpperCase();
+                      if(side==="SHORT"||side==="SELL") totalShort+=pv; else totalLong+=pv;
+                      var s=(p.sym||"").toUpperCase();
+                      tickerMap[s]=(tickerMap[s]||0)+pv;
+                    });
+                    var longPct=totalVal>0?(totalLong/totalVal*100).toFixed(0):"0";
+                    var shortPct=totalVal>0?(totalShort/totalVal*100).toFixed(0):"0";
+                    var expThisWeek=0;
+                    var nowD=new Date();
+                    optPos.forEach(function(p){ if(p.exp){ var d=(new Date(p.exp+"T16:00:00")-nowD)/86400000; if(d<=7) expThisWeek++; }});
+                    var topTicker=Object.keys(tickerMap).sort(function(a,b){return tickerMap[b]-tickerMap[a];})[0]||"-";
+                    var topPct=totalVal>0&&tickerMap[topTicker]?(tickerMap[topTicker]/totalVal*100).toFixed(0):"0";
+
+                    return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+                      /* 標題列 */
+                      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}},
+                        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+                          React.createElement("div",{style:{width:6,height:24,borderRadius:3,background:"linear-gradient(180deg,#7c3aed,#a78bfa)"}}),
+                          React.createElement("div",null,
+                            React.createElement("div",{style:{fontSize:16,fontWeight:700,color:"#e5e7eb"}},"投資組合綜合評估"),
+                            React.createElement("div",{style:{fontSize:11,color:"#6b7280",marginTop:2}},"AI 整合持倉風險 · 研究報告 · 期權流 · 暗池數據")
+                          )
+                        ),
+                        React.createElement("div",{style:{display:"flex",gap:8}},
+                          React.createElement("div",{onClick:function(){ generateRiskAdvice(null); },
+                            style:{padding:"8px 20px",background:riskAdviceLoading?"linear-gradient(135deg,#1a1a2e,#1a1030)":"linear-gradient(135deg,#7c3aed,#6d28d9)",
+                              border:"none",borderRadius:8,cursor:riskAdviceLoading?"wait":"pointer",
+                              fontSize:13,color:riskAdviceLoading?"#888":"#fff",fontWeight:700,
+                              boxShadow:riskAdviceLoading?"none":"0 4px 16px rgba(124,58,237,.35)",
+                              transition:"all .2s"}},
+                            riskAdviceLoading?"⟳ AI 分析中...":"⚡ 產出完整報告")
+                        )
                       ),
-                      /* 持倉卡片列表 */
-                      React.createElement("div",{style:{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",overflow:"hidden"}},
-                        optPos.map(function(p, pi){
-                          var curP = prices[p.sym] ? prices[p.sym].price : 0;
-                          var scan = scanPositionRisk(p, curP, nav);
-                          var scoreColor = scan.score>=80?"#22c55e":scan.score>=50?"#EAB308":"#ef4444";
-                          var isSelected = riskAdvicePos === pi;
-                          // 找匹配的研究報告
-                          var sym = (p.sym||"").toUpperCase();
-                          var matchReports = reports.filter(function(r){
-                            return ((r.content||"")+" "+(r.title||"")+" "+(r.aiAnalysis||"")).toUpperCase().indexOf(sym)>=0;
-                          }).slice(0,3);
-                          return React.createElement("div",{key:pi,style:{padding:"12px 16px",
-                            borderBottom:pi<optPos.length-1?"1px solid rgba(255,255,255,.05)":"none",
-                            background:isSelected?"#1a1030":"transparent"}},
-                            /* 第一行：持倉資訊 + 分析按鈕 */
-                            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
-                              /* Score circle */
-                              React.createElement("div",{style:{width:38,height:38,borderRadius:"50%",border:"2.5px solid "+scoreColor,
-                                display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
-                                React.createElement("span",{style:{fontSize:12,fontWeight:700,color:scoreColor}},scan.score)
-                              ),
-                              /* 持倉資訊 */
-                              React.createElement("div",{style:{flex:1,minWidth:0}},
-                                React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},
-                                  React.createElement("span",{style:{fontSize:14,fontWeight:700,color:"#e5e7eb"}},p.sym),
-                                  React.createElement("span",{style:{fontSize:10,padding:"2px 6px",borderRadius:3,
-                                    background:p.type==="CALL"?"#22c55e18":"#ef444418",
-                                    color:p.type==="CALL"?"#22c55e":"#ef4444",fontWeight:600}},p.type),
-                                  React.createElement("span",{style:{fontSize:11,color:"#6b7280"}},"$"+p.strike),
-                                  p.exp&&React.createElement("span",{style:{fontSize:11,color:"#6b7280"}},p.exp),
-                                  curP>0&&React.createElement("span",{style:{fontSize:11,color:"#9ca3af"}},"現價 $"+curP.toFixed(2))
-                                ),
-                                /* 風險 tags */
-                                React.createElement("div",{style:{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}},
-                                  scan.checks.map(function(c,ci){
-                                    return React.createElement("span",{key:ci,style:{fontSize:10,padding:"2px 6px",borderRadius:3,
-                                      background:c.ok?"#16a34a18":"#ef444418",color:c.ok?"#22c55e":"#ef4444"}},
-                                      (c.ok?"✓":"✗")+" "+c.label);
-                                  })
-                                )
-                              ),
-                              /* 單獨分析按鈕 */
-                              React.createElement("div",{onClick:function(){ generateRiskAdvice(pi); },
-                                style:{padding:"6px 10px",background:"#7c3aed15",border:"1px solid #7c3aed30",
-                                  borderRadius:6,cursor:riskAdviceLoading?"wait":"pointer",flexShrink:0}},
-                                React.createElement("span",{style:{fontSize:11,color:"#a78bfa",fontWeight:600}},
-                                  riskAdviceLoading&&isSelected?"⟳":"⚡")
-                              )
+
+                      /* 快速概覽 4 cards */
+                      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}},
+                        [{label:"總持倉",val:allPos.length+"筆",sub:"股票"+stockPos.length+" / 期權"+optPos.length,color:"#a78bfa"},
+                         {label:"方向偏斜",val:longPct+"%多/"+shortPct+"%空",sub:Number(longPct)>80?"⚠ 偏多風險":"均衡",color:Number(longPct)>80?"#EAB308":"#22c55e"},
+                         {label:"最大集中",val:topTicker,sub:topPct+"%曝險",color:Number(topPct)>40?"#ef4444":"#60a5fa"},
+                         {label:"本週到期",val:expThisWeek+"筆",sub:expThisWeek>0?"需注意":"安全",color:expThisWeek>0?"#ef4444":"#22c55e"}
+                        ].map(function(c,ci){
+                          return React.createElement("div",{key:ci,style:{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",
+                            borderRadius:12,padding:"14px 16px",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}},
+                            React.createElement("div",{style:{fontSize:10,color:"#6b7280",fontWeight:600,textTransform:"uppercase",letterSpacing:.5}},c.label),
+                            React.createElement("div",{style:{fontSize:16,fontWeight:700,color:c.color,marginTop:4}},c.val),
+                            React.createElement("div",{style:{fontSize:10,color:"#6b7280",marginTop:2}},c.sub)
+                          );
+                        })
+                      ),
+
+                      /* 持倉快速一覽表 */
+                      React.createElement("div",{style:{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",borderRadius:14,overflow:"hidden",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},
+                        React.createElement("div",{style:{padding:"10px 16px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",alignItems:"center",justifyContent:"space-between"}},
+                          React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#a78bfa"}},"持倉明細"),
+                          React.createElement("div",{style:{fontSize:10,color:"#6b7280"}},allPos.length+" 筆持倉")
+                        ),
+                        /* 表頭 */
+                        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"60px 1fr 70px 65px 70px 50px",padding:"6px 16px",
+                          borderBottom:"1px solid rgba(255,255,255,.04)",fontSize:10,color:"#6b7280",fontWeight:600}},
+                          React.createElement("div",null,"標的"),React.createElement("div",null,"類型/策略"),
+                          React.createElement("div",{style:{textAlign:"right"}},"現價"),
+                          React.createElement("div",{style:{textAlign:"right"}},"成本"),
+                          React.createElement("div",{style:{textAlign:"right"}},"損益"),
+                          React.createElement("div",{style:{textAlign:"center"}},"分析")
+                        ),
+                        allPos.map(function(p,pi){
+                          var curP=prices[p.sym]?prices[p.sym].price:0;
+                          var isOpt=isOptionType(p.type);
+                          var pnl=curP>0?((curP-Number(p.entry))/Number(p.entry)*100):"N/A";
+                          var pnlStr=typeof pnl==="number"?(pnl>=0?"+":"")+pnl.toFixed(1)+"%":"N/A";
+                          var pnlColor=typeof pnl==="number"?(pnl>=0?"#22c55e":"#ef4444"):"#6b7280";
+                          var typeColor=p.type==="CALL"||p.type==="LEAPS"||(p.type||"").indexOf("Call")!==-1?"#22c55e":
+                            p.type==="PUT"||(p.type||"").indexOf("Put")!==-1?"#ef4444":"#60a5fa";
+                          return React.createElement("div",{key:pi,style:{display:"grid",gridTemplateColumns:"60px 1fr 70px 65px 70px 50px",
+                            padding:"8px 16px",borderBottom:"1px solid rgba(255,255,255,.03)",alignItems:"center",
+                            background:pi%2===0?"transparent":"rgba(255,255,255,.01)"}},
+                            React.createElement("div",{style:{fontSize:13,fontWeight:700,color:"#e5e7eb"}},p.sym),
+                            React.createElement("div",{style:{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}},
+                              React.createElement("span",{style:{fontSize:10,padding:"1px 6px",borderRadius:3,background:typeColor+"18",color:typeColor,fontWeight:600}},p.type),
+                              isOpt&&p.strike&&React.createElement("span",{style:{fontSize:10,color:"#6b7280"}},"$"+p.strike),
+                              isOpt&&p.exp&&React.createElement("span",{style:{fontSize:10,color:"#6b7280"}},p.exp)
                             ),
-                            /* 相關研究報告 */
-                            matchReports.length>0&&React.createElement("div",{style:{marginTop:8,paddingLeft:48}},
-                              React.createElement("div",{style:{fontSize:10,color:"#7c3aed",fontWeight:600,marginBottom:4}},"📋 相關研究報告"),
-                              matchReports.map(function(r,ri){
-                                var dateStr = r.timeStr || new Date(r.ts).toLocaleDateString("zh-TW");
-                                return React.createElement("div",{key:ri,style:{fontSize:11,color:"#6b7280",padding:"3px 0",
-                                  display:"flex",gap:6,alignItems:"center"}},
-                                  React.createElement("span",{style:{color:"rgba(255,255,255,.2)"}},dateStr),
-                                  React.createElement("span",{style:{color:"#9ca3af",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
-                                    r.title||"無標題"),
-                                  r.aiAnalysis&&React.createElement("span",{style:{fontSize:9,color:"#10b98160",background:"#10b98110",
-                                    padding:"1px 5px",borderRadius:2}},"已分析")
-                                );
-                              })
+                            React.createElement("div",{style:{textAlign:"right",fontSize:12,color:"#d1d5db"}},curP>0?"$"+curP.toFixed(2):"-"),
+                            React.createElement("div",{style:{textAlign:"right",fontSize:12,color:"#9ca3af"}},"$"+Number(p.entry).toFixed(2)),
+                            React.createElement("div",{style:{textAlign:"right",fontSize:12,fontWeight:600,color:pnlColor}},pnlStr),
+                            React.createElement("div",{style:{textAlign:"center"}},
+                              React.createElement("div",{onClick:function(){ generateRiskAdvice(pi); },
+                                style:{display:"inline-flex",padding:"4px 8px",background:"#7c3aed15",border:"1px solid #7c3aed30",
+                                  borderRadius:5,cursor:riskAdviceLoading?"wait":"pointer"}},
+                                React.createElement("span",{style:{fontSize:10,color:"#a78bfa",fontWeight:600}},
+                                  riskAdviceLoading&&riskAdvicePos===pi?"⟳":"⚡")
+                              )
                             )
                           );
                         })
@@ -4896,52 +5007,141 @@ function App(){
                     );
                   })()}
 
-                  {/* AI 分析結果 */}
+                  {/* AI 分析中動畫 */}
                   {riskAdviceLoading&&(
-                    <div style={{padding:24,textAlign:"center",background:"rgba(255,255,255,.06)",border:"1px solid #7c3aed30",borderRadius:10}}>
-                      <div style={{fontSize:14,color:"#a78bfa",fontWeight:600,marginBottom:6}}>⟳ AI 正在整合分析...</div>
-                      <div style={{fontSize:12,color:"#6b7280"}}>結合持倉風險掃描 + 研究報告 + 期權流 + 暗池數據</div>
+                    <div style={{padding:32,textAlign:"center",background:"linear-gradient(135deg,rgba(124,58,237,.08),rgba(99,102,241,.06))",
+                      border:"1px solid #7c3aed30",borderRadius:14,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
+                      <div style={{fontSize:28,marginBottom:8}}>🔮</div>
+                      <div style={{fontSize:15,color:"#a78bfa",fontWeight:700,marginBottom:6}}>AI 正在產出綜合評估報告...</div>
+                      <div style={{fontSize:12,color:"#6b7280",lineHeight:1.6}}>
+                        整合持倉風險掃描 + 研究報告 + 期權流 + 暗池數據<br/>
+                        搜尋最新市場新聞與財報日程<br/>
+                        <span style={{color:"#7c3aed80"}}>約需 15-30 秒</span>
+                      </div>
+                      <div style={{marginTop:14,width:120,height:3,borderRadius:2,background:"rgba(255,255,255,.06)",margin:"14px auto 0",overflow:"hidden"}}>
+                        <div style={{width:"40%",height:"100%",borderRadius:2,background:"linear-gradient(90deg,#7c3aed,#a78bfa)",
+                          animation:"pulse 1.5s ease-in-out infinite"}}/>
+                      </div>
                     </div>
                   )}
+
+                  {/* AI 報告結果 — 完整評估報告 */}
                   {riskAdvice&&!riskAdviceLoading&&(
-                    <div style={{background:"rgba(124,58,237,.06)",border:"1px solid #7c3aed30",borderRadius:10,overflow:"hidden"}}>
-                      <div style={{padding:"12px 16px",borderBottom:"1px solid #1f1535",
+                    <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(124,58,237,.15)",borderRadius:14,overflow:"hidden",
+                      backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
+                      {/* 報告標題 */}
+                      <div style={{padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,.06)",
+                        background:"linear-gradient(135deg,rgba(124,58,237,.1),rgba(99,102,241,.05))",
                         display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{fontSize:12,color:"#a78bfa",fontWeight:700}}>⚡ AI 風控建議</div>
-                        <div style={{fontSize:10,color:"rgba(255,255,255,.2)"}}>{new Date().toLocaleString("zh-TW")}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <span style={{fontSize:18}}>📊</span>
+                          <div>
+                            <div style={{fontSize:14,color:"#e5e7eb",fontWeight:700}}>投資組合綜合評估報告</div>
+                            <div style={{fontSize:10,color:"#7c3aed90",marginTop:2}}>AI Generated · {new Date().toLocaleString("zh-TW")}</div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <div onClick={function(){
+                            if(navigator.clipboard){navigator.clipboard.writeText(riskAdvice);}
+                          }} style={{padding:"5px 12px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.08)",
+                            borderRadius:6,cursor:"pointer",fontSize:11,color:"#9ca3af"}}>📋 複製</div>
+                          <div onClick={function(){ generateRiskAdvice(null); }}
+                            style={{padding:"5px 12px",background:"#7c3aed20",border:"1px solid #7c3aed40",
+                              borderRadius:6,cursor:"pointer",fontSize:11,color:"#a78bfa",fontWeight:600}}>🔄 重新分析</div>
+                        </div>
                       </div>
-                      <div style={{padding:"16px",fontSize:13,color:"#d1d5db",lineHeight:1.8,whiteSpace:"pre-wrap",
-                        maxHeight:500,overflowY:"auto"}}>
+                      {/* 報告內文 — 渲染 markdown-like 結構 */}
+                      <div style={{padding:"20px 24px",fontSize:13,color:"#d1d5db",lineHeight:1.85,
+                        maxHeight:700,overflowY:"auto"}} className="ai-report-body">
                         {riskAdvice.split("\n").map(function(line, li){
                           var trimmed = line.trim();
-                          // 標題行高亮
-                          if(/^【.+】/.test(trimmed)){
-                            return React.createElement("div",{key:li,style:{fontSize:14,fontWeight:700,color:"#a78bfa",
-                              marginTop:li>0?12:0,marginBottom:4}},trimmed);
+                          if(!trimmed) return React.createElement("div",{key:li,style:{height:8}});
+                          // 大標題 【一、XXX】
+                          if(/^【[一二三四五六七八九十]+[、．.]/.test(trimmed)){
+                            return React.createElement("div",{key:li,style:{fontSize:16,fontWeight:700,color:"#a78bfa",
+                              marginTop:li>0?20:0,marginBottom:8,paddingBottom:6,
+                              borderBottom:"1px solid rgba(124,58,237,.2)",
+                              display:"flex",alignItems:"center",gap:8}},
+                              React.createElement("div",{style:{width:4,height:20,borderRadius:2,background:"#7c3aed"}}),
+                              trimmed
+                            );
                           }
-                          // 操作建議標記
+                          // 次標題 【XXX】
+                          if(/^【.+】/.test(trimmed)){
+                            return React.createElement("div",{key:li,style:{fontSize:14,fontWeight:700,color:"#c4b5fd",
+                              marginTop:li>0?14:0,marginBottom:6}},trimmed);
+                          }
+                          // ▎持倉行
+                          if(/^▎/.test(trimmed)){
+                            return React.createElement("div",{key:li,style:{fontSize:13,fontWeight:700,color:"#e5e7eb",
+                              marginTop:12,padding:"8px 12px",background:"rgba(255,255,255,.04)",
+                              borderLeft:"3px solid #7c3aed",borderRadius:"0 6px 6px 0"}},trimmed);
+                          }
+                          // 狀態行：🟢🟡🟠🔴
+                          if(/[🟢🟡🟠🔴]/.test(trimmed)){
+                            var stColor=/🟢/.test(trimmed)?"#22c55e":/🟡/.test(trimmed)?"#EAB308":/🟠/.test(trimmed)?"#f97316":"#ef4444";
+                            return React.createElement("div",{key:li,style:{fontSize:13,color:stColor,fontWeight:600,
+                              padding:"4px 12px",margin:"2px 0"}},trimmed);
+                          }
+                          // 操作建議標記 ✅🔄⚠️🚨
                           if(/^[✅🔄⚠️🚨]/.test(trimmed)){
-                            var advColor = /^✅/.test(trimmed)?"#22c55e":/^🔄/.test(trimmed)?"#3b82f6":/^⚠/.test(trimmed)?"#EAB308":"#ef4444";
+                            var advColor=/^✅/.test(trimmed)?"#22c55e":/^🔄/.test(trimmed)?"#3b82f6":/^⚠/.test(trimmed)?"#EAB308":"#ef4444";
                             return React.createElement("div",{key:li,style:{fontSize:13,color:advColor,fontWeight:600,
-                              padding:"6px 10px",margin:"4px 0",background:advColor+"10",borderRadius:6,
-                              borderLeft:"3px solid "+advColor}},trimmed);
+                              padding:"8px 14px",margin:"6px 0",background:advColor+"10",borderRadius:8,
+                              borderLeft:"3px solid "+advColor,lineHeight:1.6}},trimmed);
+                          }
+                          // 📅 風險日曆行
+                          if(/^📅/.test(trimmed)){
+                            return React.createElement("div",{key:li,style:{fontSize:12,color:"#fbbf24",fontWeight:500,
+                              padding:"6px 12px",margin:"3px 0",background:"rgba(251,191,36,.06)",borderRadius:6,
+                              borderLeft:"3px solid #fbbf2440"}},trimmed);
+                          }
+                          // 順風🌬️ / 逆風🌊 / 混合⚡
+                          if(/[🌬️🌊⚡]/.test(trimmed)&&/綜合|一致/.test(trimmed)){
+                            var windColor=/🌬️/.test(trimmed)?"#22c55e":/🌊/.test(trimmed)?"#ef4444":"#EAB308";
+                            return React.createElement("div",{key:li,style:{fontSize:13,color:windColor,fontWeight:700,
+                              padding:"6px 12px",margin:"4px 0",background:windColor+"08",borderRadius:6}},trimmed);
+                          }
+                          // ✓ ✗ 一致性行
+                          if(/[✓✗]/.test(trimmed)&&/一致|支持|方向/.test(trimmed)){
+                            var cColor=/✓/.test(trimmed)?"#22c55e":"#ef4444";
+                            return React.createElement("div",{key:li,style:{fontSize:12,color:cColor,padding:"2px 12px"}},trimmed);
                           }
                           // 數字列表
-                          if(/^\d+[.、]/.test(trimmed)){
-                            return React.createElement("div",{key:li,style:{fontSize:13,color:"#e5e7eb",marginTop:4}},trimmed);
+                          if(/^\d+[.、)）]/.test(trimmed)){
+                            return React.createElement("div",{key:li,style:{fontSize:13,color:"#e5e7eb",marginTop:4,paddingLeft:4}},trimmed);
                           }
-                          return React.createElement("div",{key:li,style:{fontSize:13,color:"#9ca3af"}},line);
+                          // - 列表項
+                          if(/^[-•]/.test(trimmed)){
+                            return React.createElement("div",{key:li,style:{fontSize:12,color:"#b0b8c4",paddingLeft:12,marginTop:2}},trimmed);
+                          }
+                          // 組合健康度
+                          if(/組合健康度|評分/.test(trimmed)&&/\/100/.test(trimmed)){
+                            return React.createElement("div",{key:li,style:{fontSize:18,fontWeight:700,color:"#ffa726",
+                              textAlign:"center",padding:"12px",margin:"8px 0",
+                              background:"linear-gradient(135deg,rgba(255,167,38,.08),rgba(124,58,237,.06))",
+                              borderRadius:10,border:"1px solid rgba(255,167,38,.15)"}},trimmed);
+                          }
+                          // 普通行
+                          return React.createElement("div",{key:li,style:{fontSize:13,color:"#9ca3af",paddingLeft:4}},line);
                         })}
                       </div>
                     </div>
                   )}
 
-                  {/* 底部提示 */}
-                  <div style={{background:"rgba(255,255,255,.04)",borderLeft:"3px solid #7c3aed",padding:"14px 18px",borderRadius:"0 8px 8px 0",
-                    fontSize:13,color:"#9ca3af",lineHeight:1.8}}>
-                    {"AI 會整合你的持倉風險掃描、研究報告、期權流與暗池數據。"}
-                    <br/>{"點擊 ⚡ 分析單一持倉，或點「全部分析」一次檢查所有部位。"}
-                    <br/><span style={{color:"#a78bfa"}}>{"建議僅供參考，最終決策靠自己。"}</span>
+                  {/* 數據來源說明 */}
+                  <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:12,padding:"14px 18px",
+                    display:"flex",gap:16,alignItems:"flex-start",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>
+                    <div style={{fontSize:20,flexShrink:0}}>🔮</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,color:"#a78bfa",fontWeight:700,marginBottom:4}}>AI 綜合評估引擎</div>
+                      <div style={{fontSize:11,color:"#6b7280",lineHeight:1.6}}>
+                        整合 4 大數據源：持倉風險掃描、研究報告、即時期權流、暗池數據。
+                        AI 會搜尋最新市場新聞確保風險日曆準確。
+                        點擊表格中 ⚡ 可針對單一持倉分析。
+                      </div>
+                      <div style={{fontSize:11,color:"#7c3aed80",marginTop:4}}>⚠ 建議僅供參考，最終決策靠自己。</div>
+                    </div>
                   </div>
                 </div>
               )}
