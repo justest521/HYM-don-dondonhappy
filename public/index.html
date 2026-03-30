@@ -737,23 +737,32 @@ function Spark({data=[],color="#d97706",w=100,h=36}){
 
 function KCard({label,value,sub,spark,color="#d97706",badge,dim=false}){
   return(
-    <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:5,padding:"16px 18px",
-      display:"flex",flexDirection:"column",gap:5,position:"relative",overflow:"hidden",opacity:dim?.5:1}}>
-      <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${color}70,transparent)`}}/>
+    <div className="kcard" style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",
+      borderRadius:16,padding:"18px 20px",
+      display:"flex",flexDirection:"column",gap:6,position:"relative",overflow:"hidden",opacity:dim?.5:1,
+      backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
+      boxShadow:`0 4px 24px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.03), inset 0 1px 0 rgba(255,255,255,.05)`,
+      transition:"all .3s cubic-bezier(.4,0,.2,1)",cursor:"default"}}>
+      {/* 頂部彩色邊 */}
+      <div style={{position:"absolute",top:0,left:0,right:0,height:3,
+        background:`linear-gradient(90deg,${color},${color}80,transparent)`,
+        boxShadow:`0 0 12px ${color}40`}}/>
+      {/* 背景光暈 */}
+      <div style={{position:"absolute",top:-30,right:-30,width:100,height:100,borderRadius:"50%",
+        background:`radial-gradient(circle,${color}08,transparent 70%)`,pointerEvents:"none"}}/>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-        <span style={{fontSize:13,letterSpacing:1,color:"rgba(255,255,255,.3)",fontFamily:"'IBM Plex Mono',monospace"}}>{label}</span>
-        {badge&&<span style={{fontSize:11,padding:"2px 8px",borderRadius:20,
-          background:badge==="即時"?"#10b98112":badge==="UW"?"#8b5cf615":"#ffffff0e",
-          color:badge==="即時"?"#10b981":badge==="UW"?"#8b5cf6":"#ffffff50",
-          border:`1px solid ${badge==="即時"?"#00e5a035":badge==="UW"?"#ba68c835":"#ffffff12"}`}}>{badge}</span>}
+        <span style={{fontSize:12,letterSpacing:1.5,color:"rgba(255,255,255,.35)",fontFamily:"'IBM Plex Mono',monospace",textTransform:"uppercase"}}>{label}</span>
+        {badge&&<span style={{fontSize:10,padding:"3px 10px",borderRadius:20,fontWeight:600,
+          background:badge==="即時"?"rgba(16,185,129,.1)":badge==="UW"?"rgba(139,92,246,.1)":"rgba(255,255,255,.05)",
+          color:badge==="即時"?"#10b981":badge==="UW"?"#8b5cf6":"rgba(255,255,255,.4)",
+          border:`1px solid ${badge==="即時"?"rgba(16,185,129,.2)":badge==="UW"?"rgba(139,92,246,.2)":"rgba(255,255,255,.08)"}`}}>{badge}</span>}
       </div>
-      <div style={{fontSize:28,fontWeight:700,color:"#ffffff",letterSpacing:-0.5,fontFamily:"'IBM Plex Mono',monospace",lineHeight:1.1}}>{value}</div>
+      <div style={{fontSize:28,fontWeight:700,color:"#ffffff",letterSpacing:-0.5,fontFamily:"'IBM Plex Mono',monospace",lineHeight:1.1,
+        textShadow:`0 0 20px ${color}15`}}>{value}</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginTop:2}}>
-        <span style={{fontSize:14,color:sub?.startsWith("+")||sub?.startsWith("▲")?"#10b981":sub?.startsWith("-")||sub?.startsWith("▼")?"#ef4444":"#ffffff45"}}>{sub}</span>
+        <span style={{fontSize:13,fontWeight:500,color:sub?.startsWith("+")||sub?.startsWith("▲")?"#10b981":sub?.startsWith("-")||sub?.startsWith("▼")?"#ef4444":"rgba(255,255,255,.3)"}}>{sub}</span>
         {spark&&<Spark data={spark} color={color}/>}
       </div>
-      {/* ════════════════ 登入 Modal ════════════════ */}
-
     </div>
   );
 }
@@ -2452,10 +2461,22 @@ function App(){
   button,input,textarea,select{font-family:inherit}
   .tr:hover .edit-btn{opacity:1!important}
   select{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#fff}
+  .kcard:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.12)!important;box-shadow:0 8px 32px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.06),inset 0 1px 0 rgba(255,255,255,.08)!important}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @keyframes meshMove{0%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.1)}66%{transform:translate(-20px,15px) scale(.95)}100%{transform:translate(0,0) scale(1)}}
+  .mesh-orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.035;animation:meshMove 20s ease-in-out infinite;pointer-events:none}
 `}</style>
 
+      {/* ═══ 背景 Mesh 光暈 ═══ */}
+      <div style={{position:"fixed",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0}}>
+        <div className="mesh-orb" style={{width:600,height:600,top:"-10%",left:"-5%",background:"radial-gradient(circle,#10b981,transparent 70%)",animationDelay:"0s"}}/>
+        <div className="mesh-orb" style={{width:500,height:500,top:"50%",right:"-10%",background:"radial-gradient(circle,#3b82f6,transparent 70%)",animationDelay:"-7s"}}/>
+        <div className="mesh-orb" style={{width:400,height:400,bottom:"-5%",left:"30%",background:"radial-gradient(circle,#7c3aed,transparent 70%)",animationDelay:"-14s"}}/>
+        <div className="mesh-orb" style={{width:350,height:350,top:"20%",left:"50%",background:"radial-gradient(circle,#d97706,transparent 70%)",animationDelay:"-10s",opacity:.02}}/>
+      </div>
+
       {/* ════════════════ 側欄 ════════════════ */}
-      <div className="glass-sidebar" style={{width:238,
+      <div className="glass-sidebar" style={{width:238,zIndex:1,
         display:"flex",flexDirection:"column",padding:"18px 0",flexShrink:0}}>
 
         {/* Logo */}
@@ -2523,15 +2544,18 @@ function App(){
         {/* 導覽 */}
         {NAV_ITEMS.map(n=>(
           <div key={n.id} className={n.disabled?"":"nb"} onClick={()=>!n.disabled&&setTab(n.id)} style={{
-            display:"flex",alignItems:"center",gap:10,padding:"11px 14px",margin:"1px 8px",cursor:n.disabled?"default":"pointer",
-            background:tab===n.id?"rgba(255,167,38,.08)":"transparent",
-            borderRadius:tab===n.id?10:10,
+            display:"flex",alignItems:"center",gap:10,padding:"11px 14px",margin:"2px 8px",cursor:n.disabled?"default":"pointer",
+            background:tab===n.id?"rgba(255,167,38,.1)":"transparent",
+            borderRadius:12,
             borderLeft:tab===n.id?"3px solid #ffa726":"3px solid transparent",
             opacity:n.disabled?0.35:1,
-            transition:"all .2s ease"}}>
-            <span style={{fontSize:16,color:tab===n.id?"#d97706":"rgba(255,255,255,.2)",width:22,textAlign:"center",
-              filter:tab===n.id?"drop-shadow(0 0 6px rgba(217,119,6,.4))":"none"}}>{n.icon}</span>
-            <span style={{fontSize:13,fontWeight:tab===n.id?600:400,color:tab===n.id?"#fff":"rgba(255,255,255,.4)",letterSpacing:.3}}>{n.label}</span>
+            boxShadow:tab===n.id?"0 0 20px rgba(255,167,38,.08), inset 0 0 12px rgba(255,167,38,.04)":"none",
+            transition:"all .25s cubic-bezier(.4,0,.2,1)"}}>
+            <span style={{fontSize:17,color:tab===n.id?"#ffa726":"rgba(255,255,255,.18)",width:22,textAlign:"center",
+              filter:tab===n.id?"drop-shadow(0 0 8px rgba(255,167,38,.5))":"none",
+              transition:"all .25s"}}>{n.icon}</span>
+            <span style={{fontSize:13,fontWeight:tab===n.id?700:400,color:tab===n.id?"#fff":"rgba(255,255,255,.35)",letterSpacing:.3,
+              textShadow:tab===n.id?"0 0 12px rgba(255,167,38,.2)":"none"}}>{n.label}</span>
             {n.disabled&&<span style={{fontSize:9,color:"rgba(255,255,255,.25)",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",borderRadius:6,padding:"2px 6px",marginLeft:"auto",letterSpacing:0.5}}>建置中</span>}
             {n.id==="flow"&&<div style={{marginLeft:"auto",fontSize:10,padding:"2px 8px",borderRadius:8,fontWeight:600,
               background:"rgba(16,185,129,.1)",color:"#10b981",border:"1px solid rgba(16,185,129,.15)"}}>{flow.filter(f=>f.unusual).length}</div>}
@@ -2580,7 +2604,7 @@ function App(){
       </div>
 
       {/* ════════════════ 主區域 ════════════════ */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",zIndex:1,position:"relative"}}>
 
         {/* 頂部列 */}
         <div style={{height:56,borderBottom:"1px solid rgba(255,255,255,.04)",display:"flex",alignItems:"center",
@@ -3092,7 +3116,7 @@ function App(){
 
               {/* 曲線 + 情緒 */}
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:5,padding:18}}>
+                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:18}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <div>
                       <div style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1}}>權益曲線 — 90 日</div>
@@ -3109,7 +3133,7 @@ function App(){
                   </div>
                   <EqChart data={equity}/>
                 </div>
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:5,padding:18,display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:18,display:"flex",flexDirection:"column",gap:10}}>
                   <div style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1}}>
                     期權情緒 {!uwKey&&<span style={{color:"#d9770660",fontSize:11}}>（模擬）</span>}
                   </div>
@@ -3128,21 +3152,29 @@ function App(){
               </div>
 
               {/* 即時報價列 */}
-              <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:5,padding:"14px 16px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <span style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1}}>
+              <div style={{background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:"16px 18px",
+                backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,.3)",letterSpacing:1.5,textTransform:"uppercase",fontWeight:600}}>
                     即時報價 · Yahoo Finance {yfOk===true?"✓":yfOk===false?"✗":""}
                     {yfLoading&&<span style={{color:"#d9770660",marginLeft:8}}>⟳ 更新中</span>}
                   </span>
-                  <div onClick={loadPrices} className="chip" style={{fontSize:12,padding:"3px 10px",borderRadius:4,
-                    border:"1px solid rgba(255,255,255,.08)",color:"rgba(255,255,255,.3)",background:"#ffffff06"}}>↻ 刷新</div>
+                  <div onClick={loadPrices} className="glass-btn" style={{fontSize:11,padding:"4px 12px",borderRadius:8,
+                    color:"rgba(255,255,255,.4)",fontWeight:600}}>↻ 刷新</div>
                 </div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {watchSyms.map((sym,wi)=>{
                     const q=priceOf(sym);
                     const isEditing=(watchEdit===wi);
+                    const isUp=q.pct&&q.pct.startsWith("+");
+                    const isDown=q.pct&&q.pct.startsWith("-");
+                    const accentColor=isUp?"rgba(16,185,129,.15)":isDown?"rgba(239,68,68,.15)":"rgba(255,255,255,.04)";
+                    const borderColor=isEditing?"rgba(217,119,6,.5)":isUp?"rgba(16,185,129,.12)":isDown?"rgba(239,68,68,.12)":"rgba(255,255,255,.06)";
                     return(
-                      <div key={wi} style={{padding:"8px 14px",background:"rgba(255,255,255,.03)",border:"1px solid "+(isEditing?"#d97706":"#ffffff0a"),borderRadius:4,minWidth:96,position:"relative",cursor:"pointer"}}
+                      <div key={wi} className="kcard" style={{padding:"10px 16px",background:accentColor,
+                        border:"1px solid "+borderColor,borderRadius:12,minWidth:100,position:"relative",cursor:"pointer",
+                        backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",
+                        transition:"all .2s ease"}}
                         title="點兩下編輯">
                         {isEditing
                           ? <input autoFocus defaultValue={sym}
@@ -3159,11 +3191,11 @@ function App(){
                               style={{width:"100%",background:"transparent",border:"none",outline:"none",
                                 fontSize:14,fontWeight:700,color:"#d97706",fontFamily:"Inter"}}
                             />
-                          : <div style={{fontSize:14,fontWeight:700,color:"#ffffff"}}
+                          : <div style={{fontSize:13,fontWeight:700,color:"#ffffff",letterSpacing:.5}}
                               onDoubleClick={function(){setWatchEdit(wi);}}>{sym}</div>
                         }
-                        <div style={{fontSize:18,fontWeight:700,color:"#ffffff",fontFamily:"'IBM Plex Mono'"}}>{q.price}</div>
-                        <div style={{fontSize:13,color:q.color}}>{q.pct}</div>
+                        <div style={{fontSize:17,fontWeight:700,color:"#ffffff",fontFamily:"'IBM Plex Mono'",marginTop:2}}>{q.price}</div>
+                        <div style={{fontSize:12,fontWeight:600,color:q.color,marginTop:1}}>{q.pct}</div>
                       </div>
                     );
                   })}
@@ -3172,8 +3204,8 @@ function App(){
 
               {/* 底部三欄 */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:5,padding:16}}>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1,marginBottom:12}}>今日損益明細</div>
+                <div className="glass-card" style={{padding:18}}>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,.3)",letterSpacing:1.5,marginBottom:14,textTransform:"uppercase",fontWeight:600}}>今日損益明細</div>
                   {[{l:"已實現",v:fmt$(pnl.day+1100),c:"#10b981"},{l:"未實現",v:fmt$(pnl.total-pnl.day-1100),c:"#d97706"},
                     {l:"手續費",v:"-$318",c:"#ef4444"},{l:"淨損益",v:fmt$(pnl.day),c:"#10b981"}].map(r=>(
                     <div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #ffffff06"}}>
@@ -3182,8 +3214,8 @@ function App(){
                     </div>
                   ))}
                 </div>
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:5,padding:16}}>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1,marginBottom:12}}>持倉曝險</div>
+                <div className="glass-card" style={{padding:18}}>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,.3)",letterSpacing:1.5,marginBottom:14,textTransform:"uppercase",fontWeight:600}}>持倉曝險</div>
                   {[{l:"總曝險",v:`${metrics.exp.toFixed(1)}%`,b:metrics.exp,c:"#d97706"},
                     {l:"淨曝險",v:`${(metrics.exp*.62).toFixed(1)}%`,b:metrics.exp*.62,c:"#3b82f6"},
                     {l:"Beta曝險",v:`${(metrics.beta*100).toFixed(1)}%`,b:metrics.beta*100,c:"#7c3aed"},
@@ -3200,8 +3232,8 @@ function App(){
                     </div>
                   ))}
                 </div>
-                <div style={{background:"rgba(255,255,255,.03)",border:"1px solid #252738",borderRadius:5,padding:16}}>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,.25)",letterSpacing:1,marginBottom:12}}>
+                <div className="glass-card" style={{padding:18}}>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,.3)",letterSpacing:1.5,marginBottom:14,textTransform:"uppercase",fontWeight:600}}>
                     前五大持倉 {yfOk===true&&<span style={{color:"#10b98150",fontSize:11}}>· 真實報價</span>}
                   </div>
                   {positions.slice(0,5).map(p=>(
@@ -3672,7 +3704,7 @@ function App(){
               </div>
 
               {/* ── 主表格：滿版、可滾動 ── */}
-              <div style={{flex:1,background:"#141414",border:"1px solid #252738",borderRadius:5,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}}>
+              <div style={{flex:1,background:"#141414",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}}>
                 {/* 表頭 */}
                 <div style={{display:"grid",
                   gridTemplateColumns:"90px 110px 82px 104px 100px 190px 120px 68px 100px 1fr",
@@ -3784,7 +3816,7 @@ function App(){
                 });
                 if(resonant.length===0) return null;
                 return (
-                  <div style={{background:"#0a1a10",border:"1px solid #10b98140",borderRadius:5,padding:"10px 14px"}}>
+                  <div style={{background:"#0a1a10",border:"1px solid #10b98140",borderRadius:12,padding:"10px 14px"}}>
                     <div style={{fontSize:11,color:"#10b981",letterSpacing:1,marginBottom:6}}>⚡ 暗池 × 期權流共振訊號（同標的同方向）</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                       {resonant.map(function(d,i){
@@ -3819,7 +3851,7 @@ function App(){
               </div>
 
               {/* ── 主表格 ── */}
-              <div style={{background:"#111114",border:"1px solid #252738",borderRadius:5,overflow:"hidden"}}>
+              <div style={{background:"#111114",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,overflow:"hidden"}}>
                 <div style={{display:"grid",gridTemplateColumns:"88px 90px 68px 80px 150px 90px 70px 70px 100px",
                   padding:"10px 16px",borderBottom:"1px solid rgba(255,255,255,.04)",fontSize:11,color:"rgba(255,255,255,.3)",letterSpacing:1}}>
                   <span>時間</span><span>標的</span><span>類型</span><span>成交價</span><span>成交額</span><span>股數</span><span>方向</span><span>占量%</span><span>場所</span>
@@ -3919,7 +3951,7 @@ function App(){
                   <div style={{fontFamily:"'Inter',sans-serif",fontSize:18,fontWeight:900,marginBottom:10,paddingBottom:8,borderBottom:"1px solid #ffffff0c"}}>{ch.t}</div>
                   <div style={{display:"flex",flexDirection:"column",gap:7}}>
                     {ch.items.map((item,i)=>(
-                      <div key={i} style={{background:"rgba(255,255,255,.03)",borderRadius:5,padding:"12px 14px",border:"1px solid rgba(255,255,255,.04)",borderLeft:"3px solid "+ch.c+"40"}}>
+                      <div key={i} style={{background:"rgba(255,255,255,.03)",borderRadius:12,padding:"12px 14px",border:"1px solid rgba(255,255,255,.04)",borderLeft:"3px solid "+ch.c+"40"}}>
                         <div style={{fontSize:13,fontWeight:700,color:ch.c,marginBottom:5}}>{item[0]}</div>
                         <div style={{fontSize:13,color:"rgba(255,255,255,.3)",lineHeight:1.8,whiteSpace:"pre-line"}}>{item[1]}</div>
                       </div>
@@ -4074,7 +4106,7 @@ function App(){
                     var score = scoreMatch ? parseInt(scoreMatch[1]||scoreMatch[2]||scoreMatch[3]) : null;
                     if(!score) return null;
                     var scoreColor = score>=80?"#10b981":score>=60?"#d97706":"#ef4444";
-                    return React.createElement("div",{style:{background:"rgba(255,255,255,.02)",border:"1px solid #252738",borderRadius:5,padding:"12px 16px",marginBottom:12}},
+                    return React.createElement("div",{style:{background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,padding:"12px 16px",marginBottom:12}},
                       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
                         React.createElement("span",{style:{fontSize:12,color:"rgba(255,255,255,.4)"}},"驗證準確度"),
                         React.createElement("span",{style:{fontSize:20,fontWeight:700,color:scoreColor,fontFamily:"'IBM Plex Mono',monospace"}},score+"/100")
@@ -4144,7 +4176,7 @@ function App(){
                       <div key={r.id}
                         style={{background:selectedReport?.id===r.id?"#0b0b0e":"#0f0f14",
                           border:`1px solid ${selectedReport?.id===r.id?"#d9770630":"#ffffff08"}`,
-                          borderRadius:5,padding:"14px 16px",cursor:"pointer",transition:"all .15s"}}
+                          borderRadius:12,padding:"14px 16px",cursor:"pointer",transition:"all .15s"}}
                         onClick={()=>setSelectedReport(selectedReport?.id===r.id?null:r)}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
                           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
