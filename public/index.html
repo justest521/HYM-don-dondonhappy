@@ -561,7 +561,7 @@ async function fetchSectorPerf(startDate, endDate) {
 async function fetchOptionPrices(positions, uwKey) {
   // 從持倉中取出所有期權，按標的分組
   if(!uwKey) return {};
-  var optPositions = positions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+  var optPositions = positions.filter(function(p){ return isOptionType(p.type); });
   if(!optPositions.length) return {};
   // 取得不重複的標的列表
   var syms = Array.from(new Set(optPositions.map(function(p){ return p.sym; })));
@@ -1354,7 +1354,7 @@ function App(){
         setPositions(mockPositions(p));
       } else {
         var mapped = ups.map(function(u){
-          var isOpt = (u.type==="CALL"||u.type==="PUT");
+          var isOpt = (isOptionType(u.type));
           var optKey = u.sym+"_"+u.type+"_"+u.strike+"_"+u.exp;
           var optLive = isOpt ? optP[optKey] : null;
           var stockLive = p[u.sym];
@@ -1414,7 +1414,7 @@ function App(){
       var cur   = live?.price || Number(u.entry);
       var qty   = Number(u.qty)||0;
       var entry = Number(u.entry)||0;
-      var isOpt = (u.type==="CALL"||u.type==="PUT");
+      var isOpt = (isOptionType(u.type));
       var optMult = isOpt ? 100 : 1;
       // 成本與市值（期權×100，空頭qty為負）
       var cost = entry * Math.abs(qty) * optMult;
@@ -1438,7 +1438,7 @@ function App(){
       var cur=live?.price||Number(u.entry);
       var qty=Number(u.qty)||0;  // 空頭為負數
       var entry=Number(u.entry)||0;
-      var isOpt=(u.type==="CALL"||u.type==="PUT");
+      var isOpt=(isOptionType(u.type));
       var mult=isOpt?100:1;  // 期權每口×100
       // pnl: (現價-成本) × abs口數 × 100(期權) × 方向(空頭qty為負)
       var pnlAmt=(cur-entry)*qty*mult;
@@ -2376,7 +2376,7 @@ function App(){
     setRiskAdvicePos(posIndex);
     try {
       var NL = "\n";
-      var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+      var optPos = userPositions.filter(function(p){ return isOptionType(p.type); });
 
       // 組合所有持倉風險掃描
       var posLines = optPos.map(function(p, i){
@@ -2889,7 +2889,7 @@ function App(){
                                   return React.createElement("div", {key:i, style:{display:"flex",justifyContent:"space-between",alignItems:"center",
                                     padding:"7px 12px",borderTop:i>0?"1px solid #141414":"none",fontSize:12}},
                                     React.createElement("span", {style:{color:"#fff",fontWeight:600}},
-                                      (p.type==="CALL"||p.type==="PUT") ? (p.sym+" "+p.type+" $"+p.strike) : p.sym
+                                      (isOptionType(p.type)) ? (p.sym+" "+p.type+" $"+p.strike) : p.sym
                                     ),
                                     React.createElement("span", {style:{color:"rgba(255,255,255,.4)"}}, p.type),
                                     React.createElement("span", {style:{color:"#d97706"}}, "x"+p.qty),
@@ -3030,7 +3030,7 @@ function App(){
                               {["多頭","空頭"].map(function(t){return React.createElement("option",{key:t,value:t},t);})}
                             </select>
                           </div>
-                          {posForm.type!=="股票"&&posForm.type!=="ETF"&&posForm.type!=="加密貨幣"&&React.createElement(React.Fragment,null,
+                          {isOptionType(posForm.type)&&React.createElement(React.Fragment,null,
                             React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
                               React.createElement("div",null,
                                 React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:3}},"行使價 Strike"),
@@ -3086,7 +3086,7 @@ function App(){
                         </div>
                       ):userPositions.map(function(u){
                         var live=prices[u.sym];
-                        var isOpt=(u.type==="CALL"||u.type==="PUT");
+                        var isOpt=(isOptionType(u.type));
                         var isExpired=false;
                         if(u.exp){
                           var parts=u.exp.split(/[\/\-]/);
@@ -4432,7 +4432,7 @@ function App(){
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
                   {/* 從持倉帶入 */}
                   {(function(){
-                    var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+                    var optPos = userPositions.filter(function(p){ return isOptionType(p.type); });
                     if(optPos.length===0) return null;
                     return React.createElement("div",{style:{background:"rgba(59,130,246,.06)",border:"1px solid #1e3a5f",borderRadius:10,padding:"12px 16px"}},
                       React.createElement("div",{style:{fontSize:11,color:"#60a5fa",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"從持倉帶入"),
@@ -4666,7 +4666,7 @@ function App(){
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
                   {/* 自動掃描持倉風險 */}
                   {(function(){
-                    var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+                    var optPos = userPositions.filter(function(p){ return isOptionType(p.type); });
                     if(optPos.length===0) return React.createElement("div",{style:{padding:20,textAlign:"center",color:"#6b7280",fontSize:13,
                       background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無期權持倉，新增持倉後自動掃描");
                     var alerts = [];
@@ -4763,7 +4763,7 @@ function App(){
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
                   {/* 持倉選擇 */}
                   {(function(){
-                    var optPos = userPositions.filter(function(p){ return p.type==="CALL"||p.type==="PUT"; });
+                    var optPos = userPositions.filter(function(p){ return isOptionType(p.type); });
                     if(optPos.length===0) return React.createElement("div",{style:{padding:24,textAlign:"center",color:"#6b7280",fontSize:13,
                       background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.06)",borderRadius:16,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}},"尚無期權持倉，新增持倉後可使用 AI 建議");
                     return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:12}},
