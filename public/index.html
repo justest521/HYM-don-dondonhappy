@@ -274,7 +274,7 @@ async function cloudUpdateTitle(id, title) {
 async function cloudLoadPositions() {
   if (!db) return null;
   try {
-    var res = await db.from("positions").select("*").order("created_at", { ascending: false });
+    var res = await db.from("positions").select("*").eq("user_name","TOYWU").order("created_at", { ascending: false });
     if (res.error) throw res.error;
     return (res.data || []).map(function(r) {
       return {
@@ -340,7 +340,7 @@ async function cloudDeletePosition(id) {
 async function cloudClearAndSavePositions(arr) {
   if (!db) return;
   try {
-    await db.from("positions").delete().neq("id", "0");
+    await db.from("positions").delete().eq("user_name","TOYWU");
     if (arr && arr.length > 0) await cloudSaveAllPositions(arr);
   } catch(e) { console.warn("cloudClearAndSave:", e.message); }
 }
@@ -1277,9 +1277,20 @@ function App(){
           var optKey = u.sym+"_"+u.type+"_"+u.strike+"_"+u.exp;
           var optLive = isOpt ? optP[optKey] : null;
           var stockLive = p[u.sym];
-          // 現價：期權用 UW mid price，股票用 Yahoo
-          var cur = isOpt
-            ? (optLive?.price || Number(u.entry))
+          // 檢查是否已到期
+          var isExpired = false;
+          if(u.exp){
+            var parts2=u.exp.split(/[\/\-]/);
+            var expD;
+            if(parts2.length===3){
+              if(parts2[0].length===4) expD=new Date(parts2[0],parts2[1]-1,parts2[2]);
+              else expD=new Date(parts2[2].length===2?"20"+parts2[2]:parts2[2],parts2[0]-1,parts2[1]);
+            }
+            if(expD && expD < new Date()) isExpired=true;
+          }
+          // 現價：已到期→0，期權用 UW mid price，股票用 Yahoo
+          var cur = isExpired ? 0
+            : isOpt ? (optLive?.price || Number(u.entry))
             : (stockLive?.price || Number(u.entry));
           var qty   = Number(u.qty)||0;
           var entry = Number(u.entry)||0;
@@ -1570,16 +1581,11 @@ function App(){
         // 本地是空的，直接用雲端
         localStorage.setItem("ddh_positions", JSON.stringify(cloud));
         setUserPositions(cloud);
-      } else {
-        // 兩邊都有：以本地為主（本地是最新操作），雲端有但本地沒有的補入
-        var localSyms = local.map(function(p){ return p.sym+"|"+p.type+"|"+(p.strike||"")+"|"+(p.exp||""); });
-        var merged = local.slice();
-        cloud.forEach(function(cp){
-          var key = cp.sym+"|"+cp.type+"|"+(cp.strike||"")+"|"+(cp.exp||"");
-          if(localSyms.indexOf(key)===-1) merged.push(cp);
-        });
-        localStorage.setItem("ddh_positions", JSON.stringify(merged));
-        setUserPositions(merged);
+      }
+      // 本地有資料時以本地為準，不從雲端補回（避免刪掉的又出現）
+      // 同時把本地同步到雲端確保一致
+      if(local.length>0){
+        cloudClearAndSavePositions(local);
       }
     });
   },[]);
@@ -2994,14 +3000,39 @@ function App(){
                         </div>
                       ):userPositions.map(function(u){
                         var live=prices[u.sym];
-                        var cur=live?.price||Number(u.entry);
-                        var pnlAmt=((cur-Number(u.entry))*u.qty*(u.side==="空頭"?-1:1));
-                        var pct=Number(u.entry)>0?((cur-Number(u.entry))/Number(u.entry)*100*(u.side==="空頭"?-1:1)):0;
+                        var isOpt=(u.type==="CALL"||u.type==="PUT");
+                        var isExpired=false;
+                        if(u.exp){
+                          var parts=u.exp.split(/[\/\-]/);
+                          var expDate;
+                          if(parts.length===3){
+                            if(parts[0].length===4) expDate=new Date(parts[0],parts[1]-1,parts[2]);
+                            else expDate=new Date(parts[2].length===2?"20"+parts[2]:parts[2],parts[0]-1,parts[1]);
+                          }
+                          if(expDate && expDate < new Date()) isExpired=true;
+                        }
+                        // 期權已到期 → 歸零（OTM 到期歸零，ITM 應已行權）
+                        var cur;
+                        if(isExpired){
+                          cur=0;
+                        } else if(isOpt){
+                          // 嘗試用已載入的持倉報價，否則 fallback 到成本
+                          var posMatch=positions.find(function(pp){return pp.sym===u.sym&&pp.strat===u.type&&pp.strike===u.strike&&pp.exp===u.exp;});
+                          cur=(posMatch&&posMatch.live)?Number(posMatch.cur):Number(u.entry);
+                        } else {
+                          cur=live?.price||Number(u.entry);
+                        }
+                        var qty=Number(u.qty)||0;
+                        var entry=Number(u.entry)||0;
+                        var mult=isOpt?100:1;
+                        var pnlAmt=(cur-entry)*qty*mult;
+                        var pct=entry>0?((cur-entry)/entry*100):0;
                         var batchChecked = !!posBatchSel[u.id];
                         return React.createElement("div",{key:u.id,
                           onClick:posBatchMode?function(){setPosBatchSel(function(prev){var n=Object.assign({},prev);if(n[u.id])delete n[u.id];else n[u.id]=true;return n;});}:undefined,
                           style:{padding:"11px 0",borderBottom:"1px solid rgba(255,255,255,.03)",display:"flex",alignItems:"center",gap:10,
-                            cursor:posBatchMode?"pointer":"default",background:batchChecked?"#ef444410":"transparent"}},
+                            cursor:posBatchMode?"pointer":"default",background:batchChecked?"#ef444410":isExpired?"rgba(255,60,60,.04)":"transparent",
+                            opacity:isExpired?0.5:1}},
                           /* 多筆刪除 checkbox */
                           posBatchMode&&React.createElement("div",{style:{width:20,height:20,borderRadius:4,flexShrink:0,
                             border:"2px solid "+(batchChecked?"#ef4444":"#444"),background:batchChecked?"#ef4444":"transparent",
@@ -3010,23 +3041,28 @@ function App(){
                           ),
                           React.createElement("div",{style:{flex:1}},
                             React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:3}},
-                              React.createElement("span",{style:{fontSize:14,fontWeight:700,color:"#fff"}},(u.type==="CALL"||u.type==="PUT")?(u.sym+" "+u.type+" $"+u.strike):u.sym),
+                              React.createElement("span",{style:{fontSize:14,fontWeight:700,color:isExpired?"rgba(255,255,255,.35)":"#fff"}},isOpt?(u.sym+" "+u.type+" $"+u.strike):u.sym),
                               React.createElement("span",{style:{fontSize:10,padding:"1px 6px",borderRadius:3,background:u.side==="多頭"?"#10b98120":"#ef444420",color:u.side==="多頭"?"#10b981":"#ef4444"}},u.side),
-                              React.createElement("span",{style:{fontSize:10,color:"rgba(255,255,255,.25)"}},u.type)
+                              React.createElement("span",{style:{fontSize:10,color:"rgba(255,255,255,.25)"}},u.type),
+                              isExpired&&React.createElement("span",{style:{fontSize:9,padding:"1px 5px",borderRadius:3,background:"#ef444430",color:"#ef4444",fontWeight:600}},"已到期")
                             ),
                             React.createElement("div",{style:{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,.3)"}},
-                              React.createElement("span",null,"×"+u.qty),
-                              React.createElement("span",null,"成本 $"+Number(u.entry).toFixed(2)),
-                              live&&React.createElement("span",{style:{color:"rgba(255,255,255,.4)"}},"現 $"+cur.toFixed(2)),
-                              u.exp&&React.createElement("span",{style:{color:"#d97706"}},"到期 "+u.exp)
+                              React.createElement("span",null,"×"+u.qty+(isOpt?" (×100)":"")),
+                              React.createElement("span",null,"成本 $"+entry.toFixed(2)),
+                              (!isExpired&&(live||cur!==entry))&&React.createElement("span",{style:{color:"rgba(255,255,255,.4)"}},"現 $"+cur.toFixed(2)),
+                              u.exp&&React.createElement("span",{style:{color:isExpired?"#ef4444":"#d97706"}},(isExpired?"已到期 ":"到期 ")+u.exp)
                             )
                           ),
                           React.createElement("div",{style:{textAlign:"right",minWidth:70}},
-                            React.createElement("div",{style:{fontSize:13,fontWeight:600,color:pnlAmt>=0?"#10b981":"#ef4444"}},
-                              (pnlAmt>=0?"+":"")+Math.round(pnlAmt).toLocaleString()
-                            ),
-                            React.createElement("div",{style:{fontSize:11,color:pct>=0?"#10b98180":"#ef444480"}},
-                              (pct>=0?"+":"")+pct.toFixed(2)+"%"
+                            isExpired?React.createElement("div",{style:{fontSize:12,color:"#ef4444",fontWeight:600}},
+                              "−$"+(entry*Math.abs(qty)*mult).toLocaleString()
+                            ):React.createElement(React.Fragment,null,
+                              React.createElement("div",{style:{fontSize:13,fontWeight:600,color:pnlAmt>=0?"#10b981":"#ef4444"}},
+                                (pnlAmt>=0?"+":"")+Math.round(pnlAmt).toLocaleString()
+                              ),
+                              React.createElement("div",{style:{fontSize:11,color:pct>=0?"#10b98180":"#ef444480"}},
+                                (pct>=0?"+":"")+pct.toFixed(2)+"%"
+                              )
                             )
                           ),
                           !posBatchMode&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4}},
