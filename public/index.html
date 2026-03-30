@@ -948,8 +948,24 @@ const NAV_ITEMS=[
   {id:"darkpool",  icon:"◉",label:"暗池"},
   {id:"chart",     icon:"▲",label:"K 線圖"},
   {id:"research",  icon:"📋",label:"研究"},
+  {id:"sector",    icon:"🗺️",label:"板塊績效"},
   {id:"risk",      icon:"🛡",label:"風控"},
 ];
+
+/* ── 板塊 ETF 主要成分股（Top 10）── */
+const SECTOR_HOLDINGS = {
+  XLK: [{sym:"AAPL",name:"Apple"},{sym:"MSFT",name:"Microsoft"},{sym:"NVDA",name:"NVIDIA"},{sym:"AVGO",name:"Broadcom"},{sym:"CRM",name:"Salesforce"},{sym:"ADBE",name:"Adobe"},{sym:"AMD",name:"AMD"},{sym:"CSCO",name:"Cisco"},{sym:"ORCL",name:"Oracle"},{sym:"ACN",name:"Accenture"}],
+  XLF: [{sym:"BRK.B",name:"Berkshire"},{sym:"JPM",name:"JPMorgan"},{sym:"V",name:"Visa"},{sym:"MA",name:"Mastercard"},{sym:"BAC",name:"BofA"},{sym:"WFC",name:"Wells Fargo"},{sym:"GS",name:"Goldman Sachs"},{sym:"SPGI",name:"S&P Global"},{sym:"MS",name:"Morgan Stanley"},{sym:"AXP",name:"Amex"}],
+  XLE: [{sym:"XOM",name:"ExxonMobil"},{sym:"CVX",name:"Chevron"},{sym:"COP",name:"ConocoPhillips"},{sym:"EOG",name:"EOG Resources"},{sym:"SLB",name:"Schlumberger"},{sym:"MPC",name:"Marathon Petroleum"},{sym:"PSX",name:"Phillips 66"},{sym:"VLO",name:"Valero"},{sym:"WMB",name:"Williams"},{sym:"OKE",name:"ONEOK"}],
+  XLV: [{sym:"LLY",name:"Eli Lilly"},{sym:"UNH",name:"UnitedHealth"},{sym:"JNJ",name:"J&J"},{sym:"ABBV",name:"AbbVie"},{sym:"MRK",name:"Merck"},{sym:"TMO",name:"Thermo Fisher"},{sym:"ABT",name:"Abbott"},{sym:"AMGN",name:"Amgen"},{sym:"DHR",name:"Danaher"},{sym:"PFE",name:"Pfizer"}],
+  XLI: [{sym:"GE",name:"GE Aerospace"},{sym:"CAT",name:"Caterpillar"},{sym:"UNP",name:"Union Pacific"},{sym:"RTX",name:"RTX"},{sym:"HON",name:"Honeywell"},{sym:"DE",name:"Deere"},{sym:"ETN",name:"Eaton"},{sym:"ADP",name:"ADP"},{sym:"LMT",name:"Lockheed Martin"},{sym:"BA",name:"Boeing"}],
+  XLP: [{sym:"PG",name:"P&G"},{sym:"COST",name:"Costco"},{sym:"WMT",name:"Walmart"},{sym:"KO",name:"Coca-Cola"},{sym:"PEP",name:"PepsiCo"},{sym:"PM",name:"Philip Morris"},{sym:"MDLZ",name:"Mondelez"},{sym:"MO",name:"Altria"},{sym:"CL",name:"Colgate"},{sym:"TGT",name:"Target"}],
+  XLY: [{sym:"AMZN",name:"Amazon"},{sym:"TSLA",name:"Tesla"},{sym:"HD",name:"Home Depot"},{sym:"MCD",name:"McDonald's"},{sym:"LOW",name:"Lowe's"},{sym:"NKE",name:"Nike"},{sym:"BKNG",name:"Booking"},{sym:"SBUX",name:"Starbucks"},{sym:"TJX",name:"TJX"},{sym:"CMG",name:"Chipotle"}],
+  XLC: [{sym:"META",name:"Meta"},{sym:"GOOGL",name:"Alphabet"},{sym:"GOOG",name:"Alphabet C"},{sym:"NFLX",name:"Netflix"},{sym:"T",name:"AT&T"},{sym:"CMCSA",name:"Comcast"},{sym:"DIS",name:"Disney"},{sym:"TMUS",name:"T-Mobile"},{sym:"VZ",name:"Verizon"},{sym:"EA",name:"EA"}],
+  XLU: [{sym:"NEE",name:"NextEra"},{sym:"SO",name:"Southern"},{sym:"DUK",name:"Duke Energy"},{sym:"CEG",name:"Constellation"},{sym:"SRE",name:"Sempra"},{sym:"AEP",name:"AEP"},{sym:"D",name:"Dominion"},{sym:"PCG",name:"PG&E"},{sym:"EXC",name:"Exelon"},{sym:"XEL",name:"Xcel"}],
+  XLB: [{sym:"LIN",name:"Linde"},{sym:"SHW",name:"Sherwin-Williams"},{sym:"APD",name:"Air Products"},{sym:"FCX",name:"Freeport"},{sym:"ECL",name:"Ecolab"},{sym:"NEM",name:"Newmont"},{sym:"CTVA",name:"Corteva"},{sym:"DOW",name:"Dow"},{sym:"NUE",name:"Nucor"},{sym:"DD",name:"DuPont"}],
+  XLRE: [{sym:"PLD",name:"Prologis"},{sym:"AMT",name:"American Tower"},{sym:"EQIX",name:"Equinix"},{sym:"WELL",name:"Welltower"},{sym:"SPG",name:"Simon Property"},{sym:"PSA",name:"Public Storage"},{sym:"DLR",name:"Digital Realty"},{sym:"O",name:"Realty Income"},{sym:"CCI",name:"Crown Castle"},{sym:"VICI",name:"VICI"}]
+};
 const sentColor=s=>{const u=(s||"").toUpperCase();return u==="BULLISH"?"#10b981":u==="BEARISH"?"#ef4444":"#888";};
 const sentZh   =s=>{const u=(s||"").toUpperCase();return u==="BULLISH"?"看漲":u==="BEARISH"?"看跌":"中性";};
 const typeColor=t=>t==="CALL"?"#10b981":"#ef4444";
@@ -1108,6 +1124,8 @@ function App(){
   const [sectorData, setSectorData] = useState(null);
   const [sectorLoading, setSectorLoading] = useState(false);
   const [sectorSort, setSectorSort] = useState("pct_desc");
+  const [sectorDrill, setSectorDrill] = useState(null); // 點擊板塊展開個股，存 ETF sym 如 "XLK"
+  const [sectorStockPrices, setSectorStockPrices] = useState({}); // { SYM: {price, change, changePct} }
   const [sectorDateFrom, setSectorDateFrom] = useState(function(){
     var d = new Date(); return d.getFullYear() + "-01-01"; // 預設 YTD
   });
@@ -4551,7 +4569,7 @@ function App(){
 
               {/* SOP 子分頁 */}
               <div style={{display:"flex",gap:2,borderBottom:"1px solid rgba(255,255,255,.05)"}}>
-                {[{id:"checklist",label:"開倉清單"},{id:"rules",label:"停損規則"},{id:"hold",label:"持倉自查"},{id:"advice",label:"AI建議"},{id:"sector",label:"板塊績效"},{id:"tree",label:"判斷樹"}].map(function(t){
+                {[{id:"checklist",label:"開倉清單"},{id:"rules",label:"停損規則"},{id:"hold",label:"持倉自查"},{id:"advice",label:"AI建議"},{id:"tree",label:"判斷樹"}].map(function(t){
                   return React.createElement("div",{key:t.id,onClick:function(){setSopTab(t.id);},
                     style:{padding:"10px 18px",cursor:"pointer",fontSize:13,
                       color:sopTab===t.id?"#EAB308":"#6b7280",
@@ -5146,260 +5164,6 @@ function App(){
                 </div>
               )}
 
-              {/* ── 板塊績效 ── */}
-              {sopTab==="sector"&&(
-                <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                  {/* 視圖切換 */}
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    {[{id:"tv",label:"TradingView 熱力圖",icon:"🗺️"},{id:"custom",label:"自訂日期區間",icon:"📊"}].map(function(v){
-                      return React.createElement("div",{key:v.id,onClick:function(){setSectorView(v.id);},className:"glass-btn",
-                        style:{padding:"8px 18px",fontSize:13,fontWeight:sectorView===v.id?700:400,
-                          color:sectorView===v.id?"#ffa726":"rgba(255,255,255,.45)",
-                          background:sectorView===v.id?"rgba(255,167,38,.1)":"rgba(255,255,255,.04)",
-                          border:sectorView===v.id?"1px solid rgba(255,167,38,.3)":"1px solid rgba(255,255,255,.08)",
-                          boxShadow:sectorView===v.id?"0 0 20px rgba(255,167,38,.08)":"none"}},
-                        v.icon+" "+v.label);
-                    })}
-                  </div>
-
-                  {/* ── TradingView 板塊熱力圖 ── */}
-                  {sectorView==="tv"&&(
-                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                      {/* 熱力圖 */}
-                      <div className="glass-card" style={{padding:0,overflow:"hidden"}}>
-                        <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)"}}>S&P 500 板塊熱力圖</span>
-                          <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>資料來源：TradingView</span>
-                        </div>
-                        <TVWidget type="stock-heatmap" height={500} config={{
-                          exchanges:[],
-                          dataSource:"SPX500",
-                          grouping:"sector",
-                          blockSize:"market_cap_basic",
-                          blockColor:"change",
-                          locale:"zh_TW",
-                          symbolUrl:"",
-                          colorTheme:"dark",
-                          hasTopBar:false,
-                          isDataSetEnabled:false,
-                          isZoomEnabled:true,
-                          hasSymbolTooltip:true,
-                          isMonoSize:false,
-                          width:"100%",
-                          height:500
-                        }}/>
-                      </div>
-                      {/* 板塊概覽 Widget */}
-                      <div className="glass-card" style={{padding:0,overflow:"hidden"}}>
-                        <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)"}}>板塊績效排行</span>
-                          <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>即時數據</span>
-                        </div>
-                        <TVWidget type="market-overview" height={460} config={{
-                          colorTheme:"dark",
-                          dateRange:"12M",
-                          showChart:true,
-                          locale:"zh_TW",
-                          largeChartUrl:"",
-                          isTransparent:true,
-                          showSymbolLogo:true,
-                          showFloatingTooltip:true,
-                          width:"100%",
-                          height:460,
-                          tabs:[
-                            {title:"板塊 ETF",symbols:[
-                              {s:"AMEX:XLK",d:"科技"},
-                              {s:"AMEX:XLF",d:"金融"},
-                              {s:"AMEX:XLE",d:"能源"},
-                              {s:"AMEX:XLV",d:"醫療保健"},
-                              {s:"AMEX:XLI",d:"工業"},
-                              {s:"AMEX:XLP",d:"消費必需品"},
-                              {s:"AMEX:XLY",d:"非必需消費"},
-                              {s:"AMEX:XLC",d:"通訊服務"},
-                              {s:"AMEX:XLU",d:"公用事業"},
-                              {s:"AMEX:XLB",d:"材料"},
-                              {s:"AMEX:XLRE",d:"不動產"}
-                            ],originalTitle:"Sector ETFs"}
-                          ]
-                        }}/>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── 自訂日期區間查詢 ── */}
-                  {sectorView==="custom"&&(
-                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                  {/* 日期區間選擇 + 查詢按鈕 */}
-                  <div className="glass-card" style={{padding:"18px 20px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:12,color:"rgba(255,255,255,.5)"}}>起始</span>
-                        <input type="date" value={sectorDateFrom} onChange={function(e){setSectorDateFrom(e.target.value);}}
-                          style={{padding:"7px 12px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",
-                            borderRadius:10,color:"#fff",fontSize:13,colorScheme:"dark"}}/>
-                      </div>
-                      <span style={{color:"rgba(255,255,255,.3)"}}>→</span>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:12,color:"rgba(255,255,255,.5)"}}>結束</span>
-                        <input type="date" value={sectorDateTo} onChange={function(e){setSectorDateTo(e.target.value);}}
-                          style={{padding:"7px 12px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",
-                            borderRadius:10,color:"#fff",fontSize:13,colorScheme:"dark"}}/>
-                      </div>
-                      <div onClick={function(){
-                        setSectorLoading(true); setSectorData(null);
-                        fetchSectorPerf(sectorDateFrom, sectorDateTo).then(function(data){
-                          setSectorData(data); setSectorLoading(false);
-                        }).catch(function(e){ console.warn("sector fetch error:",e); setSectorLoading(false); });
-                      }} className="glass-btn" style={{padding:"8px 20px",fontSize:13,fontWeight:600,color:"#ffa726",
-                        background:"rgba(255,167,38,.1)",border:"1px solid rgba(255,167,38,.3)",
-                        boxShadow:"0 0 20px rgba(255,167,38,.1)"}}>
-                        {sectorLoading?"查詢中…":"查詢板塊績效"}
-                      </div>
-                      {/* 快捷按鈕 */}
-                      <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
-                        {[{label:"YTD",fn:function(){var y=new Date().getFullYear();setSectorDateFrom(y+"-01-01");setSectorDateTo(new Date().toISOString().split("T")[0]);}},
-                          {label:"1M",fn:function(){var d=new Date();d.setMonth(d.getMonth()-1);setSectorDateFrom(d.toISOString().split("T")[0]);setSectorDateTo(new Date().toISOString().split("T")[0]);}},
-                          {label:"3M",fn:function(){var d=new Date();d.setMonth(d.getMonth()-3);setSectorDateFrom(d.toISOString().split("T")[0]);setSectorDateTo(new Date().toISOString().split("T")[0]);}},
-                          {label:"1Y",fn:function(){var d=new Date();d.setFullYear(d.getFullYear()-1);setSectorDateFrom(d.toISOString().split("T")[0]);setSectorDateTo(new Date().toISOString().split("T")[0]);}}
-                        ].map(function(b){
-                          return React.createElement("div",{key:b.label,onClick:b.fn,className:"glass-btn",
-                            style:{padding:"5px 12px",fontSize:11,color:"rgba(255,255,255,.5)",cursor:"pointer"}},b.label);
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 排序按鈕 */}
-                  {sectorData&&sectorData.length>0&&(
-                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                      <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>排序：</span>
-                      {[{id:"pct_desc",label:"績效高→低"},{id:"pct_asc",label:"績效低→高"},{id:"name",label:"板塊名稱"}].map(function(s){
-                        return React.createElement("div",{key:s.id,onClick:function(){setSectorSort(s.id);},className:"glass-btn",
-                          style:{padding:"4px 12px",fontSize:11,
-                            color:sectorSort===s.id?"#ffa726":"rgba(255,255,255,.4)",
-                            background:sectorSort===s.id?"rgba(255,167,38,.1)":"rgba(255,255,255,.04)",
-                            border:sectorSort===s.id?"1px solid rgba(255,167,38,.3)":"1px solid rgba(255,255,255,.08)"}},s.label);
-                      })}
-                      <span style={{marginLeft:"auto",fontSize:11,color:"rgba(255,255,255,.3)"}}>
-                        {sectorDateFrom+" → "+sectorDateTo}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Loading */}
-                  {sectorLoading&&(
-                    <div style={{textAlign:"center",padding:40}}>
-                      <div style={{fontSize:32,animation:"pulse 1s infinite"}}>📊</div>
-                      <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginTop:8}}>正在抓取 11 大板塊 ETF 歷史數據…</div>
-                    </div>
-                  )}
-
-                  {/* 尚未查詢 */}
-                  {!sectorData&&!sectorLoading&&(
-                    <div style={{textAlign:"center",padding:50}}>
-                      <div style={{fontSize:40,marginBottom:12}}>📈</div>
-                      <div style={{fontSize:14,color:"rgba(255,255,255,.4)",marginBottom:6}}>選擇日期區間後點「查詢板塊績效」</div>
-                      <div style={{fontSize:12,color:"rgba(255,255,255,.25)"}}>使用 S&P 500 板塊 ETF（XLK/XLF/XLE…）即時計算</div>
-                    </div>
-                  )}
-
-                  {/* 結果表格 */}
-                  {sectorData&&sectorData.length>0&&(
-                    <div className="glass-card" style={{overflow:"hidden",padding:0}}>
-                      {/* 表頭 */}
-                      <div style={{display:"grid",gridTemplateColumns:"44px 1fr 90px 90px 120px 60px",padding:"12px 18px",
-                        borderBottom:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.04)"}}>
-                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>#</span>
-                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>板塊</span>
-                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"right"}}>起始價</span>
-                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"right"}}>結束價</span>
-                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"right"}}>報酬率</span>
-                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"center"}}>走勢</span>
-                      </div>
-                      {/* 數據行 */}
-                      {sectorData.slice().sort(function(a,b){
-                        if(sectorSort==="pct_desc") return b.pct-a.pct;
-                        if(sectorSort==="pct_asc") return a.pct-b.pct;
-                        return a.name.localeCompare(b.name,"zh-TW");
-                      }).map(function(sec,idx){
-                        var isPos = sec.pct >= 0;
-                        var barW = Math.min(100, Math.abs(sec.pct) * 2); // 每 1% = 2px 寬
-                        // mini sparkline
-                        var closes = sec.closes || [];
-                        var mn = Math.min.apply(null,closes), mx = Math.max.apply(null,closes);
-                        var range = mx - mn || 1;
-                        var sparkH = 24, sparkW = 50;
-                        var sparkPts = closes.map(function(c,i){ return (i/(closes.length-1||1))*sparkW+","+(sparkH-(c-mn)/range*sparkH); }).join(" ");
-                        return React.createElement("div",{key:sec.sym,style:{display:"grid",gridTemplateColumns:"44px 1fr 90px 90px 120px 60px",
-                          padding:"12px 18px",alignItems:"center",
-                          borderBottom:"1px solid rgba(255,255,255,.04)",
-                          background:idx%2===0?"transparent":"rgba(255,255,255,.02)",
-                          transition:"background .15s"}},
-                          /* 排名 */
-                          React.createElement("span",{style:{fontSize:13,fontWeight:700,color:idx<3?(isPos?"#10b981":"#ef4444"):"rgba(255,255,255,.4)"}},idx+1),
-                          /* 板塊名 */
-                          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
-                            React.createElement("span",{style:{fontSize:18}},sec.icon),
-                            React.createElement("div",null,
-                              React.createElement("div",{style:{fontSize:14,fontWeight:600,color:"#fff"}},sec.name),
-                              React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)"}},sec.sym)
-                            )
-                          ),
-                          /* 起始價 */
-                          React.createElement("span",{style:{fontSize:13,color:"rgba(255,255,255,.5)",textAlign:"right",fontFamily:"'IBM Plex Mono',monospace"}},"$"+sec.startPrice.toFixed(2)),
-                          /* 結束價 */
-                          React.createElement("span",{style:{fontSize:13,color:"rgba(255,255,255,.5)",textAlign:"right",fontFamily:"'IBM Plex Mono',monospace"}},"$"+sec.endPrice.toFixed(2)),
-                          /* 報酬率 + 彩色條 */
-                          React.createElement("div",{style:{textAlign:"right",position:"relative"}},
-                            React.createElement("div",{style:{fontSize:15,fontWeight:700,color:isPos?"#10b981":"#ef4444",fontFamily:"'IBM Plex Mono',monospace"}},
-                              (isPos?"+":"")+sec.pct.toFixed(2)+"%"
-                            ),
-                            React.createElement("div",{style:{position:"absolute",bottom:-2,right:0,height:3,borderRadius:2,
-                              width:barW,background:isPos?"linear-gradient(90deg,transparent,#10b981)":"linear-gradient(90deg,#ef4444,transparent)",
-                              boxShadow:isPos?"0 0 8px rgba(16,185,129,.3)":"0 0 8px rgba(239,68,68,.3)",opacity:.6}})
-                          ),
-                          /* Mini sparkline */
-                          React.createElement("div",{style:{display:"flex",justifyContent:"center"}},
-                            closes.length>2?React.createElement("svg",{width:sparkW,height:sparkH,style:{overflow:"visible"}},
-                              React.createElement("polyline",{points:sparkPts,fill:"none",
-                                stroke:isPos?"#10b981":"#ef4444",strokeWidth:1.5,strokeLinejoin:"round",opacity:.7})
-                            ):React.createElement("span",{style:{fontSize:10,color:"rgba(255,255,255,.2)"}},"—")
-                          )
-                        );
-                      })}
-                      {/* 底部統計 */}
-                      <div style={{padding:"14px 18px",background:"rgba(255,255,255,.04)",borderTop:"1px solid rgba(255,255,255,.08)",
-                        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>
-                          {"共 "+sectorData.length+" 個板塊 · 數據來源：Yahoo Finance (S&P 500 Sector ETFs)"}
-                        </span>
-                        <div style={{display:"flex",gap:16}}>
-                          <span style={{fontSize:12,color:"#10b981"}}>
-                            {"上漲 "+sectorData.filter(function(s){return s.pct>=0;}).length}
-                          </span>
-                          <span style={{fontSize:12,color:"#ef4444"}}>
-                            {"下跌 "+sectorData.filter(function(s){return s.pct<0;}).length}
-                          </span>
-                          <span style={{fontSize:12,color:"rgba(255,255,255,.5)",fontWeight:600}}>
-                            {"平均 "+(sectorData.reduce(function(a,s){return a+s.pct;},0)/sectorData.length).toFixed(2)+"%"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 查詢完但無數據 */}
-                  {sectorData&&sectorData.length===0&&!sectorLoading&&(
-                    <div style={{textAlign:"center",padding:40}}>
-                      <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
-                      <div style={{fontSize:13,color:"rgba(255,255,255,.4)"}}>查無數據，請確認日期區間是否有效（需為交易日）</div>
-                    </div>
-                  )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* ── 判斷樹 ── */}
               {sopTab==="tree"&&(
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -5477,6 +5241,376 @@ function App(){
                     <br/>{"有催化劑但觸及停損就出場。"}
                     <br/><span style={{color:"#EAB308"}}>{"這兩句話值一百萬。"}</span>
                   </div>
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {/* ══════ 板塊績效（獨立頁面）══════ */}
+          {tab==="sector"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+              {/* 頁面標題 */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:6,height:28,borderRadius:3,background:"linear-gradient(180deg,#ffa726,#ff7043)"}}/>
+                  <div>
+                    <div style={{fontSize:18,fontWeight:700,color:"#e5e7eb"}}>板塊績效總覽</div>
+                    <div style={{fontSize:11,color:"#6b7280",marginTop:2}}>S&P 500 · 11 大板塊 · 點擊板塊查看成分股</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 視圖切換 */}
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                {[{id:"tv",label:"TradingView 熱力圖",icon:"🗺️"},{id:"custom",label:"自訂日期區間",icon:"📊"}].map(function(v){
+                  return React.createElement("div",{key:v.id,onClick:function(){setSectorView(v.id);setSectorDrill(null);},className:"glass-btn",
+                    style:{padding:"8px 18px",fontSize:13,fontWeight:sectorView===v.id?700:400,
+                      color:sectorView===v.id?"#ffa726":"rgba(255,255,255,.45)",
+                      background:sectorView===v.id?"rgba(255,167,38,.1)":"rgba(255,255,255,.04)",
+                      border:sectorView===v.id?"1px solid rgba(255,167,38,.3)":"1px solid rgba(255,255,255,.08)",
+                      boxShadow:sectorView===v.id?"0 0 20px rgba(255,167,38,.08)":"none"}},
+                    v.icon+" "+v.label);
+                })}
+              </div>
+
+              {/* ── TradingView 板塊熱力圖 ── */}
+              {sectorView==="tv"&&!sectorDrill&&(
+                <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                  <div className="glass-card" style={{padding:0,overflow:"hidden"}}>
+                    <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)"}}>S&P 500 板塊熱力圖</span>
+                      <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>資料來源：TradingView</span>
+                    </div>
+                    <TVWidget type="stock-heatmap" height={500} config={{
+                      exchanges:[],dataSource:"SPX500",grouping:"sector",blockSize:"market_cap_basic",blockColor:"change",
+                      locale:"zh_TW",symbolUrl:"",colorTheme:"dark",hasTopBar:false,isDataSetEnabled:false,
+                      isZoomEnabled:true,hasSymbolTooltip:true,isMonoSize:false,width:"100%",height:500
+                    }}/>
+                  </div>
+
+                  {/* 板塊績效排行 Widget */}
+                  <div className="glass-card" style={{padding:0,overflow:"hidden"}}>
+                    <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)"}}>板塊績效排行</span>
+                      <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>即時數據</span>
+                    </div>
+                    <TVWidget type="market-overview" height={460} config={{
+                      colorTheme:"dark",dateRange:"12M",showChart:true,locale:"zh_TW",largeChartUrl:"",isTransparent:true,
+                      showSymbolLogo:true,showFloatingTooltip:true,width:"100%",height:460,
+                      tabs:[{title:"板塊 ETF",symbols:[
+                        {s:"AMEX:XLK",d:"科技"},{s:"AMEX:XLF",d:"金融"},{s:"AMEX:XLE",d:"能源"},
+                        {s:"AMEX:XLV",d:"醫療保健"},{s:"AMEX:XLI",d:"工業"},{s:"AMEX:XLP",d:"消費必需品"},
+                        {s:"AMEX:XLY",d:"非必需消費"},{s:"AMEX:XLC",d:"通訊服務"},{s:"AMEX:XLU",d:"公用事業"},
+                        {s:"AMEX:XLB",d:"材料"},{s:"AMEX:XLRE",d:"不動產"}
+                      ],originalTitle:"Sector ETFs"}]
+                    }}/>
+                  </div>
+
+                  {/* 板塊卡片 — 可點擊展開 */}
+                  <div style={{fontSize:12,color:"#6b7280",fontWeight:600,marginTop:4}}>📂 點擊板塊查看 Top 10 成分股</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                    {SECTOR_ETFS.map(function(etf){
+                      var holdings = SECTOR_HOLDINGS[etf.sym] || [];
+                      return React.createElement("div",{key:etf.sym,onClick:function(){
+                        setSectorDrill(etf.sym);
+                        // 抓取個股即時報價
+                        var syms = holdings.map(function(h){return h.sym;});
+                        Promise.all(syms.map(function(s){
+                          return fetchYahoo(s).then(function(d){if(!d)return{sym:s,price:0,change:0,changePct:0};var ch=d.price-d.prev;return{sym:s,price:d.price,change:ch,changePct:d.prev?ch/d.prev*100:0};})
+                            .catch(function(){return{sym:s,price:0,change:0,changePct:0};});
+                        })).then(function(results){
+                          var map = {};
+                          results.forEach(function(r){ map[r.sym]=r; });
+                          setSectorStockPrices(function(prev){ return Object.assign({},prev,map); });
+                        });
+                      },className:"glass-card nb",style:{padding:"16px",cursor:"pointer",textAlign:"center",
+                        borderColor:etf.color+"30",transition:"all .2s"}},
+                        React.createElement("div",{style:{fontSize:28}},etf.icon),
+                        React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#e5e7eb",marginTop:6}},etf.name),
+                        React.createElement("div",{style:{fontSize:11,color:etf.color,fontWeight:600}},etf.sym),
+                        React.createElement("div",{style:{fontSize:10,color:"#6b7280",marginTop:4}},holdings.length+" 檔成分股")
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── 板塊個股明細（Drill-down）── */}
+              {sectorDrill&&(function(){
+                var etfInfo = SECTOR_ETFS.find(function(e){return e.sym===sectorDrill;}) || {};
+                var holdings = SECTOR_HOLDINGS[sectorDrill] || [];
+                return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+                  /* 返回按鈕 + 板塊標題 */
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},
+                    React.createElement("div",{onClick:function(){setSectorDrill(null);},className:"glass-btn nb",
+                      style:{padding:"8px 16px",fontSize:12,color:"#ffa726",cursor:"pointer",
+                        background:"rgba(255,167,38,.08)",border:"1px solid rgba(255,167,38,.2)"}},
+                      "← 返回板塊總覽"),
+                    React.createElement("span",{style:{fontSize:28}},etfInfo.icon||"📊"),
+                    React.createElement("div",null,
+                      React.createElement("div",{style:{fontSize:18,fontWeight:700,color:"#e5e7eb"}},etfInfo.name||sectorDrill),
+                      React.createElement("div",{style:{fontSize:12,color:etfInfo.color||"#ffa726",fontWeight:600}},sectorDrill+" · Top 10 成分股")
+                    )
+                  ),
+
+                  /* TradingView Symbol Overview for the ETF */
+                  React.createElement("div",{className:"glass-card",style:{padding:0,overflow:"hidden"}},
+                    React.createElement("div",{style:{padding:"12px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",fontSize:12,color:"#6b7280",fontWeight:600}},
+                      sectorDrill+" ETF 走勢"),
+                    React.createElement(TVWidget,{type:"symbol-overview",height:300,config:{
+                      symbols:[[sectorDrill,sectorDrill+"|1D"]],
+                      chartOnly:false,width:"100%",height:300,locale:"zh_TW",colorTheme:"dark",
+                      autosize:false,showVolume:true,showMA:true,hideDateRanges:false,
+                      hideMarketStatus:false,hideSymbolLogo:false,scalePosition:"right",
+                      scaleMode:"Normal",fontFamily:"Inter",fontSize:"10",
+                      noTimeScale:false,valuesTracking:"1",changeMode:"price-and-percent",
+                      chartType:"area",maLineColor:"#7c3aed",maLineWidth:1,maLength:20,
+                      lineWidth:2,lineType:0,dateRanges:["1d|1","1m|30","3m|60","12m|1D","60m|1W","all|1M"],
+                      isTransparent:true
+                    }})
+                  ),
+
+                  /* 成分股表格 */
+                  React.createElement("div",{className:"glass-card",style:{padding:0,overflow:"hidden"}},
+                    React.createElement("div",{style:{padding:"12px 18px",borderBottom:"1px solid rgba(255,255,255,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                      React.createElement("span",{style:{fontSize:13,fontWeight:700,color:"#e5e7eb"}},etfInfo.name+" Top 10 成分股"),
+                      React.createElement("span",{style:{fontSize:10,color:"#6b7280"}},"即時報價")
+                    ),
+                    /* 表頭 */
+                    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"50px 1fr 100px 100px 90px",padding:"8px 18px",
+                      borderBottom:"1px solid rgba(255,255,255,.06)",background:"rgba(255,255,255,.03)"}},
+                      React.createElement("span",{style:{fontSize:10,color:"#6b7280",fontWeight:600}},"#"),
+                      React.createElement("span",{style:{fontSize:10,color:"#6b7280",fontWeight:600}},"股票"),
+                      React.createElement("span",{style:{fontSize:10,color:"#6b7280",fontWeight:600,textAlign:"right"}},"現價"),
+                      React.createElement("span",{style:{fontSize:10,color:"#6b7280",fontWeight:600,textAlign:"right"}},"漲跌"),
+                      React.createElement("span",{style:{fontSize:10,color:"#6b7280",fontWeight:600,textAlign:"right"}},"漲跌%")
+                    ),
+                    /* 個股行 */
+                    holdings.map(function(h,hi){
+                      var sp = sectorStockPrices[h.sym] || {};
+                      var hasPrice = sp.price > 0;
+                      var isPos = (sp.change||0) >= 0;
+                      var chgColor = isPos?"#10b981":"#ef4444";
+                      return React.createElement("div",{key:h.sym,style:{display:"grid",gridTemplateColumns:"50px 1fr 100px 100px 90px",
+                        padding:"10px 18px",alignItems:"center",borderBottom:"1px solid rgba(255,255,255,.03)",
+                        background:hi%2===0?"transparent":"rgba(255,255,255,.015)",
+                        cursor:"pointer",transition:"background .15s"},
+                        onMouseEnter:function(e){e.currentTarget.style.background="rgba(255,167,38,.04)";},
+                        onMouseLeave:function(e){e.currentTarget.style.background=hi%2===0?"transparent":"rgba(255,255,255,.015)";}},
+                        React.createElement("span",{style:{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.4)"}},hi+1),
+                        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                          React.createElement("div",{style:{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,.06)",
+                            display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:etfInfo.color||"#ffa726"}},
+                            h.sym.slice(0,2)),
+                          React.createElement("div",null,
+                            React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#e5e7eb"}},h.sym),
+                            React.createElement("div",{style:{fontSize:11,color:"#6b7280"}},h.name)
+                          )
+                        ),
+                        React.createElement("span",{style:{textAlign:"right",fontSize:14,fontWeight:600,color:"#d1d5db",
+                          fontFamily:"'IBM Plex Mono',monospace"}},
+                          hasPrice?"$"+sp.price.toFixed(2):React.createElement("span",{style:{fontSize:11,color:"#6b728060"}},"載入中…")),
+                        React.createElement("span",{style:{textAlign:"right",fontSize:13,fontWeight:600,color:hasPrice?chgColor:"#6b7280",
+                          fontFamily:"'IBM Plex Mono',monospace"}},
+                          hasPrice?((isPos?"+":"")+sp.change.toFixed(2)):"—"),
+                        React.createElement("div",{style:{textAlign:"right"}},
+                          hasPrice?React.createElement("span",{style:{fontSize:12,fontWeight:700,color:chgColor,
+                            padding:"3px 8px",borderRadius:4,background:chgColor+"15"}},
+                            (isPos?"+":"")+sp.changePct.toFixed(2)+"%")
+                          :React.createElement("span",{style:{fontSize:11,color:"#6b728060"}},"—")
+                        )
+                      );
+                    })
+                  ),
+
+                  /* 同板塊其他 ETF */
+                  React.createElement("div",{style:{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",
+                    borderRadius:12,padding:"14px 18px"}},
+                    React.createElement("div",{style:{fontSize:11,color:"#6b7280",marginBottom:8}},"快速切換板塊"),
+                    React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+                      SECTOR_ETFS.map(function(e){
+                        var isActive = e.sym===sectorDrill;
+                        return React.createElement("div",{key:e.sym,onClick:function(){
+                          setSectorDrill(e.sym);
+                          var hs = SECTOR_HOLDINGS[e.sym]||[];
+                          Promise.all(hs.map(function(h){
+                            return fetchYahoo(h.sym).then(function(d){if(!d)return{sym:h.sym,price:0,change:0,changePct:0};var ch=d.price-d.prev;return{sym:h.sym,price:d.price,change:ch,changePct:d.prev?ch/d.prev*100:0};})
+                              .catch(function(){return{sym:h.sym,price:0,change:0,changePct:0};});
+                          })).then(function(results){
+                            var map={};results.forEach(function(r){map[r.sym]=r;});
+                            setSectorStockPrices(function(prev){return Object.assign({},prev,map);});
+                          });
+                        },className:"glass-btn nb",style:{padding:"6px 14px",fontSize:12,cursor:"pointer",
+                          color:isActive?e.color:"rgba(255,255,255,.4)",
+                          background:isActive?e.color+"15":"rgba(255,255,255,.03)",
+                          border:"1px solid "+(isActive?e.color+"40":"rgba(255,255,255,.06)"),
+                          fontWeight:isActive?700:400}},
+                          e.icon+" "+e.name);
+                      })
+                    )
+                  )
+                );
+              })()}
+
+              {/* ── 自訂日期區間查詢 ── */}
+              {sectorView==="custom"&&!sectorDrill&&(
+                <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                  <div className="glass-card" style={{padding:"18px 20px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:12,color:"rgba(255,255,255,.5)"}}>起始</span>
+                        <input type="date" value={sectorDateFrom} onChange={function(e){setSectorDateFrom(e.target.value);}}
+                          style={{padding:"7px 12px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",
+                            borderRadius:10,color:"#fff",fontSize:13,colorScheme:"dark"}}/>
+                      </div>
+                      <span style={{color:"rgba(255,255,255,.3)"}}>→</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:12,color:"rgba(255,255,255,.5)"}}>結束</span>
+                        <input type="date" value={sectorDateTo} onChange={function(e){setSectorDateTo(e.target.value);}}
+                          style={{padding:"7px 12px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",
+                            borderRadius:10,color:"#fff",fontSize:13,colorScheme:"dark"}}/>
+                      </div>
+                      <div onClick={function(){
+                        setSectorLoading(true); setSectorData(null);
+                        fetchSectorPerf(sectorDateFrom, sectorDateTo).then(function(data){
+                          setSectorData(data); setSectorLoading(false);
+                        }).catch(function(e){ console.warn("sector fetch error:",e); setSectorLoading(false); });
+                      }} className="glass-btn" style={{padding:"8px 20px",fontSize:13,fontWeight:600,color:"#ffa726",
+                        background:"rgba(255,167,38,.1)",border:"1px solid rgba(255,167,38,.3)",
+                        boxShadow:"0 0 20px rgba(255,167,38,.1)"}}>
+                        {sectorLoading?"查詢中…":"查詢板塊績效"}
+                      </div>
+                      <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
+                        {[{label:"YTD",fn:function(){var y=new Date().getFullYear();setSectorDateFrom(y+"-01-01");setSectorDateTo(new Date().toISOString().split("T")[0]);}},
+                          {label:"1M",fn:function(){var d=new Date();d.setMonth(d.getMonth()-1);setSectorDateFrom(d.toISOString().split("T")[0]);setSectorDateTo(new Date().toISOString().split("T")[0]);}},
+                          {label:"3M",fn:function(){var d=new Date();d.setMonth(d.getMonth()-3);setSectorDateFrom(d.toISOString().split("T")[0]);setSectorDateTo(new Date().toISOString().split("T")[0]);}},
+                          {label:"1Y",fn:function(){var d=new Date();d.setFullYear(d.getFullYear()-1);setSectorDateFrom(d.toISOString().split("T")[0]);setSectorDateTo(new Date().toISOString().split("T")[0]);}}
+                        ].map(function(b){
+                          return React.createElement("div",{key:b.label,onClick:b.fn,className:"glass-btn",
+                            style:{padding:"5px 12px",fontSize:11,color:"rgba(255,255,255,.5)",cursor:"pointer"}},b.label);
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {sectorData&&sectorData.length>0&&(
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>排序：</span>
+                      {[{id:"pct_desc",label:"績效高→低"},{id:"pct_asc",label:"績效低→高"},{id:"name",label:"板塊名稱"}].map(function(s){
+                        return React.createElement("div",{key:s.id,onClick:function(){setSectorSort(s.id);},className:"glass-btn",
+                          style:{padding:"4px 12px",fontSize:11,
+                            color:sectorSort===s.id?"#ffa726":"rgba(255,255,255,.4)",
+                            background:sectorSort===s.id?"rgba(255,167,38,.1)":"rgba(255,255,255,.04)",
+                            border:sectorSort===s.id?"1px solid rgba(255,167,38,.3)":"1px solid rgba(255,255,255,.08)"}},s.label);
+                      })}
+                      <span style={{marginLeft:"auto",fontSize:11,color:"rgba(255,255,255,.3)"}}>{sectorDateFrom+" → "+sectorDateTo}</span>
+                    </div>
+                  )}
+
+                  {sectorLoading&&(
+                    <div style={{textAlign:"center",padding:40}}>
+                      <div style={{fontSize:32,animation:"pulse 1s infinite"}}>📊</div>
+                      <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginTop:8}}>正在抓取 11 大板塊 ETF 歷史數據…</div>
+                    </div>
+                  )}
+
+                  {!sectorData&&!sectorLoading&&(
+                    <div style={{textAlign:"center",padding:50}}>
+                      <div style={{fontSize:40,marginBottom:12}}>📈</div>
+                      <div style={{fontSize:14,color:"rgba(255,255,255,.4)",marginBottom:6}}>選擇日期區間後點「查詢板塊績效」</div>
+                      <div style={{fontSize:12,color:"rgba(255,255,255,.25)"}}>使用 S&P 500 板塊 ETF（XLK/XLF/XLE…）即時計算</div>
+                    </div>
+                  )}
+
+                  {sectorData&&sectorData.length>0&&(
+                    <div className="glass-card" style={{overflow:"hidden",padding:0}}>
+                      <div style={{display:"grid",gridTemplateColumns:"44px 1fr 90px 90px 120px 60px",padding:"12px 18px",
+                        borderBottom:"1px solid rgba(255,255,255,.08)",background:"rgba(255,255,255,.04)"}}>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>#</span>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>板塊</span>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"right"}}>起始價</span>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"right"}}>結束價</span>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"right"}}>報酬率</span>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,.35)",textAlign:"center"}}>走勢</span>
+                      </div>
+                      {sectorData.slice().sort(function(a,b){
+                        if(sectorSort==="pct_desc") return b.pct-a.pct;
+                        if(sectorSort==="pct_asc") return a.pct-b.pct;
+                        return a.name.localeCompare(b.name,"zh-TW");
+                      }).map(function(sec,idx){
+                        var isPos = sec.pct >= 0;
+                        var barW = Math.min(100, Math.abs(sec.pct) * 2);
+                        var closes = sec.closes || [];
+                        var mn = Math.min.apply(null,closes), mx = Math.max.apply(null,closes);
+                        var range = mx - mn || 1;
+                        var sparkH = 24, sparkW = 50;
+                        var sparkPts = closes.map(function(c,i){ return (i/(closes.length-1||1))*sparkW+","+(sparkH-(c-mn)/range*sparkH); }).join(" ");
+                        return React.createElement("div",{key:sec.sym,onClick:function(){
+                          setSectorDrill(sec.sym);
+                          var hs = SECTOR_HOLDINGS[sec.sym]||[];
+                          Promise.all(hs.map(function(h){
+                            return fetchYahoo(h.sym).then(function(d){if(!d)return{sym:h.sym,price:0,change:0,changePct:0};var ch=d.price-d.prev;return{sym:h.sym,price:d.price,change:ch,changePct:d.prev?ch/d.prev*100:0};})
+                              .catch(function(){return{sym:h.sym,price:0,change:0,changePct:0};});
+                          })).then(function(results){
+                            var map={};results.forEach(function(r){map[r.sym]=r;});
+                            setSectorStockPrices(function(prev){return Object.assign({},prev,map);});
+                          });
+                        },style:{display:"grid",gridTemplateColumns:"44px 1fr 90px 90px 120px 60px",
+                          padding:"12px 18px",alignItems:"center",cursor:"pointer",
+                          borderBottom:"1px solid rgba(255,255,255,.04)",
+                          background:idx%2===0?"transparent":"rgba(255,255,255,.02)",
+                          transition:"background .15s"},
+                          onMouseEnter:function(e){e.currentTarget.style.background="rgba(255,167,38,.04)";},
+                          onMouseLeave:function(e){e.currentTarget.style.background=idx%2===0?"transparent":"rgba(255,255,255,.02)";}},
+                          React.createElement("span",{style:{fontSize:13,fontWeight:700,color:idx<3?(isPos?"#10b981":"#ef4444"):"rgba(255,255,255,.4)"}},idx+1),
+                          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+                            React.createElement("span",{style:{fontSize:18}},sec.icon),
+                            React.createElement("div",null,
+                              React.createElement("div",{style:{fontSize:14,fontWeight:600,color:"#fff"}},sec.name),
+                              React.createElement("div",{style:{fontSize:11,color:"rgba(255,255,255,.3)"}},sec.sym)
+                            )
+                          ),
+                          React.createElement("span",{style:{fontSize:13,color:"rgba(255,255,255,.5)",textAlign:"right",fontFamily:"'IBM Plex Mono',monospace"}},"$"+sec.startPrice.toFixed(2)),
+                          React.createElement("span",{style:{fontSize:13,color:"rgba(255,255,255,.5)",textAlign:"right",fontFamily:"'IBM Plex Mono',monospace"}},"$"+sec.endPrice.toFixed(2)),
+                          React.createElement("div",{style:{textAlign:"right",position:"relative"}},
+                            React.createElement("div",{style:{fontSize:15,fontWeight:700,color:isPos?"#10b981":"#ef4444",fontFamily:"'IBM Plex Mono',monospace"}},
+                              (isPos?"+":"")+sec.pct.toFixed(2)+"%"),
+                            React.createElement("div",{style:{position:"absolute",bottom:-2,right:0,height:3,borderRadius:2,
+                              width:barW,background:isPos?"linear-gradient(90deg,transparent,#10b981)":"linear-gradient(90deg,#ef4444,transparent)",
+                              boxShadow:isPos?"0 0 8px rgba(16,185,129,.3)":"0 0 8px rgba(239,68,68,.3)",opacity:.6}})
+                          ),
+                          React.createElement("div",{style:{display:"flex",justifyContent:"center"}},
+                            closes.length>2?React.createElement("svg",{width:sparkW,height:sparkH,style:{overflow:"visible"}},
+                              React.createElement("polyline",{points:sparkPts,fill:"none",
+                                stroke:isPos?"#10b981":"#ef4444",strokeWidth:1.5,strokeLinejoin:"round",opacity:.7})
+                            ):React.createElement("span",{style:{fontSize:10,color:"rgba(255,255,255,.2)"}},"—")
+                          )
+                        );
+                      })}
+                      <div style={{padding:"14px 18px",background:"rgba(255,255,255,.04)",borderTop:"1px solid rgba(255,255,255,.08)",
+                        display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>
+                          {"共 "+sectorData.length+" 個板塊 · 點擊可查看成分股"}
+                        </span>
+                        <div style={{display:"flex",gap:16}}>
+                          <span style={{fontSize:12,color:"#10b981"}}>{"上漲 "+sectorData.filter(function(s){return s.pct>=0;}).length}</span>
+                          <span style={{fontSize:12,color:"#ef4444"}}>{"下跌 "+sectorData.filter(function(s){return s.pct<0;}).length}</span>
+                          <span style={{fontSize:12,color:"rgba(255,255,255,.5)",fontWeight:600}}>
+                            {"平均 "+(sectorData.reduce(function(a,s){return a+s.pct;},0)/sectorData.length).toFixed(2)+"%"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {sectorData&&sectorData.length===0&&!sectorLoading&&(
+                    <div style={{textAlign:"center",padding:40}}>
+                      <div style={{fontSize:32,marginBottom:8}}>⚠️</div>
+                      <div style={{fontSize:13,color:"rgba(255,255,255,.4)"}}>查無數據，請確認日期區間是否有效（需為交易日）</div>
+                    </div>
+                  )}
                 </div>
               )}
 
