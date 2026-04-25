@@ -110,8 +110,49 @@
       Plus, X, CircleDot,
       // App icons
       Wifi, WifiOff, RefreshCw, AlertCircle, ChevronDown, ChevronUp,
-      Settings, ArrowRight,
+      Settings, ArrowRight, HelpCircle,
     } = Lucide;
+
+    // ────────────────────────────────────────────────────────────
+    // HelpTooltip — hover (?) icon for inline section help
+    // ────────────────────────────────────────────────────────────
+    function HelpTooltip({ text }) {
+      const [open, setOpen] = useState(false);
+      return (
+        <span
+          style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '6px', cursor: 'help', verticalAlign: 'middle' }}
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+        >
+          {HelpCircle ? <HelpCircle size={12} style={{ color: '#6b7280', opacity: 0.7 }} /> : <span style={{ color: '#6b7280', fontSize: '11px', fontWeight: 700 }}>(?)</span>}
+          {open && (
+            <div style={{
+              position: 'absolute',
+              bottom: 'calc(100% + 8px)',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#1a1a1a',
+              border: '1px solid #3a3a3a',
+              borderRadius: '6px',
+              padding: '10px 12px',
+              fontSize: '11px',
+              fontFamily: 'Noto Sans TC',
+              color: '#e5e7eb',
+              lineHeight: '1.7',
+              width: '300px',
+              zIndex: 1000,
+              whiteSpace: 'pre-line',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.6)',
+              textAlign: 'left',
+              fontWeight: 'normal',
+              letterSpacing: 'normal',
+            }}>
+              {text}
+            </div>
+          )}
+        </span>
+      );
+    }
 
 // ============================================================
 // L2 MACRO DASHBOARD (IIFE-isolated scope)
@@ -1740,6 +1781,7 @@ function ScorecardBreakdown({ indicatorScores, moveValue, t10y2yValue, effective
       <div className="section-title">
         <BarChart3 size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">評分明細 Scorecard Breakdown</span>
+        <HelpTooltip text={'計算邏輯（加權總分 0–100）：\n• 淨流動性站上 20MA × 40%\n• SPX 站上 20MA × 30%\n• MOVE Index < 130 × 20%\n• T10Y2Y 利差 > 0.5% × 10%\n\n分數對應倉位帶：\n• 70–100 全面進攻（100% 部位）\n• 50–69 偏進攻（80%）\n• 30–49 中性偏防（50%）\n• <30 全面撤退（30%，啟動對沖）'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           WEIGHTED · 0.4/0.3/0.2/0.1
         </span>
@@ -1873,6 +1915,7 @@ function RedAlertSection({
         <span className="font-tc font-bold text-primary text-sm">
           紅色警報系統
         </span>
+        <HelpTooltip text={'三大紅色警報觸發條件：\n• CRITICAL：MOVE Index > 130（債市恐慌信號）\n• HIGH：T10Y2Y 利差由負轉正（衰退領先 6–18 個月）\n• HIGH：失業率連 2 個月上升（景氣轉折）\n\n任一觸發 → L1 Hedge 預算自動加碼\n（CRITICAL +30bps / HIGH 各 +15bps）'} />
         <span className="text-xs font-mono-dm" style={{
           marginLeft: 'auto',
           color: overallStatus === 'safe' ? '#10b981' : overallStatus === 'caution' ? '#EAB308' : '#ef4444',
@@ -1988,6 +2031,7 @@ function EconomicCycleSection({ economicQuadrant, pmiValue, cpiTrend }) {
       <div className="section-title">
         <Compass size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">經濟週期四象限 (PMI × CPI)</span>
+        <HelpTooltip text={'用 PMI × CPI 趨勢分四象限：\n\n復甦：PMI↑ + CPI↓\n  → 買金融、小型股、消費循環\n擴張：PMI↑ + CPI↑\n  → 買能源、工業、原物料\n滯脹：PMI↓ + CPI↑\n  → 買必需消費、醫療、公用\n衰退：PMI↓ + CPI↓\n  → 買長天期公債、防禦型'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           PMI {pmiValue.toFixed(1)} · CPI {cpiTrend.toUpperCase()}
         </span>
@@ -2095,6 +2139,7 @@ function RRGMatrixSection({ sectorsByQuadrant, sectorPlacement, onCycle, effecti
       <div className="section-title">
         <Activity size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">RRG 板塊輪動矩陣</span>
+        <HelpTooltip text={'Relative Rotation Graph：\n\n領先 Leading（強且加速）→ 加碼\n走弱 Weakening（強但動能弱）→ 減碼\n落後 Lagging（弱且動能弱）→ 避開\n改善 Improving（弱但動能強）→ 觀察布局\n\n點擊象限切換顯示該區板塊。\n進攻分數 = 領先象限板塊數 / 6'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           進攻 Leading: {effectiveRrgCount}/6 · 點擊切換象限
         </span>
@@ -2214,6 +2259,7 @@ function ScenarioPlannerSection({
       <div className="section-title">
         <Play size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">下週劇本演練 (If-Then Planner)</span>
+        <HelpTooltip text={'10 個事件情境的 If-Then 標準應對：\n• CPI 高/低於預期\n• Fed 鴿派/鷹派\n• NFP 強/弱\n• M7 財報優/不及\n• PMI 突破/跌破 50\n\n每個情境內含：\n立即動作 + 倉位調整 + 停損條件\n（按「✨ AI Generate」可用 Claude 即時生成最新版）'} />
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           {isFromAI && (
             <span
@@ -2421,6 +2467,7 @@ function L1IntegrationSection({ weightedTotal, positionBand, redAlerts, l1HedgeB
       <div className="section-title">
         <GitBranch size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">L1 Hedge 串聯建議</span>
+        <HelpTooltip text={'L2 → L1 翻譯邏輯：\n\nBase bps = 倉位帶基本值\n（進攻 30 / 中性 50 / 防守 80 / 撤退 100）\n\n+ Critical alert：+30 bps\n+ High alert：每個 +15 bps\n\nUSD 預算 = (bps / 10000) × 持倉總值\n\n執行清單列出推薦商品（QQQ/SPY Put、VIX）'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           L2 → L1 PIPELINE
         </span>
@@ -3842,6 +3889,7 @@ function VIXHedgeCalculator({
                 <div className="flex items-center gap-2">
                   <BarChart3 size={14} className="text-accent" />
                   <span className="font-tc font-bold text-primary text-sm">情境 P&L 分析</span>
+                  <HelpTooltip text={'三個 macro scenario 的持倉 P&L 推算：\n\n樂觀 (+5% SPX)：預估獲利\n基準 (持平)：時間衰減成本\n悲觀 (–5% SPX)：最大回撤估算\n\n含 Greek 計算：\n損益 ≈ Delta × Beta × ΔSPX × 持倉值'} />
                 </div>
                 <PnLModeToggle mode={pnlMode} setMode={setPnlMode} />
               </div>
@@ -3945,6 +3993,7 @@ function VIXHedgeCalculator({
               <div className="section-title" style={{ marginBottom: '12px', paddingBottom: '8px' }}>
                 <Clock size={14} className="text-accent" />
                 <span className="font-tc font-bold text-primary text-sm">進場時機紀律</span>
+                <HelpTooltip text={'T-N 天執行檢核表：\n\nT–7：觀察 IV / 波動率變化\nT–3：確認 catalyst 強度\nT–1：開倉 / 加碼最後機會\nT+0：事件當日決策\nT+1：結算 / 停損\n\n避免「事件前慌張開倉、事件後遲遲不停損」'} />
                 <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>T-{daysToEvent}</span>
               </div>
               <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '-4px', marginBottom: '12px' }}>
@@ -4242,6 +4291,7 @@ function PortfolioBetaSection({
       <div className="section-title" style={{ marginBottom: '14px' }}>
         <Database size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">Portfolio Beta · 持倉組合</span>
+        <HelpTooltip text={'Beta = 持倉組合對 SPX 的敏感度\n\nBeta > 1.0：比大盤波動更大（高 β）\nBeta = 1.0：與大盤同步\nBeta < 1.0：比大盤穩定\n\n過高時建議用 SPY Put 中性化\n（目標 Beta = 0.5–0.8 較穩健）'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           {externalConnected ? 'EXTERNAL · SYNCED' : 'MANUAL'}
         </span>
@@ -4379,6 +4429,7 @@ function StockStressSection({
       <div className="section-title" style={{ marginBottom: '14px' }}>
         <Crosshair size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">Single Stock Stress Test · NVDA→QQQ</span>
+        <HelpTooltip text={'NVDA → QQQ 對沖邏輯：\n\nNVDA 在 QQQ 中佔約 8% 權重\n單純權重看：NVDA 跌 10% → QQQ 跌 0.8%\n\n但實務上 NVDA 大跌時整個科技股連動\n→ QQQ 跌幅放大 2–3 倍\n\n建議用 QQQ Put 對沖 NVDA 單一風險\n（同樣的避險效果，成本更低）'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           別人賭 NVDA · 聰明人看 NVDA 賭 QQQ
         </span>
