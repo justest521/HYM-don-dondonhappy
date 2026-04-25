@@ -111,14 +111,15 @@ async function handleFred(url, env) {
   }
 
   // FRED API call
+  const cleanKey = (env.FRED_API_KEY || '').trim();
   const fredUrl = 'https://api.stlouisfed.org/fred/series/observations'
     + '?series_id=' + encodeURIComponent(series)
-    + '&api_key=' + env.FRED_API_KEY
+    + '&api_key=' + encodeURIComponent(cleanKey)
     + '&file_type=json'
     + '&sort_order=desc'
     + '&limit=' + limit;
 
-  const fredRes = await fetch(fredUrl);
+  const fredRes = await fetch(fredUrl, { headers: { 'User-Agent': 'curl/8.0' } });
   if (!fredRes.ok) {
     const errText = await fredRes.text();
     return jsonResponse({
@@ -159,16 +160,17 @@ async function handleFredBatch(url, env) {
   const seriesList = seriesParam.split(',').map(s => s.trim()).filter(Boolean);
   if (seriesList.length > 10) return jsonResponse({ error: 'Max 10 series per batch' }, 400);
 
+  const cleanKey = (env.FRED_API_KEY || '').trim();
   const results = await Promise.all(
     seriesList.map(async (s) => {
       try {
         const fredUrl = 'https://api.stlouisfed.org/fred/series/observations'
           + '?series_id=' + encodeURIComponent(s)
-          + '&api_key=' + env.FRED_API_KEY
+          + '&api_key=' + encodeURIComponent(cleanKey)
           + '&file_type=json'
           + '&sort_order=desc'
           + '&limit=' + limit;
-        const r = await fetch(fredUrl);
+        const r = await fetch(fredUrl, { headers: { 'User-Agent': 'curl/8.0' } });
         if (!r.ok) return { series: s, error: 'FRED returned ' + r.status };
         const d = await r.json();
         return {
