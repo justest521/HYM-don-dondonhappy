@@ -755,7 +755,86 @@ function inferYieldCurveHistory(t10y2yObs) {
   return { wasNegative, latest, minInWindow };
 }
 
-// AI scenario expander — call worker /api/ai with a structured prompt
+// ============================================================
+// POLYGON HELPERS
+// ============================================================
+
+// 抓 SPX 20-week MA 判斷，用於 紅色警報「SPX 站上 20MA」
+async function fetchSPX20MA() {
+  const url = WORKER_URL + '/api/polygon/sma?ticker=I:SPX&window=20&timespan=week';
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('SPX 20MA fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+// 抓 VIX 現價（包括 fallback 到 VIXY）
+async function fetchVIXSpot() {
+  // Try VIX index first
+  const url = WORKER_URL + '/api/polygon/quote?ticker=I:VIX';
+  const res = await fetch(url);
+  const data = await res.json();
+  if (res.ok && isFinite(data.price)) {
+    return { price: data.price, source: 'I:VIX', asOf: data.asOf };
+  }
+  // Fallback to VIXY ETF (high correlation but not 1:1)
+  const fallbackUrl = WORKER_URL + '/api/polygon/quote?ticker=VIXY';
+  const fallbackRes = await fetch(fallbackUrl);
+  const fallbackData = await fallbackRes.json();
+  if (fallbackRes.ok && isFinite(fallbackData.price)) {
+    return {
+      price: null,
+      proxyPrice: fallbackData.price,
+      source: 'VIXY proxy',
+      asOf: fallbackData.asOf,
+      note: 'VIX index unavailable on your Polygon plan — VIXY ETF used as proxy (not 1:1)',
+    };
+  }
+  throw new Error('Could not fetch VIX from Polygon');
+}
+
+// 抓 SPY 現價（用於 header 顯示）
+async function fetchSPYQuote() {
+  const url = WORKER_URL + '/api/polygon/quote?ticker=SPY';
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('SPY fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+// 抓 VIX option chain 在指定 expiry，給定 strikes
+async function fetchVIXOptionChain(expiry, strikes = [16, 18, 20, 22]) {
+  const url = WORKER_URL + '/api/polygon/option-chain'
+    + '?underlying=VIX'
+    + '&expiry=' + expiry
+    + '&strikes=' + strikes.join(',')
+    + '&type=call';
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('VIX chain fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+// 抓單股 ATM straddle → implied move
+async function fetchImpliedMove(ticker, expiry) {
+  const url = WORKER_URL + '/api/polygon/atm-straddle'
+    + '?underlying=' + ticker
+    + '&expiry=' + expiry;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('ATM straddle fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+
 async function expandScenarioWithAI({ eventType, eventLabel, score, bandLabel, economicQuadrantLabel, redAlerts }) {
   const alertsDesc = redAlerts.length === 0
     ? '無紅色警報觸發'
@@ -860,6 +939,12 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
   const [fredError, setFredError] = useState(null);
   const [fredDetails, setFredDetails] = useState(null); // raw computed values for display
 
+  // STATE: Polygon auto-sync (SPX 20MA + VIX/SPY quotes)
+  const [polygonStatus, setPolygonStatus] = useState('idle');
+  const [polygonSyncTime, setPolygonSyncTime] = useState(null);
+  const [polygonError, setPolygonError] = useState(null);
+  const [polygonDetails, setPolygonDetails] = useState(null); // { spxSMA, vix, spy }
+
   // STATE: AI scenario override
   const [aiScenarios, setAiScenarios] = useState({}); // { eventId: { bullish, bearish } }
   const [aiLoading, setAiLoading] = useState(false);
@@ -912,9 +997,55 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
     }
   }, []);
 
+  // ──────────────────────────────────────────────────────────
+  // Polygon auto-sync handler
+  // ──────────────────────────────────────────────────────────
+  const syncPolygon = useCallback(async () => {
+    setPolygonStatus('fetching');
+    setPolygonError(null);
+    try {
+      // 平行抓 3 個（SPX SMA / VIX spot / SPY quote）
+      // 任一個失敗就 partial result，不阻塞其他兩個
+      const [spxSMA, vix, spy] = await Promise.allSettled([
+        fetchSPX20MA(),
+        fetchVIXSpot(),
+        fetchSPYQuote(),
+      ]);
+
+      const result = {
+        spxSMA: spxSMA.status === 'fulfilled' ? spxSMA.value : null,
+        spxSMAError: spxSMA.status === 'rejected' ? spxSMA.reason?.message : null,
+        vix: vix.status === 'fulfilled' ? vix.value : null,
+        vixError: vix.status === 'rejected' ? vix.reason?.message : null,
+        spy: spy.status === 'fulfilled' ? spy.value : null,
+        spyError: spy.status === 'rejected' ? spy.reason?.message : null,
+      };
+
+      // Apply: SPX 20MA → setSpxAboveMA（L2 own state）
+      if (result.spxSMA && result.spxSMA.aboveMA != null) {
+        setSpxAboveMA(result.spxSMA.aboveMA);
+      }
+      // VIX spot 在 L1，不在 L2 的 own state。透過 onScoreChange 一起 emit 到 parent，App 再轉給 L1。
+
+      setPolygonDetails(result);
+      setPolygonSyncTime(new Date());
+      // 部分成功也算 synced（fail-soft 策略）
+      const anyOk = result.spxSMA || result.vix || result.spy;
+      setPolygonStatus(anyOk ? 'synced' : 'error');
+      if (!anyOk) {
+        setPolygonError(result.spxSMAError || result.vixError || result.spyError || 'All Polygon calls failed');
+      }
+    } catch (e) {
+      console.error('[L2] Polygon sync error:', e);
+      setPolygonError(e.message || String(e));
+      setPolygonStatus('error');
+    }
+  }, []);
+
   // Auto-sync on mount
   useEffect(() => {
     syncFRED();
+    syncPolygon();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1013,9 +1144,11 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
         redAlerts,
         l1HedgeBudgetBps,
         economicQuadrant,
+        // Polygon details for cross-layer use (App → L1)
+        polygonDetails,
       });
     }
-  }, [weightedTotal, positionBand, redAlerts, l1HedgeBudgetBps, economicQuadrant, onScoreChange]);
+  }, [weightedTotal, positionBand, redAlerts, l1HedgeBudgetBps, economicQuadrant, polygonDetails, onScoreChange]);
 
   // ──────────────────────────────────────────────────────────
   // HANDLERS
@@ -1117,6 +1250,15 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
               error={fredError}
               details={fredDetails}
               onSync={syncFRED}
+            />
+
+            {/* ────────── Polygon Auto-Sync Bar (SPX 20MA + VIX/SPY) ────────── */}
+            <PolygonSyncBar
+              status={polygonStatus}
+              syncTime={polygonSyncTime}
+              error={polygonError}
+              details={polygonDetails}
+              onSync={syncPolygon}
             />
 
             {/* Section: 核心 4 指標 */}
@@ -1634,9 +1776,13 @@ function ScorecardBreakdown({ indicatorScores, moveValue, t10y2yValue, effective
       <div className="section-title">
         <BarChart3 size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">評分明細 Scorecard Breakdown</span>
+        <HelpTooltip text={'計算邏輯（加權總分 0–100）：\n• 淨流動性站上 20MA × 40%\n• SPX 站上 20MA × 30%\n• MOVE Index < 130 × 20%\n• T10Y2Y 利差 > 0.5% × 10%\n\n分數對應倉位帶：\n• 70–100 全面進攻（100% 部位）\n• 50–69 偏進攻（80%）\n• 30–49 中性偏防（50%）\n• <30 全面撤退（30%，啟動對沖）'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           WEIGHTED · 0.4/0.3/0.2/0.1
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 把今日 0–100 總分拆解 — 流動性、SPX、MOVE、利差、RRG 各佔多少分，找出今日主要扣分項。
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
@@ -1764,6 +1910,7 @@ function RedAlertSection({
         <span className="font-tc font-bold text-primary text-sm">
           紅色警報系統
         </span>
+        <HelpTooltip text={'三大紅色警報觸發條件：\n• CRITICAL：MOVE Index > 130（債市恐慌信號）\n• HIGH：T10Y2Y 利差由負轉正（衰退領先 6–18 個月）\n• HIGH：失業率連 2 個月上升（景氣轉折）\n\n任一觸發 → L1 Hedge 預算自動加碼\n（CRITICAL +30bps / HIGH 各 +15bps）'} />
         <span className="text-xs font-mono-dm" style={{
           marginLeft: 'auto',
           color: overallStatus === 'safe' ? '#10b981' : overallStatus === 'caution' ? '#EAB308' : '#ef4444',
@@ -1771,6 +1918,9 @@ function RedAlertSection({
         }}>
           {overallStatus === 'safe' ? 'CLEAR · 0/3' : triggeredCount + '/3 TRIGGERED'}
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 即時監控致命警報：MOVE&gt;130 危機、利差倒掛轉正、失業率連 2 月升、淨流動性負值、SPX 跌破 20MA。
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1876,9 +2026,13 @@ function EconomicCycleSection({ economicQuadrant, pmiValue, cpiTrend }) {
       <div className="section-title">
         <Compass size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">經濟週期四象限 (PMI × CPI)</span>
+        <HelpTooltip text={'用 PMI × CPI 趨勢分四象限：\n\n復甦：PMI↑ + CPI↓\n  → 買金融、小型股、消費循環\n擴張：PMI↑ + CPI↑\n  → 買能源、工業、原物料\n滯脹：PMI↓ + CPI↑\n  → 買必需消費、醫療、公用\n衰退：PMI↓ + CPI↓\n  → 買長天期公債、防禦型'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           PMI {pmiValue.toFixed(1)} · CPI {cpiTrend.toUpperCase()}
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 用 PMI × CPI 趨勢定位當下經濟週期（復甦／擴張／滯脹／衰退），決定該避險還是進攻哪些板塊。
       </div>
 
       {/* Visual quadrant matrix */}
@@ -1980,9 +2134,13 @@ function RRGMatrixSection({ sectorsByQuadrant, sectorPlacement, onCycle, effecti
       <div className="section-title">
         <Activity size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">RRG 板塊輪動矩陣</span>
+        <HelpTooltip text={'Relative Rotation Graph：\n\n領先 Leading（強且加速）→ 加碼\n走弱 Weakening（強但動能弱）→ 減碼\n落後 Lagging（弱且動能弱）→ 避開\n改善 Improving（弱但動能強）→ 觀察布局\n\n點擊象限切換顯示該區板塊。\n進攻分數 = 領先象限板塊數 / 6'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           進攻 Leading: {effectiveRrgCount}/6 · 點擊切換象限
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 11 個 GICS 板塊的相對強度／動能矩陣 — 看哪些板塊正在「領先 / 走弱 / 落後 / 改善」，決定資金流向。
       </div>
 
       {/* 2x2 grid of quadrants */}
@@ -2096,6 +2254,7 @@ function ScenarioPlannerSection({
       <div className="section-title">
         <Play size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">下週劇本演練 (If-Then Planner)</span>
+        <HelpTooltip text={'10 個事件情境的 If-Then 標準應對：\n• CPI 高/低於預期\n• Fed 鴿派/鷹派\n• NFP 強/弱\n• M7 財報優/不及\n• PMI 突破/跌破 50\n\n每個情境內含：\n立即動作 + 倉位調整 + 停損條件\n（按「✨ AI Generate」可用 Claude 即時生成最新版）'} />
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           {isFromAI && (
             <span
@@ -2146,6 +2305,9 @@ function ScenarioPlannerSection({
           )}
           <span className="text-xs text-muted-2 font-mono-dm">SCENARIO PLANNING</span>
         </div>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 10 個事件情境的 If-Then 應對劇本，事先排好交易計畫。
       </div>
 
       {aiError && (
@@ -2300,9 +2462,13 @@ function L1IntegrationSection({ weightedTotal, positionBand, redAlerts, l1HedgeB
       <div className="section-title">
         <GitBranch size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">L1 Hedge 串聯建議</span>
+        <HelpTooltip text={'L2 → L1 翻譯邏輯：\n\nBase bps = 倉位帶基本值\n（進攻 30 / 中性 50 / 防守 80 / 撤退 100）\n\n+ Critical alert：+30 bps\n+ High alert：每個 +15 bps\n\nUSD 預算 = (bps / 10000) × 持倉總值\n\n執行清單列出推薦商品（QQQ/SPY Put、VIX）'} />
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           L2 → L1 PIPELINE
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 把 L2 算出的 Macro Score 翻譯成 L1 操盤層的具體行動：建議避險預算（bps + USD）、觸發理由、執行清單。
       </div>
 
       {/* Recommendation hero */}
@@ -2595,6 +2761,128 @@ function FREDSyncBar({ status, syncTime, error, details, onSync }) {
             <span>UNRATE latest</span>
             <span style={{ color: details.unemp?.rising ? '#fb923c' : '#10b981' }}>
               {details.unemp?.latest?.toFixed(1) || '?'}% {details.unemp?.rising ? '↑' : ''}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {!syncTime && status === 'idle' && (
+        <div className="text-xs text-muted-2 font-tc" style={{ fontSize: '10px', marginTop: '4px' }}>
+          首次同步將自動執行…
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────── PolygonSyncBar (SPX 20MA + VIX/SPY)
+function PolygonSyncBar({ status, syncTime, error, details, onSync }) {
+  const colorMap = {
+    idle:     { color: '#888',    label: 'IDLE' },
+    fetching: { color: '#a78bfa', label: 'FETCHING' },
+    synced:   { color: '#10b981', label: 'SYNCED' },
+    error:    { color: '#ef4444', label: 'ERROR' },
+  };
+  const cfg = colorMap[status] || colorMap.idle;
+
+  const timeAgo = !syncTime ? '—' : (() => {
+    const diffSec = Math.floor((Date.now() - syncTime.getTime()) / 1000);
+    if (diffSec < 60) return diffSec + 's';
+    if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm';
+    return Math.floor(diffSec / 3600) + 'h';
+  })();
+
+  // Detect partial-success: any of the 3 calls failed
+  const hasPartialError = details && (details.spxSMAError || details.vixError || details.spyError);
+
+  return (
+    <div
+      style={{
+        background: '#0a0a0a',
+        border: '1px solid ' + cfg.color + '30',
+        borderRadius: '4px',
+        padding: '10px 12px',
+        marginBottom: '16px',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div
+            style={{
+              width: '6px', height: '6px',
+              background: cfg.color,
+              borderRadius: '50%',
+              animation: status === 'fetching' ? 'pulse 1s infinite' : 'none',
+            }}
+          />
+          <span className="font-mono-dm" style={{ fontSize: '10px', letterSpacing: '0.1em', color: cfg.color, fontWeight: 600 }}>
+            POLYGON · {cfg.label}
+          </span>
+          {hasPartialError && status === 'synced' && (
+            <span className="font-mono-dm" style={{ fontSize: '8px', color: '#fb923c', letterSpacing: '0.08em' }}>
+              PARTIAL
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {syncTime && status !== 'error' && (
+            <span className="font-mono-dm text-muted-2" style={{ fontSize: '9px' }}>
+              {timeAgo} ago
+            </span>
+          )}
+          <button
+            onClick={onSync}
+            disabled={status === 'fetching'}
+            className="icon-btn"
+            style={{
+              fontSize: '10px',
+              padding: '3px 8px',
+              borderColor: '#a78bfa',
+              color: '#a78bfa',
+              opacity: status === 'fetching' ? 0.5 : 1,
+              cursor: status === 'fetching' ? 'wait' : 'pointer',
+            }}
+          >
+            {status === 'fetching' ? '同步中…' : (status === 'synced' ? '↻ Re-sync' : '↻ Sync')}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-xs text-red font-tc" style={{ fontSize: '10px', marginTop: '6px', lineHeight: 1.4 }}>
+          {error}
+        </div>
+      )}
+
+      {details && status !== 'error' && (
+        <div style={{ marginTop: '8px', fontSize: '9.5px', color: '#666', fontFamily: 'DM Mono' }}>
+          {/* SPX 20MA */}
+          <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>SPX 20MA</span>
+            <span style={{ color: details.spxSMA ? (details.spxSMA.aboveMA ? '#10b981' : '#ef4444') : '#666' }}>
+              {details.spxSMA
+                ? (details.spxSMA.aboveMA ? '✓ above ' : '✗ below ') + (details.spxSMA.pctFromMA?.toFixed(1) || '?') + '%'
+                : (details.spxSMAError ? 'error' : '—')}
+            </span>
+          </div>
+          {/* VIX */}
+          <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>VIX spot</span>
+            <span style={{ color: '#f4f4f4' }}>
+              {details.vix
+                ? (details.vix.price != null
+                    ? '$' + details.vix.price.toFixed(2)
+                    : (details.vix.proxyPrice != null ? '$' + details.vix.proxyPrice.toFixed(2) + ' (VIXY proxy)' : '—'))
+                : (details.vixError ? 'error' : '—')}
+            </span>
+          </div>
+          {/* SPY */}
+          <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>SPY</span>
+            <span style={{ color: details.spy?.changePct != null ? (details.spy.changePct >= 0 ? '#10b981' : '#ef4444') : '#666' }}>
+              {details.spy
+                ? '$' + (details.spy.price?.toFixed(2) || '?') + ' ' + ((details.spy.changePct ?? 0) >= 0 ? '+' : '') + (details.spy.changePct?.toFixed(2) || '?') + '%'
+                : (details.spyError ? 'error' : '—')}
             </span>
           </div>
         </div>

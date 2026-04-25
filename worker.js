@@ -48,12 +48,29 @@ export default {
         return await handleYahoo(request, env);
       }
 
+      // ── New: Polygon proxy
+      // /api/polygon/quote?ticker=I:VIX  — index/stock current price
+      // /api/polygon/sma?ticker=I:SPX&window=20&timespan=week  — 20MA
+      // /api/polygon/option-chain?underlying=VIX&expiry=2026-05-14  — chain snapshot
+      // /api/polygon/option-snapshot?underlying=NVDA&contract=O:NVDA260516C00150000
+      if (path.startsWith('/api/polygon/')) {
+        return await handlePolygon(request, env, path);
+      }
+
       // ── Health check
       if (path === '/' || path === '/health') {
         return jsonResponse({
           ok: true,
           worker: 'solitary-wood-898d',
-          routes: ['/api/fred', '/api/fred/batch', '/api/ai', '/api/uw/*', '/api/yahoo'],
+          routes: [
+            '/api/fred', '/api/fred/batch',
+            '/api/ai',
+            '/api/uw/*',
+            '/api/yahoo',
+            '/api/polygon/quote', '/api/polygon/sma',
+            '/api/polygon/option-chain', '/api/polygon/option-snapshot',
+            '/api/polygon/atm-straddle',
+          ],
           time: new Date().toISOString(),
         });
       }
@@ -111,15 +128,14 @@ async function handleFred(url, env) {
   }
 
   // FRED API call
-  const cleanKey = (env.FRED_API_KEY || '').trim();
   const fredUrl = 'https://api.stlouisfed.org/fred/series/observations'
     + '?series_id=' + encodeURIComponent(series)
-    + '&api_key=' + encodeURIComponent(cleanKey)
+    + '&api_key=' + env.FRED_API_KEY
     + '&file_type=json'
     + '&sort_order=desc'
     + '&limit=' + limit;
 
-  const fredRes = await fetch(fredUrl, { headers: { 'User-Agent': 'curl/8.0' } });
+  const fredRes = await fetch(fredUrl);
   if (!fredRes.ok) {
     const errText = await fredRes.text();
     return jsonResponse({
@@ -160,17 +176,16 @@ async function handleFredBatch(url, env) {
   const seriesList = seriesParam.split(',').map(s => s.trim()).filter(Boolean);
   if (seriesList.length > 10) return jsonResponse({ error: 'Max 10 series per batch' }, 400);
 
-  const cleanKey = (env.FRED_API_KEY || '').trim();
   const results = await Promise.all(
     seriesList.map(async (s) => {
       try {
         const fredUrl = 'https://api.stlouisfed.org/fred/series/observations'
           + '?series_id=' + encodeURIComponent(s)
-          + '&api_key=' + encodeURIComponent(cleanKey)
+          + '&api_key=' + env.FRED_API_KEY
           + '&file_type=json'
           + '&sort_order=desc'
           + '&limit=' + limit;
-        const r = await fetch(fredUrl, { headers: { 'User-Agent': 'curl/8.0' } });
+        const r = await fetch(fredUrl);
         if (!r.ok) return { series: s, error: 'FRED returned ' + r.status };
         const d = await r.json();
         return {
@@ -275,4 +290,387 @@ async function handleYahoo(request, env) {
   } catch (e) {
     return jsonResponse({ error: 'Yahoo fetch failed', message: e.message }, 500);
   }
+}
+
+// ════════════════════════════════════════════════════════════
+// Polygon.io proxy
+// ────────────────────────────────────────────────────────────
+// Required: env.POLYGON_API_KEY (set via wrangler secret put POLYGON_API_KEY)
+// Subscription tier matters:
+//   - Indices snapshot (I:VIX, I:SPX) requires Indices subscription
+//   - Options snapshot/chain requires Options subscription
+//   - Stocks snapshot requires Stocks subscription
+// All prefixed with 'I:' for indices, 'O:' for options, plain ticker for stocks.
+// ════════════════════════════════════════════════════════════
+async function handlePolygon(request, env, path) {
+  if (!env.POLYGON_API_KEY) {
+    return jsonResponse({
+      error: 'POLYGON_API_KEY not configured. Set via: wrangler secret put POLYGON_API_KEY',
+    }, 500);
+  }
+  const url = new URL(request.url);
+  const subPath = path.replace(/^\/api\/polygon/, '');
+
+  try {
+    if (subPath === '/quote') {
+      return await polygonQuote(url, env);
+    }
+    if (subPath === '/sma') {
+      return await polygonSMA(url, env);
+    }
+    if (subPath === '/option-chain') {
+      return await polygonOptionChain(url, env);
+    }
+    if (subPath === '/option-snapshot') {
+      return await polygonOptionSnapshot(url, env);
+    }
+    if (subPath === '/atm-straddle') {
+      return await polygonATMStraddle(url, env);
+    }
+    return jsonResponse({ error: 'Unknown polygon route: ' + subPath }, 404);
+  } catch (e) {
+    return jsonResponse({
+      error: 'Polygon proxy error',
+      message: e.message,
+      route: subPath,
+    }, 500);
+  }
+}
+
+// Cache wrapper — Polygon data we cache 5 min for snapshots, 60 min for SMA
+async function polygonCachedFetch(cacheKey, ttlSec, fetcher) {
+  const cache = caches.default;
+  const cacheUrl = new URL('https://internal/__polygon-cache/' + cacheKey);
+  const cacheReq = new Request(cacheUrl.toString());
+  const cached = await cache.match(cacheReq);
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set('X-Cache', 'HIT');
+    return new Response(cached.body, { status: cached.status, headers });
+  }
+  const fresh = await fetcher();
+  if (fresh.ok) {
+    const cloned = fresh.clone();
+    const responseToCache = new Response(cloned.body, fresh);
+    responseToCache.headers.set('Cache-Control', 's-maxage=' + ttlSec);
+    responseToCache.headers.set('X-Cache', 'MISS');
+    await cache.put(cacheReq, responseToCache.clone());
+    return responseToCache;
+  }
+  return fresh;
+}
+
+// ────────────────────────────────────────────────────────────
+// /api/polygon/quote?ticker=I:VIX  → { ticker, price, prevClose, change, changePct, asOf }
+// Tries indices snapshot first, falls back to last-trade for stocks.
+// ────────────────────────────────────────────────────────────
+async function polygonQuote(url, env) {
+  const ticker = url.searchParams.get('ticker');
+  if (!ticker) return jsonResponse({ error: 'Missing ticker' }, 400);
+
+  return polygonCachedFetch('quote-' + ticker, 60, async () => {
+    let polyUrl;
+    if (ticker.startsWith('I:')) {
+      // Indices: use Indices unified snapshot
+      polyUrl = 'https://api.polygon.io/v3/snapshot?ticker.any_of=' + encodeURIComponent(ticker)
+        + '&apiKey=' + env.POLYGON_API_KEY;
+      const r = await fetch(polyUrl);
+      const d = await r.json();
+      if (!r.ok || !d.results || d.results.length === 0) {
+        return jsonResponse({
+          error: 'Indices snapshot failed (你的 Polygon 方案可能未含 Indices)',
+          status: r.status,
+          polygonError: d.error || d.message || null,
+          ticker,
+          hint: 'Options Starter 不含 Indices。需要 Indices Starter ($29/月) 或用 ETF 代理（VIXY 代理 VIX、SPY 代理 SPX）',
+        }, r.ok ? 404 : r.status);
+      }
+      const item = d.results[0];
+      return jsonResponse({
+        ticker,
+        price: item.value ?? null,
+        prevClose: item.session?.previous_close ?? null,
+        change: item.session?.change ?? null,
+        changePct: item.session?.change_percent ?? null,
+        marketStatus: item.market_status ?? null,
+        asOf: item.last_updated ? new Date(item.last_updated / 1_000_000).toISOString() : null,
+        source: 'polygon-indices',
+      });
+    }
+    // Stocks: use snapshot
+    polyUrl = 'https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/'
+      + encodeURIComponent(ticker) + '?apiKey=' + env.POLYGON_API_KEY;
+    const r = await fetch(polyUrl);
+    const d = await r.json();
+    if (!r.ok || !d.ticker) {
+      return jsonResponse({
+        error: 'Stock snapshot failed',
+        status: r.status,
+        polygonError: d.error || d.message || null,
+        ticker,
+      }, r.ok ? 404 : r.status);
+    }
+    const t = d.ticker;
+    return jsonResponse({
+      ticker,
+      price: t.lastTrade?.p ?? t.day?.c ?? null,
+      prevClose: t.prevDay?.c ?? null,
+      change: t.todaysChange ?? null,
+      changePct: t.todaysChangePerc ?? null,
+      asOf: t.updated ? new Date(t.updated / 1_000_000).toISOString() : null,
+      source: 'polygon-stocks',
+    });
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// /api/polygon/sma?ticker=I:SPX&window=20&timespan=week
+// Uses Polygon's SMA technical indicator endpoint.
+// Returns latest SMA value + latest close price + above/below boolean.
+// ────────────────────────────────────────────────────────────
+async function polygonSMA(url, env) {
+  const ticker = url.searchParams.get('ticker');
+  const window = parseInt(url.searchParams.get('window') || '20', 10);
+  const timespan = url.searchParams.get('timespan') || 'day';
+  if (!ticker) return jsonResponse({ error: 'Missing ticker' }, 400);
+
+  const cacheKey = 'sma-' + ticker + '-' + window + '-' + timespan;
+  return polygonCachedFetch(cacheKey, 1800, async () => {
+    // Indices SMA endpoint
+    const isIndex = ticker.startsWith('I:');
+    const base = 'https://api.polygon.io/v1/indicators/sma/' + encodeURIComponent(ticker)
+      + '?timespan=' + timespan
+      + '&window=' + window
+      + '&series_type=close'
+      + '&order=desc'
+      + '&limit=10'
+      + '&apiKey=' + env.POLYGON_API_KEY;
+    const r = await fetch(base);
+    const d = await r.json();
+    if (!r.ok) {
+      return jsonResponse({
+        error: 'SMA fetch failed',
+        status: r.status,
+        polygonError: d.error || d.message || null,
+        ticker,
+        hint: isIndex ? '需要 Indices subscription' : '檢查 ticker 拼寫',
+      }, r.status);
+    }
+    const sma = d.results?.values?.[0];
+    if (!sma) {
+      return jsonResponse({ error: 'No SMA data', ticker }, 404);
+    }
+    // Get latest close (from underlying if available, or fetch separately)
+    const latestClose = d.results?.underlying?.aggregates?.[0]?.c
+      || d.results?.values?.[0]?.value; // fallback to SMA itself if no close
+    return jsonResponse({
+      ticker,
+      window,
+      timespan,
+      latestSMA: sma.value,
+      smaTimestamp: sma.timestamp ? new Date(sma.timestamp).toISOString() : null,
+      latestClose,
+      aboveMA: latestClose != null ? latestClose > sma.value : null,
+      pctFromMA: latestClose != null
+        ? ((latestClose - sma.value) / sma.value) * 100
+        : null,
+      source: 'polygon-sma',
+    });
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// /api/polygon/option-chain?underlying=VIX&expiry=2026-05-14&strikes=16,18,20,22
+// Returns parsed list of contracts at the specified strikes (call default).
+// ────────────────────────────────────────────────────────────
+async function polygonOptionChain(url, env) {
+  const underlying = url.searchParams.get('underlying');
+  const expiry = url.searchParams.get('expiry');     // YYYY-MM-DD
+  const strikesParam = url.searchParams.get('strikes');  // comma-separated
+  const contractType = url.searchParams.get('type') || 'call';
+  if (!underlying || !expiry) {
+    return jsonResponse({ error: 'Missing underlying or expiry param' }, 400);
+  }
+
+  const strikes = strikesParam
+    ? strikesParam.split(',').map(s => parseFloat(s.trim())).filter(s => isFinite(s))
+    : null;
+
+  const cacheKey = 'optchain-' + underlying + '-' + expiry + '-' + (strikesParam || 'all') + '-' + contractType;
+  return polygonCachedFetch(cacheKey, 60, async () => {
+    // Polygon option chain snapshot
+    let polyUrl = 'https://api.polygon.io/v3/snapshot/options/' + encodeURIComponent(underlying)
+      + '?expiration_date=' + expiry
+      + '&contract_type=' + contractType
+      + '&limit=250'
+      + '&apiKey=' + env.POLYGON_API_KEY;
+    const r = await fetch(polyUrl);
+    const d = await r.json();
+    if (!r.ok) {
+      return jsonResponse({
+        error: 'Option chain fetch failed',
+        status: r.status,
+        polygonError: d.error || d.message || null,
+        underlying, expiry,
+      }, r.status);
+    }
+    let contracts = (d.results || []).map(c => ({
+      ticker: c.details?.ticker,
+      strike: c.details?.strike_price,
+      expiry: c.details?.expiration_date,
+      type: c.details?.contract_type,
+      bid: c.last_quote?.bid ?? null,
+      ask: c.last_quote?.ask ?? null,
+      mid: (c.last_quote?.bid != null && c.last_quote?.ask != null)
+        ? (c.last_quote.bid + c.last_quote.ask) / 2 : null,
+      lastPrice: c.last_trade?.price ?? null,
+      iv: c.implied_volatility ?? null,
+      delta: c.greeks?.delta ?? null,
+      gamma: c.greeks?.gamma ?? null,
+      theta: c.greeks?.theta ?? null,
+      vega: c.greeks?.vega ?? null,
+      openInterest: c.open_interest ?? null,
+      volume: c.day?.volume ?? null,
+    }));
+
+    // Filter by strikes if specified
+    if (strikes) {
+      contracts = strikes.map(s => {
+        // Find closest strike in returned chain (within $0.5 tolerance)
+        const match = contracts.reduce((best, c) => {
+          const dist = Math.abs(c.strike - s);
+          return (best === null || dist < Math.abs(best.strike - s)) ? c : best;
+        }, null);
+        return match && Math.abs(match.strike - s) <= 1.0 ? match : null;
+      }).filter(Boolean);
+    }
+
+    return jsonResponse({
+      underlying,
+      expiry,
+      contractType,
+      requestedStrikes: strikes,
+      contracts,
+      asOf: new Date().toISOString(),
+      source: 'polygon-options',
+    });
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// /api/polygon/option-snapshot?underlying=NVDA&contract=O:NVDA260516C00150000
+// Single-contract detailed snapshot (full greeks, iv, oi).
+// ────────────────────────────────────────────────────────────
+async function polygonOptionSnapshot(url, env) {
+  const underlying = url.searchParams.get('underlying');
+  const contract = url.searchParams.get('contract');
+  if (!underlying || !contract) {
+    return jsonResponse({ error: 'Missing underlying or contract param' }, 400);
+  }
+  const cacheKey = 'optsnap-' + contract;
+  return polygonCachedFetch(cacheKey, 60, async () => {
+    const polyUrl = 'https://api.polygon.io/v3/snapshot/options/' + encodeURIComponent(underlying)
+      + '/' + encodeURIComponent(contract) + '?apiKey=' + env.POLYGON_API_KEY;
+    const r = await fetch(polyUrl);
+    const d = await r.json();
+    if (!r.ok) {
+      return jsonResponse({
+        error: 'Option snapshot failed',
+        status: r.status,
+        polygonError: d.error || d.message || null,
+      }, r.status);
+    }
+    return jsonResponse(d);
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// /api/polygon/atm-straddle?underlying=NVDA&expiry=2026-05-16
+// 計算 ATM straddle premium → implied move estimate
+// expectedMove ≈ (ATM Call mid + ATM Put mid) ×  ~0.85
+// ────────────────────────────────────────────────────────────
+async function polygonATMStraddle(url, env) {
+  const underlying = url.searchParams.get('underlying');
+  const expiry = url.searchParams.get('expiry');
+  if (!underlying || !expiry) {
+    return jsonResponse({ error: 'Missing underlying or expiry' }, 400);
+  }
+  const cacheKey = 'atmstr-' + underlying + '-' + expiry;
+  return polygonCachedFetch(cacheKey, 300, async () => {
+    // 1. Get current spot
+    const spotRes = await fetch('https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/'
+      + encodeURIComponent(underlying) + '?apiKey=' + env.POLYGON_API_KEY);
+    const spotData = await spotRes.json();
+    if (!spotRes.ok || !spotData.ticker) {
+      return jsonResponse({
+        error: 'Could not get spot price',
+        polygonError: spotData.error || spotData.message,
+      }, spotRes.status);
+    }
+    const spot = spotData.ticker.lastTrade?.p
+      ?? spotData.ticker.day?.c
+      ?? spotData.ticker.prevDay?.c;
+    if (!spot) return jsonResponse({ error: 'No spot price found' }, 404);
+
+    // 2. Round spot to nearest strike (assume strikes spaced $1 for high-priced stocks, $0.5 for low)
+    const atmStrike = Math.round(spot);
+
+    // 3. Fetch both call and put at ATM
+    const fetchSide = async (type) => {
+      const u = 'https://api.polygon.io/v3/snapshot/options/' + encodeURIComponent(underlying)
+        + '?expiration_date=' + expiry
+        + '&contract_type=' + type
+        + '&strike_price.gte=' + (atmStrike - 2.5)
+        + '&strike_price.lte=' + (atmStrike + 2.5)
+        + '&limit=10'
+        + '&apiKey=' + env.POLYGON_API_KEY;
+      const r = await fetch(u);
+      const d = await r.json();
+      if (!r.ok) return null;
+      // Find the contract closest to spot
+      return (d.results || []).reduce((best, c) => {
+        const dist = Math.abs((c.details?.strike_price || 0) - spot);
+        return (!best || dist < Math.abs(best.details.strike_price - spot)) ? c : best;
+      }, null);
+    };
+
+    const [call, put] = await Promise.all([fetchSide('call'), fetchSide('put')]);
+    if (!call || !put) {
+      return jsonResponse({
+        error: 'Could not find ATM straddle pair',
+        spot, atmStrike,
+        callFound: !!call, putFound: !!put,
+      }, 404);
+    }
+
+    const callMid = (call.last_quote?.bid != null && call.last_quote?.ask != null)
+      ? (call.last_quote.bid + call.last_quote.ask) / 2
+      : (call.last_trade?.price ?? null);
+    const putMid = (put.last_quote?.bid != null && put.last_quote?.ask != null)
+      ? (put.last_quote.bid + put.last_quote.ask) / 2
+      : (put.last_trade?.price ?? null);
+
+    const straddlePremium = (callMid || 0) + (putMid || 0);
+    // Standard rule of thumb: implied move ≈ straddle × 0.85 (accounts for premium decay/skew)
+    const impliedMoveDollar = straddlePremium * 0.85;
+    const impliedMovePct = spot > 0 ? (impliedMoveDollar / spot) * 100 : null;
+
+    return jsonResponse({
+      underlying,
+      expiry,
+      spot,
+      atmStrike: call.details.strike_price,
+      callTicker: call.details?.ticker,
+      callMid,
+      callIV: call.implied_volatility,
+      putTicker: put.details?.ticker,
+      putMid,
+      putIV: put.implied_volatility,
+      straddlePremium,
+      impliedMoveDollar,
+      impliedMovePct,
+      asOf: new Date().toISOString(),
+      source: 'polygon-atm-straddle',
+    });
+  });
 }

@@ -18,7 +18,7 @@
   <!-- Alias React → react (lowercase) for lucide-react UMD's broken expectation -->
   <script>window.react = window.React;</script>
 
-  <!-- lucide-react UMD (icons) — 0.263.1 是最後一個 UMD 正常運作的版本 -->
+  <!-- lucide-react UMD (icons) — pinned to 0.263.1 (last UMD-working version; 0.300+ broken) -->
   <script crossorigin src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
 
   <!-- Supabase anon key (HYM-CPO project, RLS-protected) -->
@@ -114,7 +114,7 @@
     } = Lucide;
 
     // ────────────────────────────────────────────────────────────
-    // HelpTooltip — hover (?) icon for inline section help
+    // HelpTooltip — hover (?) icon for inline section help (global scope, used by L2/VIX/App)
     // ────────────────────────────────────────────────────────────
     function HelpTooltip({ text }) {
       const [open, setOpen] = useState(false);
@@ -127,28 +127,13 @@
           {HelpCircle ? <HelpCircle size={12} style={{ color: '#6b7280', opacity: 0.7 }} /> : <span style={{ color: '#6b7280', fontSize: '11px', fontWeight: 700 }}>(?)</span>}
           {open && (
             <div style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 8px)',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: '#1a1a1a',
-              border: '1px solid #3a3a3a',
-              borderRadius: '6px',
-              padding: '10px 12px',
-              fontSize: '11px',
-              fontFamily: 'Noto Sans TC',
-              color: '#e5e7eb',
-              lineHeight: '1.7',
-              width: '300px',
-              zIndex: 1000,
-              whiteSpace: 'pre-line',
-              boxShadow: '0 6px 20px rgba(0,0,0,0.6)',
-              textAlign: 'left',
-              fontWeight: 'normal',
-              letterSpacing: 'normal',
-            }}>
-              {text}
-            </div>
+              position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
+              background: '#1a1a1a', border: '1px solid #3a3a3a', borderRadius: '6px',
+              padding: '10px 12px', fontSize: '11px', fontFamily: 'Noto Sans TC',
+              color: '#e5e7eb', lineHeight: '1.7', width: '300px', zIndex: 1000,
+              whiteSpace: 'pre-line', boxShadow: '0 6px 20px rgba(0,0,0,0.6)',
+              textAlign: 'left', fontWeight: 'normal', letterSpacing: 'normal',
+            }}>{text}</div>
           )}
         </span>
       );
@@ -169,13 +154,15 @@
 📈 盤中
   • 持倉自動每 60 秒 sync
   • 重大事件（CPI/Fed/NFP）公布後手動 Re-sync FRED
-  • 「下週劇本演練」按 ✨ AI Generate 更新即時情境
+  • L1 VIX chain 按「↻ 從 Polygon 自動填」拿即時 premium
+  • Stress test 按「↻ 從 Polygon 算」拿 ATM straddle implied move
 
 🌙 收盤後
   • 看「情境 P&L 分析」— 今日不同 scenario 的損益
   • 用 Stress Test 跑重倉股下跌風險` },
-        { title: '📊 10 個 section 速查', body: `滑鼠移到每個 section 標題旁的 (?) 圖示可看詳細計算公式。
+        { title: '📊 主要功能速查', body: `滑鼠移到每個 section 標題旁的 (?) 圖示可看詳細計算公式。
 
+L2 Dashboard:
 1. TodayCallHero — 今日總分 + 倉位帶
 2. ScorecardBreakdown — 4 項加權細項
 3. RedAlertSection — 三大致命警報
@@ -183,23 +170,27 @@
 5. RRGMatrixSection — 板塊輪動矩陣
 6. ScenarioPlannerSection — 事件 If-Then 劇本
 7. L1IntegrationSection — 避險 bps 建議
-8. 情境 P&L 分析 — scenario 損益推算
-9. 進場時機紀律 — T-N 天檢核
-10. Portfolio Beta + Stress Test — Beta + NVDA→QQQ 試算` },
+
+L1 Hedge:
+8. VIX Call Chain — 16/18/20/22C premium（可從 Polygon 自動填）
+9. 情境 P&L 分析 — scenario 損益推算
+10. 進場時機紀律 — T-N 天檢核
+11. Portfolio Beta — 持倉組合 Beta
+12. Single Stock Stress Test — NVDA→QQQ 試算（ATM straddle 自動算 implied move）` },
         { title: '🔑 常用設定', body: `【新增持倉】
 Supabase Dashboard → Project HYM-CPO → Table Editor → positions 表
 INSERT INTO positions (ticker, option_type, qty, current_price, strike, expiry, user_name)
 VALUES ('AAPL', 'CALL', 5, 175.5, 180, '06/20/26', 'toywu');
 
 【切換 user】
-編輯 public/index.html 找：const USER_NAME = 'toywu';
+編輯 App.jsx 找：const USER_NAME = 'toywu';
 注意 lowercase（PostgreSQL = 是 case-sensitive）
 
 【Console 工具】
 setSupabaseKey('eyJ...') — 寫進 localStorage 並 reload
 clearSupabaseKey()        — 清除回 hardcoded` },
         { title: '🐛 Troubleshooting', body: `【FRED 回 520】
-偶發 Cloudflare 路由問題，重試幾次。Worker 已用 curl/8.0 UA 繞過 WAF。
+偶發 Cloudflare 路由問題，重試幾次。Worker 用 curl/8.0 UA 繞過 WAF。
 
 【lucide forwardRef undefined】
 確認 lucide-react 用 0.263.1 版本，且 HTML 有 alias window.react = window.React。
@@ -209,36 +200,32 @@ clearSupabaseKey()        — 清除回 hardcoded` },
 2. 確認 USER_NAME = 'toywu' (lowercase)
 3. 確認 DB user_name 欄位也是 lowercase
 
-【Babel 報 import.meta】
-原始 jsx 用 Vite 語法，已在 HTML 移除。改 source 重 build 要記得再清。` },
+【Polygon 整合】
+要先 wrangler secret put POLYGON_API_KEY。
+Indices (I:VIX/I:SPX) 要 Indices 訂閱方案；沒有的話 Worker 自動 fallback 到 VIXY ETF。` },
         { title: '🔗 資源連結', body: `GitHub: github.com/justest521/HYM-don-dondonhappy
 Vercel: vercel.com/justest521s-projects/hym-admin-pdd3-dondonhappy
 Cloudflare Worker: dash.cloudflare.com → Workers → solitary-wood-898d
 Supabase: supabase.com/dashboard/project/kzxunbohppykfkaqioqd
 FRED API: fred.stlouisfed.org/docs/api/fred
+Polygon API: polygon.io/docs
 Anthropic API: docs.claude.com` },
       ];
       return (
-        <div
-          onClick={onClose}
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-            zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: '8px',
-              maxWidth: '720px', width: '100%', maxHeight: '85vh', overflowY: 'auto',
-              padding: '28px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-            }}
-          >
+        <div onClick={onClose} style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px',
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: '8px',
+            maxWidth: '720px', width: '100%', maxHeight: '85vh', overflowY: 'auto',
+            padding: '28px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid #2a2a2a' }}>
               <div>
                 <div style={{ fontFamily: 'Noto Sans TC', fontSize: '18px', fontWeight: 700, color: '#f4f4f4' }}>📖 MEP Trading System · 使用說明</div>
-                <div style={{ fontFamily: 'DM Mono', fontSize: '11px', color: '#666', marginTop: '4px', letterSpacing: '0.1em' }}>L2 MACRO · L1 HEDGE · SUPABASE POSITIONS</div>
+                <div style={{ fontFamily: 'DM Mono', fontSize: '11px', color: '#666', marginTop: '4px', letterSpacing: '0.1em' }}>L2 MACRO · L1 HEDGE · POLYGON · SUPABASE</div>
               </div>
               <button onClick={onClose} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#888', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'DM Mono', fontSize: '12px' }}>關閉 ESC</button>
             </div>
@@ -248,7 +235,7 @@ Anthropic API: docs.claude.com` },
                 <div style={{ fontFamily: 'Noto Sans TC', fontSize: '12px', color: '#d4d4d4', lineHeight: '1.8', whiteSpace: 'pre-line', paddingLeft: '4px' }}>{s.body}</div>
               </div>
             ))}
-            <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid #2a2a2a', fontFamily: 'DM Mono', fontSize: '10px', color: '#555', textAlign: 'center' }}>完整說明請見 GitHub README · 點背景或按鈕關閉</div>
+            <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid #2a2a2a', fontFamily: 'DM Mono', fontSize: '10px', color: '#555', textAlign: 'center' }}>完整說明請見 GitHub README · 點背景或按 ESC 關閉</div>
           </div>
         </div>
       );
@@ -1008,7 +995,86 @@ function inferYieldCurveHistory(t10y2yObs) {
   return { wasNegative, latest, minInWindow };
 }
 
-// AI scenario expander — call worker /api/ai with a structured prompt
+// ============================================================
+// POLYGON HELPERS
+// ============================================================
+
+// 抓 SPX 20-week MA 判斷，用於 紅色警報「SPX 站上 20MA」
+async function fetchSPX20MA() {
+  const url = WORKER_URL + '/api/polygon/sma?ticker=I:SPX&window=20&timespan=week';
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('SPX 20MA fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+// 抓 VIX 現價（包括 fallback 到 VIXY）
+async function fetchVIXSpot() {
+  // Try VIX index first
+  const url = WORKER_URL + '/api/polygon/quote?ticker=I:VIX';
+  const res = await fetch(url);
+  const data = await res.json();
+  if (res.ok && isFinite(data.price)) {
+    return { price: data.price, source: 'I:VIX', asOf: data.asOf };
+  }
+  // Fallback to VIXY ETF (high correlation but not 1:1)
+  const fallbackUrl = WORKER_URL + '/api/polygon/quote?ticker=VIXY';
+  const fallbackRes = await fetch(fallbackUrl);
+  const fallbackData = await fallbackRes.json();
+  if (fallbackRes.ok && isFinite(fallbackData.price)) {
+    return {
+      price: null,
+      proxyPrice: fallbackData.price,
+      source: 'VIXY proxy',
+      asOf: fallbackData.asOf,
+      note: 'VIX index unavailable on your Polygon plan — VIXY ETF used as proxy (not 1:1)',
+    };
+  }
+  throw new Error('Could not fetch VIX from Polygon');
+}
+
+// 抓 SPY 現價（用於 header 顯示）
+async function fetchSPYQuote() {
+  const url = WORKER_URL + '/api/polygon/quote?ticker=SPY';
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('SPY fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+// 抓 VIX option chain 在指定 expiry，給定 strikes
+async function fetchVIXOptionChain(expiry, strikes = [16, 18, 20, 22]) {
+  const url = WORKER_URL + '/api/polygon/option-chain'
+    + '?underlying=VIX'
+    + '&expiry=' + expiry
+    + '&strikes=' + strikes.join(',')
+    + '&type=call';
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('VIX chain fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+// 抓單股 ATM straddle → implied move
+async function fetchImpliedMove(ticker, expiry) {
+  const url = WORKER_URL + '/api/polygon/atm-straddle'
+    + '?underlying=' + ticker
+    + '&expiry=' + expiry;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error('ATM straddle fetch failed: HTTP ' + res.status + ' - ' + text.slice(0, 150));
+  }
+  return await res.json();
+}
+
+
 async function expandScenarioWithAI({ eventType, eventLabel, score, bandLabel, economicQuadrantLabel, redAlerts }) {
   const alertsDesc = redAlerts.length === 0
     ? '無紅色警報觸發'
@@ -1113,6 +1179,12 @@ function L2MacroDashboard({ onScoreChange = null }) {
   const [fredError, setFredError] = useState(null);
   const [fredDetails, setFredDetails] = useState(null); // raw computed values for display
 
+  // STATE: Polygon auto-sync (SPX 20MA + VIX/SPY quotes)
+  const [polygonStatus, setPolygonStatus] = useState('idle');
+  const [polygonSyncTime, setPolygonSyncTime] = useState(null);
+  const [polygonError, setPolygonError] = useState(null);
+  const [polygonDetails, setPolygonDetails] = useState(null); // { spxSMA, vix, spy }
+
   // STATE: AI scenario override
   const [aiScenarios, setAiScenarios] = useState({}); // { eventId: { bullish, bearish } }
   const [aiLoading, setAiLoading] = useState(false);
@@ -1165,9 +1237,55 @@ function L2MacroDashboard({ onScoreChange = null }) {
     }
   }, []);
 
+  // ──────────────────────────────────────────────────────────
+  // Polygon auto-sync handler
+  // ──────────────────────────────────────────────────────────
+  const syncPolygon = useCallback(async () => {
+    setPolygonStatus('fetching');
+    setPolygonError(null);
+    try {
+      // 平行抓 3 個（SPX SMA / VIX spot / SPY quote）
+      // 任一個失敗就 partial result，不阻塞其他兩個
+      const [spxSMA, vix, spy] = await Promise.allSettled([
+        fetchSPX20MA(),
+        fetchVIXSpot(),
+        fetchSPYQuote(),
+      ]);
+
+      const result = {
+        spxSMA: spxSMA.status === 'fulfilled' ? spxSMA.value : null,
+        spxSMAError: spxSMA.status === 'rejected' ? spxSMA.reason?.message : null,
+        vix: vix.status === 'fulfilled' ? vix.value : null,
+        vixError: vix.status === 'rejected' ? vix.reason?.message : null,
+        spy: spy.status === 'fulfilled' ? spy.value : null,
+        spyError: spy.status === 'rejected' ? spy.reason?.message : null,
+      };
+
+      // Apply: SPX 20MA → setSpxAboveMA（L2 own state）
+      if (result.spxSMA && result.spxSMA.aboveMA != null) {
+        setSpxAboveMA(result.spxSMA.aboveMA);
+      }
+      // VIX spot 在 L1，不在 L2 的 own state。透過 onScoreChange 一起 emit 到 parent，App 再轉給 L1。
+
+      setPolygonDetails(result);
+      setPolygonSyncTime(new Date());
+      // 部分成功也算 synced（fail-soft 策略）
+      const anyOk = result.spxSMA || result.vix || result.spy;
+      setPolygonStatus(anyOk ? 'synced' : 'error');
+      if (!anyOk) {
+        setPolygonError(result.spxSMAError || result.vixError || result.spyError || 'All Polygon calls failed');
+      }
+    } catch (e) {
+      console.error('[L2] Polygon sync error:', e);
+      setPolygonError(e.message || String(e));
+      setPolygonStatus('error');
+    }
+  }, []);
+
   // Auto-sync on mount
   useEffect(() => {
     syncFRED();
+    syncPolygon();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1266,9 +1384,11 @@ function L2MacroDashboard({ onScoreChange = null }) {
         redAlerts,
         l1HedgeBudgetBps,
         economicQuadrant,
+        // Polygon details for cross-layer use (App → L1)
+        polygonDetails,
       });
     }
-  }, [weightedTotal, positionBand, redAlerts, l1HedgeBudgetBps, economicQuadrant, onScoreChange]);
+  }, [weightedTotal, positionBand, redAlerts, l1HedgeBudgetBps, economicQuadrant, polygonDetails, onScoreChange]);
 
   // ──────────────────────────────────────────────────────────
   // HANDLERS
@@ -1370,6 +1490,15 @@ function L2MacroDashboard({ onScoreChange = null }) {
               error={fredError}
               details={fredDetails}
               onSync={syncFRED}
+            />
+
+            {/* ────────── Polygon Auto-Sync Bar (SPX 20MA + VIX/SPY) ────────── */}
+            <PolygonSyncBar
+              status={polygonStatus}
+              syncTime={polygonSyncTime}
+              error={polygonError}
+              details={polygonDetails}
+              onSync={syncPolygon}
             />
 
             {/* Section: 核心 4 指標 */}
@@ -2412,7 +2541,7 @@ function ScenarioPlannerSection({
         </div>
       </div>
       <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
-        ▸ 10 個事件情境（CPI 高低、Fed 鴿鷹、NFP、M7 財報、PMI 突破/跌破）的 If-Then 應對劇本，事先排好交易計畫。
+        ▸ 10 個事件情境的 If-Then 應對劇本，事先排好交易計畫。
       </div>
 
       {aiError && (
@@ -2866,6 +2995,128 @@ function FREDSyncBar({ status, syncTime, error, details, onSync }) {
             <span>UNRATE latest</span>
             <span style={{ color: details.unemp?.rising ? '#fb923c' : '#10b981' }}>
               {details.unemp?.latest?.toFixed(1) || '?'}% {details.unemp?.rising ? '↑' : ''}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {!syncTime && status === 'idle' && (
+        <div className="text-xs text-muted-2 font-tc" style={{ fontSize: '10px', marginTop: '4px' }}>
+          首次同步將自動執行…
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────── PolygonSyncBar (SPX 20MA + VIX/SPY)
+function PolygonSyncBar({ status, syncTime, error, details, onSync }) {
+  const colorMap = {
+    idle:     { color: '#888',    label: 'IDLE' },
+    fetching: { color: '#a78bfa', label: 'FETCHING' },
+    synced:   { color: '#10b981', label: 'SYNCED' },
+    error:    { color: '#ef4444', label: 'ERROR' },
+  };
+  const cfg = colorMap[status] || colorMap.idle;
+
+  const timeAgo = !syncTime ? '—' : (() => {
+    const diffSec = Math.floor((Date.now() - syncTime.getTime()) / 1000);
+    if (diffSec < 60) return diffSec + 's';
+    if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm';
+    return Math.floor(diffSec / 3600) + 'h';
+  })();
+
+  // Detect partial-success: any of the 3 calls failed
+  const hasPartialError = details && (details.spxSMAError || details.vixError || details.spyError);
+
+  return (
+    <div
+      style={{
+        background: '#0a0a0a',
+        border: '1px solid ' + cfg.color + '30',
+        borderRadius: '4px',
+        padding: '10px 12px',
+        marginBottom: '16px',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div
+            style={{
+              width: '6px', height: '6px',
+              background: cfg.color,
+              borderRadius: '50%',
+              animation: status === 'fetching' ? 'pulse 1s infinite' : 'none',
+            }}
+          />
+          <span className="font-mono-dm" style={{ fontSize: '10px', letterSpacing: '0.1em', color: cfg.color, fontWeight: 600 }}>
+            POLYGON · {cfg.label}
+          </span>
+          {hasPartialError && status === 'synced' && (
+            <span className="font-mono-dm" style={{ fontSize: '8px', color: '#fb923c', letterSpacing: '0.08em' }}>
+              PARTIAL
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {syncTime && status !== 'error' && (
+            <span className="font-mono-dm text-muted-2" style={{ fontSize: '9px' }}>
+              {timeAgo} ago
+            </span>
+          )}
+          <button
+            onClick={onSync}
+            disabled={status === 'fetching'}
+            className="icon-btn"
+            style={{
+              fontSize: '10px',
+              padding: '3px 8px',
+              borderColor: '#a78bfa',
+              color: '#a78bfa',
+              opacity: status === 'fetching' ? 0.5 : 1,
+              cursor: status === 'fetching' ? 'wait' : 'pointer',
+            }}
+          >
+            {status === 'fetching' ? '同步中…' : (status === 'synced' ? '↻ Re-sync' : '↻ Sync')}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-xs text-red font-tc" style={{ fontSize: '10px', marginTop: '6px', lineHeight: 1.4 }}>
+          {error}
+        </div>
+      )}
+
+      {details && status !== 'error' && (
+        <div style={{ marginTop: '8px', fontSize: '9.5px', color: '#666', fontFamily: 'DM Mono' }}>
+          {/* SPX 20MA */}
+          <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>SPX 20MA</span>
+            <span style={{ color: details.spxSMA ? (details.spxSMA.aboveMA ? '#10b981' : '#ef4444') : '#666' }}>
+              {details.spxSMA
+                ? (details.spxSMA.aboveMA ? '✓ above ' : '✗ below ') + (details.spxSMA.pctFromMA?.toFixed(1) || '?') + '%'
+                : (details.spxSMAError ? 'error' : '—')}
+            </span>
+          </div>
+          {/* VIX */}
+          <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>VIX spot</span>
+            <span style={{ color: '#f4f4f4' }}>
+              {details.vix
+                ? (details.vix.price != null
+                    ? '$' + details.vix.price.toFixed(2)
+                    : (details.vix.proxyPrice != null ? '$' + details.vix.proxyPrice.toFixed(2) + ' (VIXY proxy)' : '—'))
+                : (details.vixError ? 'error' : '—')}
+            </span>
+          </div>
+          {/* SPY */}
+          <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>SPY</span>
+            <span style={{ color: details.spy?.changePct != null ? (details.spy.changePct >= 0 ? '#10b981' : '#ef4444') : '#666' }}>
+              {details.spy
+                ? '$' + (details.spy.price?.toFixed(2) || '?') + ' ' + ((details.spy.changePct ?? 0) >= 0 ? '+' : '') + (details.spy.changePct?.toFixed(2) || '?') + '%'
+                : (details.spyError ? 'error' : '—')}
             </span>
           </div>
         </div>
@@ -3406,6 +3657,8 @@ function VIXHedgeCalculator({
   externalMacroAlerts = null,        // L2 red alerts: array of { id, severity, name, ... }
   externalMacroScore = null,         // L2 weighted total score (0-100), optional context
   externalMacroBand = null,          // L2 position band info, optional context
+  externalVIXSpot = null,            // L2 → L1 VIX spot price from Polygon
+  workerUrl = 'https://solitary-wood-898d.justest521.workers.dev',  // for option chain fetch
 }) {
   // ──────────────────────────────────────────────────────────
   // State: Inputs (existing v1)
@@ -3426,10 +3679,108 @@ function VIXHedgeCalculator({
   const [vixPrice, setVixPrice] = useState(16.36);
   const [vixIvRank, setVixIvRank] = useState(65);
 
+  // Sync VIX spot from L2 Polygon
+  useEffect(() => {
+    if (externalVIXSpot != null && isFinite(externalVIXSpot)) {
+      setVixPrice(externalVIXSpot);
+    }
+  }, [externalVIXSpot]);
+
   const [call16Premium, setCall16Premium] = useState(2.20);
   const [call18Premium, setCall18Premium] = useState(0.95);
   const [call20Premium, setCall20Premium] = useState(0.59);
   const [call22Premium, setCall22Premium] = useState(0.35);
+
+  // VIX option chain auto-fill state
+  const [chainStatus, setChainStatus] = useState('idle');  // 'idle' | 'fetching' | 'synced' | 'error'
+  const [chainError, setChainError] = useState(null);
+  const [chainSyncTime, setChainSyncTime] = useState(null);
+
+  // Stress test (single stock) implied-move auto-fill state
+  const [straddleStatus, setStraddleStatus] = useState('idle');
+  const [straddleError, setStraddleError] = useState(null);
+  const [straddleSyncTime, setStraddleSyncTime] = useState(null);
+
+  // Helper: pick next VIX expiry ~daysToEvent days out
+  // VIX options expire on Wednesdays (third Wednesday of expiry month).
+  // For simplicity, calculate the target date and use ISO format.
+  const targetExpiry = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysToEvent + 7);  // a bit beyond event for safety
+    return d.toISOString().slice(0, 10);
+  }, [daysToEvent]);
+
+  const fetchVIXChain = useCallback(async () => {
+    setChainStatus('fetching');
+    setChainError(null);
+    try {
+      const url = workerUrl + '/api/polygon/option-chain'
+        + '?underlying=VIX&type=call&expiry=' + targetExpiry
+        + '&strikes=16,18,20,22';
+      const res = await fetch(url);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error('HTTP ' + res.status + ' — ' + text.slice(0, 150));
+      }
+      const data = await res.json();
+      if (!data.contracts || data.contracts.length === 0) {
+        throw new Error('No contracts found at expiry ' + targetExpiry + '. Try a different date.');
+      }
+      // Map strikes to setters
+      const byStrike = {};
+      data.contracts.forEach(c => { byStrike[Math.round(c.strike)] = c; });
+
+      const apply = (strike, setter) => {
+        const c = byStrike[strike];
+        if (c && c.mid != null && c.mid > 0) {
+          setter(parseFloat(c.mid.toFixed(2)));
+        } else if (c && c.lastPrice != null && c.lastPrice > 0) {
+          setter(parseFloat(c.lastPrice.toFixed(2)));
+        }
+      };
+      apply(16, setCall16Premium);
+      apply(18, setCall18Premium);
+      apply(20, setCall20Premium);
+      apply(22, setCall22Premium);
+
+      setChainSyncTime(new Date());
+      setChainStatus('synced');
+    } catch (e) {
+      console.error('[L1] VIX chain fetch error:', e);
+      setChainError(e.message || String(e));
+      setChainStatus('error');
+    }
+  }, [workerUrl, targetExpiry]);
+
+  // Stress test: fetch ATM straddle for single stock → derive implied-move %
+  const fetchStressStraddle = useCallback(async (ticker) => {
+    setStraddleStatus('fetching');
+    setStraddleError(null);
+    try {
+      const url = workerUrl + '/api/polygon/atm-straddle'
+        + '?underlying=' + encodeURIComponent(ticker)
+        + '&expiry=' + targetExpiry;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error('HTTP ' + res.status + ' — ' + text.slice(0, 150));
+      }
+      const data = await res.json();
+      const movePct = data.impliedMovePct ?? data.implied_move_pct ?? data.impliedMove;
+      if (movePct == null || !isFinite(movePct)) {
+        throw new Error('No implied move data returned for ' + ticker);
+      }
+      // Polygon returns either a fraction (0.08) or percent (8). Normalize to percent.
+      const normalized = movePct < 1 ? movePct * 100 : movePct;
+      setStressImpliedMove(parseFloat(normalized.toFixed(2)));
+      setStraddleSyncTime(new Date());
+      setStraddleStatus('synced');
+    } catch (e) {
+      console.error('[L1] Stress straddle fetch error:', e);
+      setStraddleError(e.message || String(e));
+      setStraddleStatus('error');
+    }
+  }, [workerUrl, targetExpiry]);
 
   const [selectedStructure, setSelectedStructure] = useState('spread_16_20');
 
@@ -3902,10 +4253,39 @@ function VIXHedgeCalculator({
             </div>
 
             {/* Section: Option Chain */}
-            <div className="section-title" style={{ marginTop: '24px' }}>
+            <div className="section-title" style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Layers size={13} className="text-accent" />
               <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>VIX CALL CHAIN</span>
+              <button
+                onClick={fetchVIXChain}
+                disabled={chainStatus === 'fetching'}
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: '10px',
+                  padding: '3px 8px',
+                  borderRadius: '3px',
+                  border: '1px solid ' + (chainStatus === 'error' ? '#ef4444' : chainStatus === 'synced' ? '#10b981' : '#2a2a2a'),
+                  background: 'transparent',
+                  color: chainStatus === 'error' ? '#ef4444' : chainStatus === 'synced' ? '#10b981' : '#EAB308',
+                  cursor: chainStatus === 'fetching' ? 'wait' : 'pointer',
+                  fontFamily: 'DM Mono',
+                  letterSpacing: '0.05em',
+                }}
+                title={'從 Polygon 抓 ' + targetExpiry + ' 到期的 16/18/20/22C premium'}
+              >
+                {chainStatus === 'fetching' ? '⋯ 抓取中' : chainStatus === 'synced' ? '✓ 已同步' : chainStatus === 'error' ? '✕ 失敗' : '↻ 從 Polygon 自動填'}
+              </button>
             </div>
+            {chainStatus === 'synced' && chainSyncTime && (
+              <div style={{ fontSize: '10px', color: '#888', fontFamily: 'DM Mono', marginTop: '4px', marginBottom: '6px' }}>
+                expiry {targetExpiry} · {Math.round((Date.now() - chainSyncTime.getTime()) / 1000)}s ago
+              </div>
+            )}
+            {chainStatus === 'error' && chainError && (
+              <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px', marginBottom: '6px', lineHeight: '1.4' }}>
+                {chainError.slice(0, 120)}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <PremiumInput label="16C" value={call16Premium} onChange={setCall16Premium} />
@@ -4073,6 +4453,11 @@ function VIXHedgeCalculator({
               setStressTicker={setStressTicker}
               stressImpliedMove={stressImpliedMove}
               setStressImpliedMove={setStressImpliedMove}
+              fetchStressStraddle={fetchStressStraddle}
+              straddleStatus={straddleStatus}
+              straddleError={straddleError}
+              straddleSyncTime={straddleSyncTime}
+              targetExpiry={targetExpiry}
               stressQQQWeight={stressQQQWeight}
               setStressQQQWeight={setStressQQQWeight}
               stressContagion={stressContagion}
@@ -4517,6 +4902,7 @@ function PortfolioBetaSection({
 function StockStressSection({
   stressTicker, setStressTicker,
   stressImpliedMove, setStressImpliedMove,
+  fetchStressStraddle, straddleStatus, straddleError, straddleSyncTime, targetExpiry,
   stressQQQWeight, setStressQQQWeight,
   stressContagion, setStressContagion,
   qqqPrice, setQqqPrice,
@@ -4526,17 +4912,46 @@ function StockStressSection({
 }) {
   return (
     <div className="bg-card hair-border" style={{ borderRadius: '6px', padding: '18px' }}>
-      <div className="section-title" style={{ marginBottom: '14px' }}>
+      <div className="section-title" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
         <Crosshair size={14} className="text-accent" />
         <span className="font-tc font-bold text-primary text-sm">Single Stock Stress Test · NVDA→QQQ</span>
-        <HelpTooltip text={'NVDA → QQQ 對沖邏輯：\n\nNVDA 在 QQQ 中佔約 8% 權重\n單純權重看：NVDA 跌 10% → QQQ 跌 0.8%\n\n但實務上 NVDA 大跌時整個科技股連動\n→ QQQ 跌幅放大 2–3 倍\n\n建議用 QQQ Put 對沖 NVDA 單一風險\n（同樣的避險效果，成本更低）'} />
-        <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
+        <HelpTooltip text={'NVDA → QQQ 對沖邏輯：\n\nNVDA 在 QQQ 中佔約 8% 權重\n單純權重看：NVDA 跌 10% → QQQ 跌 0.8%\n\n但實務上 NVDA 大跌時整個科技股連動\n→ QQQ 跌幅放大 2–3 倍\n\n建議用 QQQ Put 對沖 NVDA 單一風險\n（同樣的避險效果，成本更低）\n\n按「↻ 從 Polygon 算」自動拿 ATM straddle 算 implied move %'} />
+        <button
+          onClick={() => fetchStressStraddle && fetchStressStraddle(stressTicker)}
+          disabled={straddleStatus === 'fetching' || !fetchStressStraddle}
+          style={{
+            marginLeft: 'auto',
+            fontSize: '10px',
+            padding: '3px 8px',
+            borderRadius: '3px',
+            border: '1px solid ' + (straddleStatus === 'error' ? '#ef4444' : straddleStatus === 'synced' ? '#10b981' : '#2a2a2a'),
+            background: 'transparent',
+            color: straddleStatus === 'error' ? '#ef4444' : straddleStatus === 'synced' ? '#10b981' : '#EAB308',
+            cursor: straddleStatus === 'fetching' ? 'wait' : 'pointer',
+            fontFamily: 'DM Mono',
+            letterSpacing: '0.05em',
+          }}
+          title={'從 Polygon 抓 ' + stressTicker + ' ' + (targetExpiry || '') + ' ATM straddle 算 implied move'}
+        >
+          {straddleStatus === 'fetching' ? '⋯ 計算中' : straddleStatus === 'synced' ? '✓ 已同步' : straddleStatus === 'error' ? '✕ 失敗' : '↻ 從 Polygon 算'}
+        </button>
+        <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: '8px' }}>
           別人賭 NVDA · 聰明人看 NVDA 賭 QQQ
         </span>
       </div>
-      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '-6px', marginBottom: '14px' }}>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '-6px', marginBottom: '12px' }}>
         ▸ 把單一重倉股（NVDA）的下跌情境放大到整個持倉，並建議用 QQQ Put 對沖規模。
       </div>
+      {straddleStatus === 'synced' && straddleSyncTime && (
+        <div style={{ fontSize: '10px', color: '#888', fontFamily: 'DM Mono', marginTop: '-8px', marginBottom: '10px' }}>
+          {stressTicker} expiry {targetExpiry} · {Math.round((Date.now() - straddleSyncTime.getTime()) / 1000)}s ago
+        </div>
+      )}
+      {straddleStatus === 'error' && straddleError && (
+        <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '-8px', marginBottom: '10px', lineHeight: '1.4' }}>
+          {straddleError.slice(0, 140)}
+        </div>
+      )}
 
       {/* Inputs grid */}
       <div className="grid grid-cols-3 gap-3 mb-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
@@ -5173,6 +5588,9 @@ function App() {
     externalMacroAlerts: macroState?.redAlerts ?? null,
     externalMacroScore: macroState?.score ?? null,
     externalMacroBand: macroState?.band ?? null,
+    // L2 → L1 Polygon bridge: VIX spot lets L1 sync without dual fetch; workerUrl for L1's own Polygon calls
+    externalVIXSpot: macroState?.polygonDetails?.vix?.price ?? null,
+    workerUrl: 'https://solitary-wood-898d.justest521.workers.dev',
   }), [positions, macroState]);
 
   // ──────────────────────────────────────────────────────────
