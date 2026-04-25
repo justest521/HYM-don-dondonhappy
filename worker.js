@@ -411,14 +411,22 @@ async function polygonQuote(url, env) {
       }, r.ok ? 404 : r.status);
     }
     const t = d.ticker;
+    // After-hours / weekend: lastTrade & day.c can be 0; fall back to prevDay close so price is always usable
+    const lastTradeP = t.lastTrade?.p;
+    const dayClose = t.day?.c;
+    const prevClose = t.prevDay?.c ?? null;
+    const price = (lastTradeP && lastTradeP > 0) ? lastTradeP
+                : (dayClose && dayClose > 0) ? dayClose
+                : prevClose;
     return jsonResponse({
       ticker,
-      price: t.lastTrade?.p ?? t.day?.c ?? null,
-      prevClose: t.prevDay?.c ?? null,
+      price,
+      prevClose,
       change: t.todaysChange ?? null,
       changePct: t.todaysChangePerc ?? null,
       asOf: t.updated ? new Date(t.updated / 1_000_000).toISOString() : null,
       source: 'polygon-stocks',
+      ...(price === prevClose && (!lastTradeP || lastTradeP === 0) ? { note: 'using prev-day close (market closed/no trades)' } : {}),
     });
   });
 }
@@ -607,9 +615,14 @@ async function polygonATMStraddle(url, env) {
         polygonError: spotData.error || spotData.message,
       }, spotRes.status);
     }
-    const spot = spotData.ticker.lastTrade?.p
-      ?? spotData.ticker.day?.c
-      ?? spotData.ticker.prevDay?.c;
+    // After-hours / weekend: lastTrade & day.c can be 0 (truthy via ??), so explicitly skip 0
+    const lastTradeP = spotData.ticker.lastTrade?.p;
+    const dayClose = spotData.ticker.day?.c;
+    const prevClose = spotData.ticker.prevDay?.c;
+    const spot = (lastTradeP && lastTradeP > 0) ? lastTradeP
+               : (dayClose && dayClose > 0) ? dayClose
+               : (prevClose && prevClose > 0) ? prevClose
+               : null;
     if (!spot) return jsonResponse({ error: 'No spot price found' }, 404);
 
     // 2. Round spot to nearest strike (assume strikes spaced $1 for high-priced stocks, $0.5 for low)
@@ -643,17 +656,34 @@ async function polygonATMStraddle(url, env) {
       }, 404);
     }
 
-    const callMid = (call.last_quote?.bid != null && call.last_quote?.ask != null)
+    const callMid = (call.last_quote?.bid != null && call.last_quote?.ask != null && call.last_quote.bid > 0)
       ? (call.last_quote.bid + call.last_quote.ask) / 2
       : (call.last_trade?.price ?? null);
-    const putMid = (put.last_quote?.bid != null && put.last_quote?.ask != null)
+    const putMid = (put.last_quote?.bid != null && put.last_quote?.ask != null && put.last_quote.bid > 0)
       ? (put.last_quote.bid + put.last_quote.ask) / 2
       : (put.last_trade?.price ?? null);
 
-    const straddlePremium = (callMid || 0) + (putMid || 0);
-    // Standard rule of thumb: implied move ≈ straddle × 0.85 (accounts for premium decay/skew)
-    const impliedMoveDollar = straddlePremium * 0.85;
-    const impliedMovePct = spot > 0 ? (impliedMoveDollar / spot) * 100 : null;
+    let straddlePremium = (callMid || 0) + (putMid || 0);
+    let impliedMoveDollar = straddlePremium * 0.85;
+    let impliedMovePct = spot > 0 ? (impliedMoveDollar / spot) * 100 : null;
+    let derivedFrom = 'straddle-mid';
+
+    // Fallback: if no quotes/trades (market closed), estimate from IV via Black-Scholes approximation
+    // Implied move ≈ Spot × avg(IV) × √(DTE/365)
+    if (straddlePremium <= 0) {
+      const callIV = call.implied_volatility;
+      const putIV = put.implied_volatility;
+      if (callIV && putIV) {
+        const avgIV = (callIV + putIV) / 2;
+        const dte = (new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+        if (dte > 0) {
+          impliedMovePct = avgIV * Math.sqrt(dte / 365) * 100;
+          impliedMoveDollar = (impliedMovePct / 100) * spot;
+          straddlePremium = impliedMoveDollar / 0.85;  // implied straddle from IV
+          derivedFrom = 'iv-estimate';
+        }
+      }
+    }
 
     return jsonResponse({
       underlying,
@@ -669,6 +699,7 @@ async function polygonATMStraddle(url, env) {
       straddlePremium,
       impliedMoveDollar,
       impliedMovePct,
+      derivedFrom,
       asOf: new Date().toISOString(),
       source: 'polygon-atm-straddle',
     });
