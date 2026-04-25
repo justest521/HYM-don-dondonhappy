@@ -71,8 +71,8 @@
 
   <!-- Configuration: 在這裡填你的 Supabase anon key -->
   <script>
-    // 從 dondonhappy 既有 localStorage 讀取，或設為空字串走 mock 模式
-    window.__SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || '';
+    // localStorage 優先（讓 console setSupabaseKey() 可覆寫），fallback 到 head 裡 hardcoded 的值
+    window.__SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || window.__SUPABASE_ANON_KEY || '';
     // 也可以直接 hardcode（不建議 commit 進 git）：
     // window.__SUPABASE_ANON_KEY = 'eyJhbGc...';
 
