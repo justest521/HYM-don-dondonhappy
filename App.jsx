@@ -142,6 +142,59 @@ export default function App() {
   const [collapseL2, setCollapseL2] = useState(false);
   const [collapseL1, setCollapseL1] = useState(false);
 
+  // AI portfolio summary — auto-triggered on positions change (debounced 30 min)
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiSummaryTime, setAiSummaryTime] = useState(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState(null);
+  const lastAiPositionsRef = useRef('');
+
+  const generateAiSummary = useCallback(async (positionsArr, macroSnapshot, opts = {}) => {
+    if (!positionsArr || positionsArr.length === 0) return;
+    // De-dup: if positions haven't materially changed and within 30 min, skip
+    const fingerprint = JSON.stringify(positionsArr.map(p => ({ t: p.ticker, q: p.qty, s: p.strike })));
+    const now = Date.now();
+    if (!opts.force && fingerprint === lastAiPositionsRef.current && aiSummaryTime && (now - aiSummaryTime.getTime()) < 30 * 60 * 1000) {
+      return;
+    }
+    lastAiPositionsRef.current = fingerprint;
+    setAiSummaryLoading(true);
+    setAiSummaryError(null);
+    try {
+      const positionsText = positionsArr.map(p =>
+        '- ' + p.ticker + (p.option_type ? ' ' + p.option_type : '') + ' qty=' + p.qty + (p.strike ? ' strike=' + p.strike : '') + (p.expiry ? ' expiry=' + p.expiry : '')
+      ).join('\n');
+      const macroText = macroSnapshot ? ('Macro Score: ' + macroSnapshot.score + '/100, Band: ' + macroSnapshot.band + ', Alerts: ' + ((macroSnapshot.redAlerts || []).length)) : 'no macro data';
+      const prompt = '以下是我目前的美股期權持倉與當前 macro 狀態：\n\n持倉:\n' + positionsText + '\n\n' + macroText + '\n\n請用 3-5 行簡短中文評估：(1) 整體曝險方向 (2) 最大單一風險點 (3) 建議行動。每點一行，不要使用 markdown。';
+      const r = await fetch('https://solitary-wood-898d.justest521.workers.dev/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 400,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      if (!r.ok) throw new Error('AI HTTP ' + r.status);
+      const data = await r.json();
+      const text = data.content?.[0]?.text || data.error || '(empty)';
+      setAiSummary(text);
+      setAiSummaryTime(new Date());
+    } catch (e) {
+      console.error('[App] AI summary error:', e);
+      setAiSummaryError(e.message || String(e));
+    } finally {
+      setAiSummaryLoading(false);
+    }
+  }, [aiSummaryTime]);
+
+  // Trigger AI summary when positions OR macro state change (debounced 8s to batch updates)
+  useEffect(() => {
+    if (!positions || positions.length === 0) return;
+    const t = setTimeout(() => generateAiSummary(positions, macroState), 8000);
+    return () => clearTimeout(t);
+  }, [positions, macroState, generateAiSummary]);
+
   // Tick for relative time refresh
   const [, setNowTick] = useState(0);
 
@@ -310,6 +363,48 @@ export default function App() {
         >
           <L2MacroDashboard onScoreChange={handleMacroChange} />
         </CollapsibleSection>
+
+        {/* AI Portfolio Summary — auto-generated when positions/macro change (debounced 30 min) */}
+        {(aiSummary || aiSummaryLoading || aiSummaryError) && (
+          <div style={{
+            margin: '12px 24px 0',
+            padding: '14px 18px',
+            background: 'rgba(167,139,250,0.06)',
+            border: '1px solid rgba(167,139,250,0.25)',
+            borderRadius: '6px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: aiSummary ? '8px' : '0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '11px', fontFamily: 'DM Mono', color: '#a78bfa', letterSpacing: '0.1em', fontWeight: 600 }}>
+                  ✨ AI PORTFOLIO RISK SUMMARY
+                </span>
+                {aiSummaryTime && !aiSummaryLoading && (
+                  <span style={{ fontSize: '10px', color: '#666', fontFamily: 'DM Mono' }}>
+                    · {Math.round((Date.now() - aiSummaryTime.getTime()) / 1000)}s ago · 30min cache
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => generateAiSummary(positions, macroState, { force: true })}
+                disabled={aiSummaryLoading}
+                style={{
+                  background: 'transparent', border: '1px solid rgba(167,139,250,0.35)',
+                  color: '#a78bfa', padding: '3px 8px', borderRadius: '3px',
+                  fontSize: '10px', cursor: aiSummaryLoading ? 'wait' : 'pointer', fontFamily: 'DM Mono',
+                }}
+              >{aiSummaryLoading ? '⋯' : '↻ refresh'}</button>
+            </div>
+            {aiSummaryLoading && !aiSummary && (
+              <div style={{ fontSize: '12px', color: '#888', fontFamily: 'Noto Sans TC' }}>分析中⋯</div>
+            )}
+            {aiSummary && (
+              <div style={{ fontSize: '13px', color: '#e5e7eb', fontFamily: 'Noto Sans TC', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>{aiSummary}</div>
+            )}
+            {aiSummaryError && (
+              <div style={{ fontSize: '11px', color: '#ef4444', fontFamily: 'Noto Sans TC' }}>AI 失敗: {aiSummaryError}</div>
+            )}
+          </div>
+        )}
 
         {/* Cross-Layer Bridge */}
         <CrossLayerBridge

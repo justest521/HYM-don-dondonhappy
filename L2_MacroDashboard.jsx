@@ -1042,11 +1042,30 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
     }
   }, []);
 
-  // Auto-sync on mount
+  // Auto-sync on mount + auto-re-sync every hour (FRED is daily/weekly so hourly is plenty)
   useEffect(() => {
     syncFRED();
     syncPolygon();
+    fetchMoveIndex();
+    const fredInterval = setInterval(() => { syncFRED(); fetchMoveIndex(); }, 60 * 60 * 1000);  // 1 hr
+    const polygonInterval = setInterval(() => { syncPolygon(); }, 5 * 60 * 1000);                // 5 min (faster for live VIX/SPX)
+    return () => { clearInterval(fredInterval); clearInterval(polygonInterval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // MOVE Index auto-fetch via worker /api/yahoo (^MOVE symbol)
+  const fetchMoveIndex = useCallback(async () => {
+    try {
+      const r = await fetch(WORKER_URL + '/api/yahoo?symbol=%5EMOVE');
+      if (!r.ok) return;
+      const d = await r.json();
+      const price = d.regularMarketPrice ?? d.price ?? d.lastPrice;
+      if (price && isFinite(price) && price > 0) {
+        setMoveValue(parseFloat(price.toFixed(1)));
+      }
+    } catch (e) {
+      console.warn('[L2] MOVE Index auto-fetch failed (manual fallback OK):', e.message);
+    }
   }, []);
 
   // ──────────────────────────────────────────────────────────
