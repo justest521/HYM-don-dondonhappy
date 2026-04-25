@@ -154,6 +154,54 @@
       );
     }
 
+    // ────────────────────────────────────────────────────────────
+    // HelpModal — full in-app user guide (opened from header 📖 button)
+    // ────────────────────────────────────────────────────────────
+    function HelpModal({ open, onClose }) {
+      if (!open) return null;
+      const sections = [
+        { title: '📅 每日操作流程', body: '🌅 早盤前 (07:00 ET 前)\n  1. 看「FRED · SYNCED」是否亮綠（黃色按 Re-sync）\n  2. 看 TODAY\\'S MACRO SCORE — 跟昨天比有沒有變色（綠→黃 / 黃→紅 = 警訊）\n  3. 看「紅色警報系統」— 任一觸發都要重新評估倉位\n  4. 看「L1 Hedge 串聯建議」— 今日的 hedge bps 預算\n\n📈 盤中\n  • 持倉自動每 60 秒 sync\n  • 重大事件（CPI/Fed/NFP）公布後手動 Re-sync FRED\n  • 「下週劇本演練」按 ✨ AI Generate 更新即時情境\n\n🌙 收盤後\n  • 看「情境 P&L 分析」— 今日不同 scenario 的損益\n  • 用 Stress Test 跑重倉股下跌風險' },
+        { title: '📊 10 個 section 速查', body: '滑鼠移到每個 section 標題旁的 (?) 圖示可看詳細計算公式。\n\n1. TodayCallHero — 今日總分 + 倉位帶\n2. ScorecardBreakdown — 4 項加權細項\n3. RedAlertSection — 三大致命警報\n4. EconomicCycleSection — PMI×CPI 四象限\n5. RRGMatrixSection — 板塊輪動矩陣\n6. ScenarioPlannerSection — 事件 If-Then 劇本\n7. L1IntegrationSection — 避險 bps 建議\n8. 情境 P&L 分析 — scenario 損益推算\n9. 進場時機紀律 — T-N 天檢核\n10. Portfolio Beta + Stress Test — Beta + NVDA→QQQ 試算' },
+        { title: '🔑 常用設定', body: '【新增持倉】\nSupabase Dashboard → Project HYM-CPO → Table Editor → positions 表\nINSERT INTO positions (ticker, option_type, qty, current_price, strike, expiry, user_name)\nVALUES (\\'AAPL\\', \\'CALL\\', 5, 175.5, 180, \\'06/20/26\\', \\'toywu\\');\n\n【切換 user】\n編輯 public/index.html 找：const USER_NAME = \\'toywu\\';\n注意 lowercase（PostgreSQL = 是 case-sensitive）\n\n【Console 工具】\nsetSupabaseKey(\\'eyJ...\\') — 寫進 localStorage 並 reload\nclearSupabaseKey()         — 清除回 hardcoded' },
+        { title: '🐛 Troubleshooting', body: '【FRED 回 520】\n偶發 Cloudflare 路由問題，重試幾次。Worker 已用 curl/8.0 UA 繞過 WAF。\n\n【lucide forwardRef undefined】\n確認 lucide-react 用 0.263.1 版本，且 HTML 有 alias window.react = window.React。\n\n【Supabase 未連線】\n1. Console 打 window.__SUPABASE_ANON_KEY 應該回傳 JWT\n2. 確認 USER_NAME = \\'toywu\\' (lowercase)\n3. 確認 DB user_name 欄位也是 lowercase\n\n【Babel 報 import.meta】\n原始 jsx 用 Vite 語法，已在 HTML 移除。改 source 重 build 要記得再清。' },
+        { title: '🔗 資源連結', body: 'GitHub: github.com/justest521/HYM-don-dondonhappy\nVercel: vercel.com/justest521s-projects/hym-admin-pdd3-dondonhappy\nCloudflare Worker: dash.cloudflare.com → Workers → solitary-wood-898d\nSupabase: supabase.com/dashboard/project/kzxunbohppykfkaqioqd\nFRED API: fred.stlouisfed.org/docs/api/fred\nAnthropic API: docs.claude.com' },
+      ];
+      return (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: '8px',
+              maxWidth: '720px', width: '100%', maxHeight: '85vh', overflowY: 'auto',
+              padding: '28px 32px', boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid #2a2a2a' }}>
+              <div>
+                <div style={{ fontFamily: 'Noto Sans TC', fontSize: '18px', fontWeight: 700, color: '#f4f4f4' }}>📖 MEP Trading System · 使用說明</div>
+                <div style={{ fontFamily: 'DM Mono', fontSize: '11px', color: '#666', marginTop: '4px', letterSpacing: '0.1em' }}>L2 MACRO · L1 HEDGE · SUPABASE POSITIONS</div>
+              </div>
+              <button onClick={onClose} style={{ background: 'transparent', border: '1px solid #2a2a2a', color: '#888', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'DM Mono', fontSize: '12px' }}>關閉 ESC</button>
+            </div>
+            {sections.map((s, i) => (
+              <div key={i} style={{ marginBottom: '24px' }}>
+                <div style={{ fontFamily: 'Noto Sans TC', fontSize: '14px', fontWeight: 700, color: '#EAB308', marginBottom: '10px' }}>{s.title}</div>
+                <div style={{ fontFamily: 'Noto Sans TC', fontSize: '12px', color: '#d4d4d4', lineHeight: '1.8', whiteSpace: 'pre-line', paddingLeft: '4px' }}>{s.body}</div>
+              </div>
+            ))}
+            <div style={{ marginTop: '20px', paddingTop: '14px', borderTop: '1px solid #2a2a2a', fontFamily: 'DM Mono', fontSize: '10px', color: '#555', textAlign: 'center' }}>完整說明請見 GitHub README · 點背景或按鈕關閉</div>
+          </div>
+        </div>
+      );
+    }
+
 // ============================================================
 // L2 MACRO DASHBOARD (IIFE-isolated scope)
 // ============================================================
@@ -5196,6 +5244,14 @@ function AppHeader({
 }) {
   const status = STATUS_CONFIG[supabaseStatus] || STATUS_CONFIG.mock;
   const Icon = status.icon;
+  const [showHelp, setShowHelp] = useState(false);
+  // ESC key closes modal
+  useEffect(() => {
+    if (!showHelp) return;
+    const handler = (e) => { if (e.key === 'Escape') setShowHelp(false); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showHelp]);
 
   return (
     <div style={{
@@ -5295,7 +5351,30 @@ function AppHeader({
         >
           <Settings size={14} />
         </button>
+
+        <button
+          onClick={() => setShowHelp(true)}
+          style={{
+            background: 'transparent',
+            border: '1px solid #2a2a2a',
+            color: '#EAB308',
+            padding: '6px 10px',
+            borderRadius: '3px',
+            cursor: 'pointer',
+            fontFamily: 'Noto Sans TC',
+            fontSize: '12px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            marginLeft: '4px',
+          }}
+          title="使用說明書 (?)"
+        >
+          📖 說明
+        </button>
       </div>
+      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
 }
