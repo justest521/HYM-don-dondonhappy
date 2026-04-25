@@ -15,6 +15,9 @@
   <!-- Babel Standalone (transpiles JSX in browser) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- Alias React → react (lowercase) for lucide-react UMD's broken expectation -->
+  <script>window.react = window.React;</script>
+
   <!-- lucide-react UMD (icons) — 0.263.1 是最後一個 UMD 正常運作的版本 -->
   <script crossorigin src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
 
