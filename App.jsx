@@ -238,7 +238,7 @@ export default function App() {
     try {
       const { data, error } = await client
         .from('positions')
-        .select('id, ticker, option_type, qty, current_price, strike, expiry, note')
+        .select('id, ticker, option_type, qty, current_price, cost, strike, expiry, note')
         .eq('user_name', USER_NAME);
       if (error) throw error;
 
@@ -943,13 +943,13 @@ function BridgeArrow() {
 // ────────────────────────────────────────────────────────────
 function PositionsManager({ positions, supabaseStatus, onChange }) {
   const [editing, setEditing] = useState(null);  // null | 'new' | id
-  const [form, setForm] = useState({ ticker: '', option_type: '', qty: '', current_price: '', strike: '', expiry: '', note: '' });
+  const [form, setForm] = useState({ ticker: '', option_type: 'CALL', qty: '1', current_price: '', cost: '', strike: '', expiry: '', note: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   const startNew = () => {
     setEditing('new');
-    setForm({ ticker: '', option_type: '', qty: '', current_price: '', strike: '', expiry: '', note: '' });
+    setForm({ ticker: '', option_type: 'CALL', qty: '1', current_price: '', cost: '', strike: '', expiry: '', note: '' });
     setError(null);
   };
 
@@ -958,8 +958,9 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
     setForm({
       ticker: p.ticker || '',
       option_type: p.option_type || '',
-      qty: p.qty != null ? String(p.qty) : '',
+      qty: p.qty != null ? String(p.qty) : '1',
       current_price: p.current_price != null ? String(p.current_price) : '',
+      cost: p.cost != null ? String(p.cost) : '',
       strike: p.strike != null ? String(p.strike) : '',
       expiry: p.expiry || '',
       note: p.note || '',
@@ -972,6 +973,8 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
   const submit = async () => {
     if (!form.ticker.trim()) { setError('Ticker 必填'); return; }
     if (!form.qty || parseFloat(form.qty) <= 0) { setError('Qty 必填且 > 0'); return; }
+    if (form.current_price === '' || parseFloat(form.current_price) < 0) { setError('Current Price 必填'); return; }
+    if (form.cost === '' || parseFloat(form.cost) < 0) { setError('Cost (買入成本) 必填'); return; }
     setBusy(true);
     setError(null);
     try {
@@ -980,11 +983,12 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
       const payload = {
         ticker: form.ticker.trim().toUpperCase(),
         option_type: form.option_type || null,
-        qty: parseFloat(form.qty),
-        current_price: form.current_price === '' ? null : parseFloat(form.current_price),
+        qty: parseInt(form.qty, 10),
+        current_price: parseFloat(form.current_price),
+        cost: parseFloat(form.cost),
         strike: form.strike === '' ? null : parseFloat(form.strike),
         expiry: form.expiry || null,
-        note: form.note || null,
+        note: form.note || '',
         user_name: 'toywu',
       };
       if (editing === 'new') {
@@ -1065,7 +1069,8 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
             <FormField label="Ticker *" value={form.ticker} onChange={(v) => setForm({ ...form, ticker: v.toUpperCase() })} placeholder="NVDA" />
             <FormField label="Type" value={form.option_type} onChange={(v) => setForm({ ...form, option_type: v })} type="select" options={[{ value: '', label: '股票' }, { value: 'CALL', label: 'CALL' }, { value: 'PUT', label: 'PUT' }]} />
             <FormField label="Qty *" value={form.qty} onChange={(v) => setForm({ ...form, qty: v })} placeholder="10" type="number" />
-            <FormField label="Current Price" value={form.current_price} onChange={(v) => setForm({ ...form, current_price: v })} placeholder="183.04" type="number" />
+            <FormField label="Current Price *" value={form.current_price} onChange={(v) => setForm({ ...form, current_price: v })} placeholder="183.04" type="number" />
+            <FormField label="買入成本 Cost *" value={form.cost} onChange={(v) => setForm({ ...form, cost: v })} placeholder="180.00" type="number" />
             <FormField label="Strike" value={form.strike} onChange={(v) => setForm({ ...form, strike: v })} placeholder="190" type="number" disabled={!form.option_type} />
             <FormField label="Expiry (MM/DD/YY)" value={form.expiry} onChange={(v) => setForm({ ...form, expiry: v })} placeholder="03/21/26" disabled={!form.option_type} />
             <FormField label="Note" value={form.note} onChange={(v) => setForm({ ...form, note: v })} placeholder="(選填)" wide />
@@ -1096,6 +1101,8 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                 <th style={{ textAlign: 'left', padding: '6px 8px' }}>TYPE</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>QTY</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>PRICE</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>COST</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>P/L</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>STRIKE</th>
                 <th style={{ textAlign: 'left', padding: '6px 8px' }}>EXPIRY</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>VALUE</th>
@@ -1103,27 +1110,35 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
               </tr>
             </thead>
             <tbody>
-              {realPositions.map(p => (
-                <tr key={p.id} style={{ borderBottom: '1px solid #1a1a1a', color: '#d4d4d4' }}>
-                  <td style={{ padding: '8px', fontWeight: 600, color: '#f4f4f4' }}>{p.ticker}</td>
-                  <td style={{ padding: '8px', color: p.option_type === 'CALL' ? '#10b981' : p.option_type === 'PUT' ? '#ef4444' : '#888' }}>{p.option_type || '股票'}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>{p.qty}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>{p.current_price != null ? '$' + Number(p.current_price).toFixed(2) : '—'}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>{p.strike != null ? '$' + Number(p.strike).toFixed(0) : '—'}</td>
-                  <td style={{ padding: '8px' }}>{p.expiry || '—'}</td>
-                  <td style={{ padding: '8px', textAlign: 'right', color: '#EAB308' }}>${(p.value || 0).toLocaleString()}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>
-                    <button onClick={() => startEdit(p)} disabled={busy || editing} style={{
-                      background: 'transparent', border: '1px solid #2a2a2a', color: '#888',
-                      padding: '3px 8px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer', marginRight: '4px',
-                    }}>✎</button>
-                    <button onClick={() => remove(p.id, p.ticker)} disabled={busy || editing} style={{
-                      background: 'transparent', border: '1px solid #ef444450', color: '#ef4444',
-                      padding: '3px 8px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer',
-                    }}>✕</button>
-                  </td>
-                </tr>
-              ))}
+              {realPositions.map(p => {
+                const cur = Number(p.current_price);
+                const cost = Number(p.cost);
+                const plPct = (cur && cost) ? ((cur - cost) / cost) * 100 : null;
+                const plColor = plPct == null ? '#666' : plPct >= 0 ? '#10b981' : '#ef4444';
+                return (
+                  <tr key={p.id} style={{ borderBottom: '1px solid #1a1a1a', color: '#d4d4d4' }}>
+                    <td style={{ padding: '8px', fontWeight: 600, color: '#f4f4f4' }}>{p.ticker}</td>
+                    <td style={{ padding: '8px', color: p.option_type === 'CALL' ? '#10b981' : p.option_type === 'PUT' ? '#ef4444' : '#888' }}>{p.option_type || '股票'}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{p.qty}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{p.current_price != null ? '$' + Number(p.current_price).toFixed(2) : '—'}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{p.cost != null ? '$' + Number(p.cost).toFixed(2) : '—'}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', color: plColor }}>{plPct == null ? '—' : (plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%'}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{p.strike != null ? '$' + Number(p.strike).toFixed(0) : '—'}</td>
+                    <td style={{ padding: '8px' }}>{p.expiry || '—'}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', color: '#EAB308' }}>${(p.value || 0).toLocaleString()}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>
+                      <button onClick={() => startEdit(p)} disabled={busy || editing} style={{
+                        background: 'transparent', border: '1px solid #2a2a2a', color: '#888',
+                        padding: '3px 8px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer', marginRight: '4px',
+                      }}>✎</button>
+                      <button onClick={() => remove(p.id, p.ticker)} disabled={busy || editing} style={{
+                        background: 'transparent', border: '1px solid #ef444450', color: '#ef4444',
+                        padding: '3px 8px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer',
+                      }}>✕</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
