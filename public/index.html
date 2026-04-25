@@ -1744,6 +1744,9 @@ function ScorecardBreakdown({ indicatorScores, moveValue, t10y2yValue, effective
           WEIGHTED · 0.4/0.3/0.2/0.1
         </span>
       </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 把今日 0–100 總分拆解 — 流動性、SPX、MOVE、利差、RRG 各佔多少分，找出今日主要扣分項。
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
         {indicators.map((ind) => (
@@ -1878,6 +1881,9 @@ function RedAlertSection({
           {overallStatus === 'safe' ? 'CLEAR · 0/3' : triggeredCount + '/3 TRIGGERED'}
         </span>
       </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 即時監控致命警報：MOVE&gt;130 危機、利差倒掛轉正、失業率連 2 月升、淨流動性負值、SPX 跌破 20MA。
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {conditions.map((c) => (
@@ -1986,6 +1992,9 @@ function EconomicCycleSection({ economicQuadrant, pmiValue, cpiTrend }) {
           PMI {pmiValue.toFixed(1)} · CPI {cpiTrend.toUpperCase()}
         </span>
       </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 用 PMI × CPI 趨勢定位當下經濟週期（復甦／擴張／滯脹／衰退），決定該避險還是進攻哪些板塊。
+      </div>
 
       {/* Visual quadrant matrix */}
       <div style={{
@@ -2089,6 +2098,9 @@ function RRGMatrixSection({ sectorsByQuadrant, sectorPlacement, onCycle, effecti
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           進攻 Leading: {effectiveRrgCount}/6 · 點擊切換象限
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 11 個 GICS 板塊的相對強度／動能矩陣 — 看哪些板塊正在「領先 / 走弱 / 落後 / 改善」，決定資金流向。
       </div>
 
       {/* 2x2 grid of quadrants */}
@@ -2253,6 +2265,9 @@ function ScenarioPlannerSection({
           <span className="text-xs text-muted-2 font-mono-dm">SCENARIO PLANNING</span>
         </div>
       </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 10 個事件情境（CPI 高低、Fed 鴿鷹、NFP、M7 財報、PMI 突破/跌破）的 If-Then 應對劇本，事先排好交易計畫。
+      </div>
 
       {aiError && (
         <div style={{
@@ -2409,6 +2424,9 @@ function L1IntegrationSection({ weightedTotal, positionBand, redAlerts, l1HedgeB
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           L2 → L1 PIPELINE
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '6px', marginBottom: '14px' }}>
+        ▸ 把 L2 算出的 Macro Score 翻譯成 L1 操盤層的具體行動：建議避險預算（bps + USD）、觸發理由、執行清單。
       </div>
 
       {/* Recommendation hero */}
@@ -3827,6 +3845,9 @@ function VIXHedgeCalculator({
                 </div>
                 <PnLModeToggle mode={pnlMode} setMode={setPnlMode} />
               </div>
+              <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '-4px', marginBottom: '14px' }}>
+                ▸ 在不同 macro scenario（樂觀／基準／悲觀）下，目前持倉組合的盈虧推算與最大回撤估算。
+              </div>
 
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }} className="font-mono-dm tabular">
@@ -3925,6 +3946,9 @@ function VIXHedgeCalculator({
                 <Clock size={14} className="text-accent" />
                 <span className="font-tc font-bold text-primary text-sm">進場時機紀律</span>
                 <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>T-{daysToEvent}</span>
+              </div>
+              <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '-4px', marginBottom: '12px' }}>
+                ▸ 距事件 T-N 天的進場節奏檢核 — 提醒何時該開倉、加碼、停損，避免情緒化操作。
               </div>
               <div className="grid grid-cols-1 gap-2">
                 <TimingRow
@@ -4222,6 +4246,9 @@ function PortfolioBetaSection({
           {externalConnected ? 'EXTERNAL · SYNCED' : 'MANUAL'}
         </span>
       </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '-6px', marginBottom: '14px' }}>
+        ▸ 持倉組合相對 SPX 的 Beta 值 — 大盤跌 1% 你大概跌多少，是否需要中性化避險。
+      </div>
 
       {/* Computed metrics row */}
       <div className="grid grid-cols-4 gap-3 mb-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
@@ -4355,6 +4382,9 @@ function StockStressSection({
         <span className="text-xs text-muted-2 font-mono-dm" style={{ marginLeft: 'auto' }}>
           別人賭 NVDA · 聰明人看 NVDA 賭 QQQ
         </span>
+      </div>
+      <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'Noto Sans TC', lineHeight: '1.55', marginTop: '-6px', marginBottom: '14px' }}>
+        ▸ 把單一重倉股（NVDA）的下跌情境放大到整個持倉，並建議用 QQQ Put 對沖規模。
       </div>
 
       {/* Inputs grid */}
