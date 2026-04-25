@@ -5737,6 +5737,13 @@ function App() {
           <L2MacroDashboard onScoreChange={handleMacroChange} />
         </CollapsibleSection>
 
+        {/* Positions CRUD UI — directly above macro context for easy editing */}
+        <PositionsManager
+          positions={positions}
+          supabaseStatus={supabaseStatus}
+          onChange={fetchPositions}
+        />
+
         {/* AI Portfolio Summary — auto-generated when positions/macro change (debounced 30 min) */}
         {(aiSummary || aiSummaryLoading || aiSummaryError) && (
           <div style={{
@@ -6304,6 +6311,223 @@ function BridgeArrow() {
 }
 
 // ────────────────────────────── Collapsible Section
+// ────────────────────────────────────────────────────────────
+// PositionsManager — CRUD for Supabase positions table
+// ────────────────────────────────────────────────────────────
+function PositionsManager({ positions, supabaseStatus, onChange }) {
+  const [editing, setEditing] = useState(null);  // null | 'new' | id
+  const [form, setForm] = useState({ ticker: '', option_type: '', qty: '', current_price: '', strike: '', expiry: '', note: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const startNew = () => {
+    setEditing('new');
+    setForm({ ticker: '', option_type: '', qty: '', current_price: '', strike: '', expiry: '', note: '' });
+    setError(null);
+  };
+
+  const startEdit = (p) => {
+    setEditing(p.id);
+    setForm({
+      ticker: p.ticker || '',
+      option_type: p.option_type || '',
+      qty: p.qty != null ? String(p.qty) : '',
+      current_price: p.current_price != null ? String(p.current_price) : '',
+      strike: p.strike != null ? String(p.strike) : '',
+      expiry: p.expiry || '',
+      note: p.note || '',
+    });
+    setError(null);
+  };
+
+  const cancel = () => { setEditing(null); setError(null); };
+
+  const submit = async () => {
+    if (!form.ticker.trim()) { setError('Ticker 必填'); return; }
+    if (!form.qty || parseFloat(form.qty) <= 0) { setError('Qty 必填且 > 0'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Supabase 未連線');
+      const payload = {
+        ticker: form.ticker.trim().toUpperCase(),
+        option_type: form.option_type || null,
+        qty: parseFloat(form.qty),
+        current_price: form.current_price === '' ? null : parseFloat(form.current_price),
+        strike: form.strike === '' ? null : parseFloat(form.strike),
+        expiry: form.expiry || null,
+        note: form.note || null,
+        user_name: 'toywu',
+      };
+      if (editing === 'new') {
+        const { error } = await client.from('positions').insert(payload);
+        if (error) throw error;
+      } else {
+        const { error } = await client.from('positions').update(payload).eq('id', editing);
+        if (error) throw error;
+      }
+      setEditing(null);
+      onChange();
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id, ticker) => {
+    if (!window.confirm('確定刪除 ' + ticker + ' 這筆持倉？')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Supabase 未連線');
+      const { error } = await client.from('positions').delete().eq('id', id);
+      if (error) throw error;
+      onChange();
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isReadOnly = supabaseStatus !== 'connected';
+  const realPositions = positions.filter(p => !String(p.id || '').startsWith('mock-'));
+
+  return (
+    <div style={{ background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: '6px', padding: '16px 20px', margin: '12px 24px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Database size={14} className="text-accent" />
+          <span style={{ fontFamily: 'Noto Sans TC', fontSize: '13px', fontWeight: 700, color: '#f4f4f4' }}>持倉管理</span>
+          <span style={{ fontFamily: 'DM Mono', fontSize: '10px', color: '#666', letterSpacing: '0.1em', marginLeft: '4px' }}>
+            {realPositions.length} POSITIONS · USER: toywu
+          </span>
+        </div>
+        {!editing && (
+          <button
+            onClick={startNew}
+            disabled={isReadOnly || busy}
+            style={{
+              background: isReadOnly ? '#1a1a1a' : 'rgba(234,179,8,0.12)',
+              border: '1px solid #EAB30850',
+              color: isReadOnly ? '#555' : '#EAB308',
+              padding: '5px 12px', borderRadius: '3px',
+              fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 600,
+              cursor: isReadOnly ? 'not-allowed' : 'pointer',
+            }}
+          >+ 新增持倉</button>
+        )}
+      </div>
+
+      {isReadOnly && (
+        <div style={{ fontSize: '11px', color: '#fb923c', fontFamily: 'Noto Sans TC', padding: '8px 12px', background: 'rgba(251,146,60,0.06)', borderRadius: '3px', marginBottom: '10px' }}>
+          ⚠️ Supabase 未連線（目前 mock 資料），無法新增/編輯。請先設定 anon key。
+        </div>
+      )}
+
+      {/* Inline form for new/edit */}
+      {editing && (
+        <div style={{ background: '#1a1a1a', border: '1px solid #EAB30840', borderRadius: '4px', padding: '14px', marginBottom: '12px' }}>
+          <div style={{ fontSize: '11px', fontFamily: 'DM Mono', color: '#EAB308', letterSpacing: '0.1em', marginBottom: '10px' }}>
+            {editing === 'new' ? '+ 新增持倉' : '✎ 編輯持倉'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '8px' }}>
+            <FormField label="Ticker *" value={form.ticker} onChange={(v) => setForm({ ...form, ticker: v.toUpperCase() })} placeholder="NVDA" />
+            <FormField label="Type" value={form.option_type} onChange={(v) => setForm({ ...form, option_type: v })} type="select" options={[{ value: '', label: '股票' }, { value: 'CALL', label: 'CALL' }, { value: 'PUT', label: 'PUT' }]} />
+            <FormField label="Qty *" value={form.qty} onChange={(v) => setForm({ ...form, qty: v })} placeholder="10" type="number" />
+            <FormField label="Current Price" value={form.current_price} onChange={(v) => setForm({ ...form, current_price: v })} placeholder="183.04" type="number" />
+            <FormField label="Strike" value={form.strike} onChange={(v) => setForm({ ...form, strike: v })} placeholder="190" type="number" disabled={!form.option_type} />
+            <FormField label="Expiry (MM/DD/YY)" value={form.expiry} onChange={(v) => setForm({ ...form, expiry: v })} placeholder="03/21/26" disabled={!form.option_type} />
+            <FormField label="Note" value={form.note} onChange={(v) => setForm({ ...form, note: v })} placeholder="(選填)" wide />
+          </div>
+          {error && (
+            <div style={{ fontSize: '11px', color: '#ef4444', fontFamily: 'Noto Sans TC', marginTop: '6px', padding: '6px 10px', background: 'rgba(239,68,68,0.08)', borderRadius: '3px' }}>{error}</div>
+          )}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+            <button onClick={submit} disabled={busy} style={{
+              background: '#EAB308', color: '#000', padding: '6px 14px', borderRadius: '3px',
+              border: 'none', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer',
+            }}>{busy ? '⋯' : (editing === 'new' ? '✓ 新增' : '✓ 儲存')}</button>
+            <button onClick={cancel} disabled={busy} style={{
+              background: 'transparent', color: '#888', padding: '6px 14px', borderRadius: '3px',
+              border: '1px solid #2a2a2a', fontFamily: 'DM Mono', fontSize: '11px', cursor: busy ? 'wait' : 'pointer',
+            }}>取消</button>
+          </div>
+        </div>
+      )}
+
+      {/* Positions table */}
+      {realPositions.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'DM Mono' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #2a2a2a', color: '#666', fontSize: '10px', letterSpacing: '0.08em' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>TICKER</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>TYPE</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>QTY</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>PRICE</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>STRIKE</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>EXPIRY</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>VALUE</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', width: '90px' }}>動作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {realPositions.map(p => (
+                <tr key={p.id} style={{ borderBottom: '1px solid #1a1a1a', color: '#d4d4d4' }}>
+                  <td style={{ padding: '8px', fontWeight: 600, color: '#f4f4f4' }}>{p.ticker}</td>
+                  <td style={{ padding: '8px', color: p.option_type === 'CALL' ? '#10b981' : p.option_type === 'PUT' ? '#ef4444' : '#888' }}>{p.option_type || '股票'}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{p.qty}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{p.current_price != null ? '$' + Number(p.current_price).toFixed(2) : '—'}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{p.strike != null ? '$' + Number(p.strike).toFixed(0) : '—'}</td>
+                  <td style={{ padding: '8px' }}>{p.expiry || '—'}</td>
+                  <td style={{ padding: '8px', textAlign: 'right', color: '#EAB308' }}>${(p.value || 0).toLocaleString()}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>
+                    <button onClick={() => startEdit(p)} disabled={busy || editing} style={{
+                      background: 'transparent', border: '1px solid #2a2a2a', color: '#888',
+                      padding: '3px 8px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer', marginRight: '4px',
+                    }}>✎</button>
+                    <button onClick={() => remove(p.id, p.ticker)} disabled={busy || editing} style={{
+                      background: 'transparent', border: '1px solid #ef444450', color: '#ef4444',
+                      padding: '3px 8px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer',
+                    }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Simple form field used by PositionsManager
+function FormField({ label, value, onChange, placeholder, type, options, disabled, wide }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: wide ? 'span 4' : 'auto' }}>
+      <label style={{ fontSize: '10px', color: '#888', fontFamily: 'DM Mono', letterSpacing: '0.05em' }}>{label}</label>
+      {type === 'select' ? (
+        <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} style={{
+          background: '#0a0a0a', border: '1px solid #2a2a2a', color: '#f4f4f4',
+          padding: '6px 8px', borderRadius: '3px', fontSize: '12px', fontFamily: 'DM Mono',
+        }}>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input type={type || 'text'} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} style={{
+          background: '#0a0a0a', border: '1px solid #2a2a2a', color: '#f4f4f4',
+          padding: '6px 8px', borderRadius: '3px', fontSize: '12px', fontFamily: 'DM Mono',
+          opacity: disabled ? 0.4 : 1,
+        }} />
+      )}
+    </div>
+  );
+}
+
 function CollapsibleSection({ title, subtitle, icon: Icon, collapsed, setCollapsed, children }) {
   return (
     <div>
