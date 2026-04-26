@@ -1730,43 +1730,47 @@ function PortfolioBetaSection({
                 </tr>
               );
             })}
-            {/* Add row */}
-            <tr>
-              <td style={{ padding: '8px 6px' }}>
-                <input
-                  type="text"
-                  placeholder="TICKER"
-                  value={newPosTicker}
-                  onChange={(e) => setNewPosTicker(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === 'Enter' && onAdd()}
-                  className="text-input"
-                  style={{ width: '80px', padding: '4px 8px' }}
-                />
-              </td>
-              <td style={{ padding: '8px 6px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={newPosValue}
-                  onChange={(e) => setNewPosValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && onAdd()}
-                  className="text-input"
-                  style={{ width: '100px', padding: '4px 8px', textAlign: 'right' }}
-                />
-              </td>
-              <td colSpan={4} style={{ padding: '8px 6px', textAlign: 'right' }}>
-                <button onClick={onAdd} className="icon-btn" style={{ borderColor: '#EAB308', color: '#EAB308' }}>
-                  <Plus size={10} /> 新增持倉
-                </button>
-              </td>
-            </tr>
+            {/* Add row — 隱藏當 Supabase 已連線（避免跟頁面上方的「持倉管理」搞混） */}
+            {!externalConnected && (
+              <tr>
+                <td style={{ padding: '8px 6px' }}>
+                  <input
+                    type="text"
+                    placeholder="TICKER"
+                    value={newPosTicker}
+                    onChange={(e) => setNewPosTicker(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+                    className="text-input"
+                    style={{ width: '80px', padding: '4px 8px' }}
+                  />
+                </td>
+                <td style={{ padding: '8px 6px', textAlign: 'right' }}>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={newPosValue}
+                    onChange={(e) => setNewPosValue(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && onAdd()}
+                    className="text-input"
+                    style={{ width: '100px', padding: '4px 8px', textAlign: 'right' }}
+                  />
+                </td>
+                <td colSpan={4} style={{ padding: '8px 6px', textAlign: 'right' }}>
+                  <button onClick={onAdd} className="icon-btn" style={{ borderColor: '#EAB308', color: '#EAB308' }}>
+                    <Plus size={10} /> 新增持倉
+                  </button>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="mt-3 text-xs text-muted-2 font-tc" style={{ fontSize: '10.5px', lineHeight: 1.5 }}>
-        Beta 來自內建 lookup（to-SPY），未知 ticker 預設 1.10。權重變化會即時影響 VIX hedge 的有效性計算。
-        {externalConnected && '  · 持倉來自外部 prop（例如 Supabase positions），手動編輯不會回寫'}
+        Beta 來自內建 lookup（to-SPY），未知 ticker 預設 1.10。
+        {externalConnected
+          ? <span style={{ color: '#EAB308' }}>  · 持倉來自 Supabase（自動同步）。要新增/編輯/刪除請到頁面最上方「<b>持倉管理</b>」面板，這裡只算 Beta。</span>
+          : '  權重變化會即時影響 VIX hedge 的有效性計算。'}
       </div>
     </div>
   );
