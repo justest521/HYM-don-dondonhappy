@@ -5452,15 +5452,26 @@ function mapSupabasePosition(row) {
   const multiplier = isOption ? 100 : 1;
   const value = (row.qty || 0) * (row.current_price || 0) * multiplier;
   return {
+    // ── identity & primary aggregate
     id: row.id,
     ticker: (row.ticker || '').toUpperCase(),
     value,
-    // 額外欄位，本元件不直接用，但可以存著供將來擴充
+    // ── flat fields (so PositionsManager + L1/L2 can read directly without _meta)
+    option_type: row.option_type,
+    qty: row.qty,
+    current_price: row.current_price,
+    cost: row.cost,
+    strike: row.strike,
+    expiry: row.expiry,
+    note: row.note,
+    isOption,
+    // ── legacy structure preserved for any consumer still using _meta
     _meta: {
       isOption,
       optionType: row.option_type,
       qty: row.qty,
       currentPrice: row.current_price,
+      cost: row.cost,
       strike: row.strike,
       expiry: row.expiry,
       note: row.note,
@@ -6314,11 +6325,29 @@ function BridgeArrow() {
 // ────────────────────────────────────────────────────────────
 // PositionsManager — CRUD for Supabase positions table
 // ────────────────────────────────────────────────────────────
+const WORKER_URL_APP = 'https://solitary-wood-898d.justest521.workers.dev';
+
+// Fetch current price for a ticker from Polygon via worker (returns null on fail)
+async function fetchCurrentPrice(ticker) {
+  if (!ticker) return null;
+  try {
+    const r = await fetch(WORKER_URL_APP + '/api/polygon/quote?ticker=' + encodeURIComponent(ticker.toUpperCase()));
+    if (!r.ok) return null;
+    const d = await r.json();
+    const p = d.price;
+    return (p && isFinite(p) && p > 0) ? parseFloat(p.toFixed(2)) : null;
+  } catch { return null; }
+}
+
 function PositionsManager({ positions, supabaseStatus, onChange }) {
   const [editing, setEditing] = useState(null);  // null | 'new' | id
   const [form, setForm] = useState({ ticker: '', option_type: 'CALL', qty: '1', current_price: '', cost: '', strike: '', expiry: '', note: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [tickerLookup, setTickerLookup] = useState(false);  // for "loading" indicator on auto-fetch
+  const [pricesRefreshing, setPricesRefreshing] = useState(false);
+  const [pricesLastRefresh, setPricesLastRefresh] = useState(null);
+  const debounceRef = useRef(null);
 
   const startNew = () => {
     setEditing('new');
@@ -6380,6 +6409,66 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
     }
   };
 
+  // Auto-fetch current price when ticker changes in form (debounced 600ms)
+  const onTickerChange = (v) => {
+    const upper = v.toUpperCase();
+    setForm(f => ({ ...f, ticker: upper }));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!upper || upper.length < 1) return;
+    debounceRef.current = setTimeout(async () => {
+      setTickerLookup(true);
+      const p = await fetchCurrentPrice(upper);
+      setTickerLookup(false);
+      if (p != null) {
+        setForm(f => ({
+          ...f,
+          current_price: f.current_price === '' ? String(p) : f.current_price,
+          cost: f.cost === '' ? String(p) : f.cost,
+        }));
+      }
+    }, 600);
+  };
+
+  // Bulk-refresh current_price for all positions via Polygon
+  const refreshAllPrices = async () => {
+    setPricesRefreshing(true);
+    setError(null);
+    try {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Supabase 未連線');
+      const realPos = positions.filter(p => !String(p.id || '').startsWith('mock-'));
+      const updates = await Promise.all(realPos.map(async (p) => {
+        const fresh = await fetchCurrentPrice(p.ticker);
+        if (fresh == null || fresh === Number(p.current_price)) return null;
+        return { id: p.id, ticker: p.ticker, newPrice: fresh };
+      }));
+      const valid = updates.filter(Boolean);
+      if (valid.length === 0) {
+        setPricesLastRefresh(new Date());
+        return;
+      }
+      // Batch update via parallel calls
+      await Promise.all(valid.map(u =>
+        client.from('positions').update({ current_price: u.newPrice }).eq('id', u.id)
+      ));
+      setPricesLastRefresh(new Date());
+      onChange();
+    } catch (e) {
+      setError('現價更新失敗: ' + (e.message || String(e)));
+    } finally {
+      setPricesRefreshing(false);
+    }
+  };
+
+  // Auto-refresh prices every 5 min when at least 1 real position exists & Supabase connected
+  useEffect(() => {
+    const realCount = positions.filter(p => !String(p.id || '').startsWith('mock-')).length;
+    if (realCount === 0 || supabaseStatus !== 'connected') return;
+    const interval = setInterval(() => { refreshAllPrices(); }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions, supabaseStatus]);
+
   const remove = async (id, ticker) => {
     if (!window.confirm('確定刪除 ' + ticker + ' 這筆持倉？')) return;
     setBusy(true);
@@ -6411,18 +6500,38 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
           </span>
         </div>
         {!editing && (
-          <button
-            onClick={startNew}
-            disabled={isReadOnly || busy}
-            style={{
-              background: isReadOnly ? '#1a1a1a' : 'rgba(234,179,8,0.12)',
-              border: '1px solid #EAB30850',
-              color: isReadOnly ? '#555' : '#EAB308',
-              padding: '5px 12px', borderRadius: '3px',
-              fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 600,
-              cursor: isReadOnly ? 'not-allowed' : 'pointer',
-            }}
-          >+ 新增持倉</button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {pricesLastRefresh && (
+              <span style={{ fontSize: '10px', color: '#666', fontFamily: 'DM Mono' }}>
+                現價 {Math.round((Date.now() - pricesLastRefresh.getTime()) / 1000)}s ago
+              </span>
+            )}
+            <button
+              onClick={refreshAllPrices}
+              disabled={isReadOnly || busy || pricesRefreshing}
+              style={{
+                background: 'transparent',
+                border: '1px solid #2a2a2a',
+                color: pricesRefreshing ? '#EAB308' : '#888',
+                padding: '5px 10px', borderRadius: '3px',
+                fontFamily: 'DM Mono', fontSize: '11px',
+                cursor: pricesRefreshing ? 'wait' : 'pointer',
+              }}
+              title="從 Polygon 抓所有持倉的最新現價並更新到 Supabase"
+            >{pricesRefreshing ? '⋯ 更新中' : '↻ 更新現價'}</button>
+            <button
+              onClick={startNew}
+              disabled={isReadOnly || busy}
+              style={{
+                background: isReadOnly ? '#1a1a1a' : 'rgba(234,179,8,0.12)',
+                border: '1px solid #EAB30850',
+                color: isReadOnly ? '#555' : '#EAB308',
+                padding: '5px 12px', borderRadius: '3px',
+                fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 600,
+                cursor: isReadOnly ? 'not-allowed' : 'pointer',
+              }}
+            >+ 新增持倉</button>
+          </div>
         )}
       </div>
 
@@ -6439,7 +6548,7 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
             {editing === 'new' ? '+ 新增持倉' : '✎ 編輯持倉'}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '8px' }}>
-            <FormField label="Ticker *" value={form.ticker} onChange={(v) => setForm({ ...form, ticker: v.toUpperCase() })} placeholder="NVDA" />
+            <FormField label={'Ticker *' + (tickerLookup ? '  ⋯ 抓現價' : '')} value={form.ticker} onChange={onTickerChange} placeholder="NVDA" />
             <FormField label="Type" value={form.option_type} onChange={(v) => setForm({ ...form, option_type: v })} type="select" options={[{ value: '', label: '股票' }, { value: 'CALL', label: 'CALL' }, { value: 'PUT', label: 'PUT' }]} />
             <FormField label="Qty *" value={form.qty} onChange={(v) => setForm({ ...form, qty: v })} placeholder="10" type="number" />
             <FormField label="Current Price *" value={form.current_price} onChange={(v) => setForm({ ...form, current_price: v })} placeholder="183.04" type="number" />
