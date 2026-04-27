@@ -277,16 +277,32 @@ async function handleYahoo(request, env) {
   const symbol = url.searchParams.get('symbol');
   if (!symbol) return jsonResponse({ error: 'Missing symbol param' }, 400);
 
-  // Yahoo's quote API
-  const yahooUrl = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbol);
+  // Yahoo's /v7/quote requires crumb cookie now (returns 401). Use /v8/chart instead.
+  const yahooUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(symbol)
+    + '?interval=1d&range=5d';
   try {
     const r = await fetch(yahooUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; MEP-Worker/1.0)',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MEP-Worker/1.0)' },
     });
+    if (!r.ok) {
+      return jsonResponse({ error: 'Yahoo fetch failed', status: r.status, symbol }, r.status);
+    }
     const data = await r.json();
-    return jsonResponse(data, r.status);
+    const result = data.chart?.result?.[0];
+    if (!result) return jsonResponse({ error: 'No data for symbol', symbol }, 404);
+    const meta = result.meta || {};
+    const closes = result.indicators?.quote?.[0]?.close || [];
+    const lastClose = closes.filter(v => v != null).pop() ?? null;
+    return jsonResponse({
+      symbol,
+      regularMarketPrice: meta.regularMarketPrice ?? lastClose,
+      price: meta.regularMarketPrice ?? lastClose,
+      previousClose: meta.previousClose ?? meta.chartPreviousClose ?? null,
+      currency: meta.currency ?? null,
+      exchange: meta.exchangeName ?? null,
+      asOf: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+      source: 'yahoo-chart-v8',
+    });
   } catch (e) {
     return jsonResponse({ error: 'Yahoo fetch failed', message: e.message }, 500);
   }
