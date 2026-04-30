@@ -1318,8 +1318,14 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
               {realPositions.map(p => {
                 const cur = Number(p.current_price);
                 const cost = Number(p.cost);
+                const qty = Number(p.qty);
+                const isOpt = p.option_type && ['CALL', 'PUT'].includes(String(p.option_type).toUpperCase());
+                const mult = isOpt ? 100 : 1;
                 const plPct = (cur && cost) ? ((cur - cost) / cost) * 100 : null;
+                const plDollar = (isFinite(cur) && isFinite(cost) && isFinite(qty)) ? (cur - cost) * qty * mult : null;
                 const plColor = plPct == null ? '#666' : plPct >= 0 ? '#10b981' : '#ef4444';
+                const plDollarStr = plDollar == null ? '—'
+                  : (plDollar >= 0 ? '+$' : '-$') + Math.abs(plDollar).toLocaleString(undefined, { maximumFractionDigits: 0 });
                 return (
                   <tr key={p.id} style={{ borderBottom: '1px solid #1a1a1a', color: '#d4d4d4' }}>
                     <td style={{ padding: '8px', fontWeight: 600, color: '#f4f4f4' }}>{p.ticker}</td>
@@ -1327,7 +1333,10 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.qty}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.current_price != null ? '$' + Number(p.current_price).toFixed(2) : '—'}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.cost != null ? '$' + Number(p.cost).toFixed(2) : '—'}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', color: plColor }}>{plPct == null ? '—' : (plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%'}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', color: plColor, lineHeight: 1.2 }}>
+                      <div>{plPct == null ? '—' : (plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%'}</div>
+                      <div style={{ fontSize: '10px', opacity: 0.75 }}>{plDollarStr}</div>
+                    </td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.strike != null ? '$' + Number(p.strike).toFixed(0) : '—'}</td>
                     <td style={{ padding: '8px' }}>{p.expiry || '—'}</td>
                     <td style={{ padding: '8px', textAlign: 'right', color: '#EAB308' }}>${(p.value || 0).toLocaleString()}</td>
@@ -1345,6 +1354,36 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                 );
               })}
             </tbody>
+            <tfoot>
+              {(() => {
+                const tot = realPositions.reduce((acc, p) => {
+                  const cur = Number(p.current_price);
+                  const cost = Number(p.cost);
+                  const qty = Number(p.qty);
+                  const isOpt = p.option_type && ['CALL', 'PUT'].includes(String(p.option_type).toUpperCase());
+                  const mult = isOpt ? 100 : 1;
+                  if (isFinite(cur) && isFinite(qty)) acc.value += cur * qty * mult;
+                  if (isFinite(cost) && isFinite(qty)) acc.cost += cost * qty * mult;
+                  if (isFinite(cur) && isFinite(cost) && isFinite(qty)) acc.pl += (cur - cost) * qty * mult;
+                  return acc;
+                }, { value: 0, cost: 0, pl: 0 });
+                const plPct = tot.cost > 0 ? (tot.pl / tot.cost) * 100 : 0;
+                const plColor = tot.pl >= 0 ? '#10b981' : '#ef4444';
+                const fmt = (n) => (n >= 0 ? '+$' : '-$') + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                return (
+                  <tr style={{ borderTop: '2px solid #2a2a2a', color: '#f4f4f4', fontWeight: 600 }}>
+                    <td style={{ padding: '10px 8px', fontSize: '10px', letterSpacing: '0.08em', color: '#666' }} colSpan={5}>TOTAL · {realPositions.length} positions</td>
+                    <td style={{ padding: '10px 8px', textAlign: 'right', color: plColor, lineHeight: 1.2 }}>
+                      <div>{(plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%'}</div>
+                      <div style={{ fontSize: '10px', opacity: 0.75 }}>{fmt(tot.pl)}</div>
+                    </td>
+                    <td colSpan={2} style={{ padding: '10px 8px', textAlign: 'right', fontSize: '10px', color: '#666' }}>cost ${tot.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                    <td style={{ padding: '10px 8px', textAlign: 'right', color: '#EAB308' }}>${tot.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                    <td></td>
+                  </tr>
+                );
+              })()}
+            </tfoot>
           </table>
         </div>
       )}
