@@ -5802,6 +5802,11 @@ function App() {
     return () => window.removeEventListener('open-l1-calculator', handler);
   }, []);
 
+  // Phase 4b probe: just a useState — no effect, no fetch. If page still works
+  // with this added, the next phase will add the useEffect that populates
+  // window.__BETA_CACHE from real Polygon /aggregates data.
+  const [betaVersion, setBetaVersion] = useState(0);
+
   // ──────────────────────────────────────────────────────────
   // Handlers
   // ──────────────────────────────────────────────────────────
