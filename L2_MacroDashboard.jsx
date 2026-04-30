@@ -759,6 +759,64 @@ function inferYieldCurveHistory(t10y2yObs) {
 // POLYGON HELPERS
 // ============================================================
 
+// ────────────────────────────────────────────────────────────
+// RRG: relative-rotation classification of 11 sector ETFs vs SPY
+// Pulls daily closes via the worker /aggregates endpoint (cached 15min server-side),
+// then computes simplified JdK RS-Ratio / RS-Momentum and bins each ETF into
+// leading / weakening / lagging / improving.
+// ────────────────────────────────────────────────────────────
+const RRG_ETFS = ['XLK', 'XLY', 'XLC', 'XLI', 'XLB', 'XLE', 'XLF', 'XLV', 'XLP', 'XLU', 'XLRE'];
+
+async function fetchAggregates(ticker, days = 70) {
+  const r = await fetch(WORKER_URL + '/api/polygon/aggregates?ticker=' + encodeURIComponent(ticker) + '&days=' + days);
+  if (!r.ok) return null;
+  const d = await r.json();
+  return Array.isArray(d.bars) ? d.bars : null;
+}
+
+async function fetchSectorRotation() {
+  const days = 70;
+  const all = await Promise.all([
+    fetchAggregates('SPY', days),
+    ...RRG_ETFS.map((t) => fetchAggregates(t, days)),
+  ]);
+  const spyBars = all[0];
+  if (!spyBars || spyBars.length < 28) return null;
+  const spy = spyBars.map((b) => b.c);
+  const spyN = spy.length;
+  const spyLatest = spy[spyN - 1];
+  const spyMid = spy[spyN - 14];
+  const spyOld = spy[Math.max(0, spyN - 28)];
+  const spyRecent = spyLatest / spyMid - 1;
+  const spyOlder = spyMid / spyOld - 1;
+
+  const placement = {};
+  const detail = {};
+  for (let i = 0; i < RRG_ETFS.length; i++) {
+    const ticker = RRG_ETFS[i];
+    const bars = all[i + 1];
+    if (!bars || bars.length < 28) continue;
+    const c = bars.map((b) => b.c);
+    const n = c.length;
+    const latest = c[n - 1];
+    const mid = c[n - 14];
+    const old = c[Math.max(0, n - 28)];
+    const recent = latest / mid - 1;
+    const older = mid / old - 1;
+    const rs = recent - spyRecent;        // outperforming SPY now? (>0)
+    const rsOld = older - spyOlder;       // outperforming SPY 14d ago?
+    const momentum = rs - rsOld;          // accelerating vs SPY?
+    let quadrant;
+    if (rs > 0 && momentum > 0) quadrant = 'leading';
+    else if (rs > 0 && momentum <= 0) quadrant = 'weakening';
+    else if (rs <= 0 && momentum > 0) quadrant = 'improving';
+    else quadrant = 'lagging';
+    placement[ticker] = quadrant;
+    detail[ticker] = { rs, momentum, quadrant };
+  }
+  return { placement, detail };
+}
+
 // 抓 SPX 20-week MA 判斷，用於 紅色警報「SPX 站上 20MA」
 async function fetchSPX20MA() {
   const url = WORKER_URL + '/api/polygon/sma?ticker=I:SPX&window=20&timespan=week';
@@ -1025,12 +1083,13 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
     setPolygonStatus('fetching');
     setPolygonError(null);
     try {
-      // 平行抓 3 個（SPX SMA / VIX spot / SPY quote）
-      // 任一個失敗就 partial result，不阻塞其他兩個
-      const [spxSMA, vix, spy] = await Promise.allSettled([
+      // 平行抓 4 個（SPX SMA / VIX spot / SPY quote / RRG sector rotation）
+      // 任一個失敗就 partial result，不阻塞其他
+      const [spxSMA, vix, spy, rrg] = await Promise.allSettled([
         fetchSPX20MA(),
         fetchVIXSpot(),
         fetchSPYQuote(),
+        fetchSectorRotation(),
       ]);
 
       const result = {
@@ -1040,11 +1099,17 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
         vixError: vix.status === 'rejected' ? vix.reason?.message : null,
         spy: spy.status === 'fulfilled' ? spy.value : null,
         spyError: spy.status === 'rejected' ? spy.reason?.message : null,
+        rrg: rrg.status === 'fulfilled' ? rrg.value : null,
+        rrgError: rrg.status === 'rejected' ? rrg.reason?.message : null,
       };
 
       // Apply: SPX 20MA → setSpxAboveMA（L2 own state）
       if (result.spxSMA && result.spxSMA.aboveMA != null) {
         setSpxAboveMA(result.spxSMA.aboveMA);
+      }
+      // RRG → auto-classify all 11 sector ETFs into 4 quadrants based on real momentum
+      if (result.rrg && result.rrg.placement && Object.keys(result.rrg.placement).length > 0) {
+        setSectorPlacement((prev) => ({ ...prev, ...result.rrg.placement }));
       }
       // VIX spot 在 L1，不在 L2 的 own state。透過 onScoreChange 一起 emit 到 parent，App 再轉給 L1。
 
