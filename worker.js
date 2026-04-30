@@ -252,6 +252,18 @@ async function handleUW(request, env) {
   const uwPath = url.pathname.replace(/^\/api\/uw/, '');
   const uwUrl = 'https://api.unusualwhales.com' + uwPath + url.search;
 
+  // Cache wrapper — UW data is daily-ish, 15 min cache is plenty and saves
+  // rate-limit budget when multiple tabs/refreshes hit the same ticker.
+  const cacheKey = 'uw-' + uwPath + '?' + url.search;
+  const cache = caches.default;
+  const cacheReq = new Request('https://internal/__uw-cache/' + encodeURIComponent(cacheKey));
+  const cached = await cache.match(cacheReq);
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set('X-Cache', 'HIT');
+    return new Response(cached.body, { status: cached.status, headers });
+  }
+
   const headers = new Headers();
   headers.set('Accept', 'application/json');
   if (env.UW_API_KEY) {
@@ -260,13 +272,20 @@ async function handleUW(request, env) {
 
   const uwRes = await fetch(uwUrl, { headers });
   const text = await uwRes.text();
-  return new Response(text, {
+  const response = new Response(text, {
     status: uwRes.status,
     headers: {
       'Content-Type': uwRes.headers.get('Content-Type') || 'application/json',
+      'Cache-Control': 's-maxage=900',
+      'X-Cache': 'MISS',
       ...corsHeaders(),
     },
   });
+  // Only cache 200 responses
+  if (uwRes.ok) {
+    await cache.put(cacheReq, response.clone());
+  }
+  return response;
 }
 
 // ════════════════════════════════════════════════════════════

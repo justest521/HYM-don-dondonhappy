@@ -3267,6 +3267,21 @@ function PolygonSyncBar({ status, syncTime, error, details, onSync }) {
                 : (details.spyError ? 'error' : '—')}
             </span>
           </div>
+          {/* SPY GEX (UW) — net dealer gamma; >0 = range-bound, <0 = volatile */}
+          {(() => {
+            const gex = (typeof window !== 'undefined' && window.__GEX_CACHE) ? window.__GEX_CACHE['SPY'] : null;
+            if (!gex || !isFinite(gex.netGamma)) return null;
+            const billions = gex.netGamma / 1e9;
+            const positive = billions > 0;
+            return (
+              <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>SPY GEX</span>
+                <span style={{ color: positive ? '#10b981' : '#ef4444' }}>
+                  {(positive ? '+' : '') + billions.toFixed(2) + 'B Γ · ' + (positive ? 'range' : 'volatile')}
+                </span>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -3646,13 +3661,92 @@ function approxQQQWeight(details) {
   return Math.min(0.10, parseFloat((details.market_cap / 30e12).toFixed(4)));
 }
 
+// ────────────────────────────────────────────────────────────
+// Unusual Whales helpers — IVR, earnings, GEX (all 15min cached server-side)
+// ────────────────────────────────────────────────────────────
+async function fetchIVR(ticker) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t) return null;
+  try {
+    const r = await fetch(WORKER_URL + '/api/uw/api/stock/' + encodeURIComponent(t) + '/iv-rank?timespan=1m');
+    if (!r.ok) return null;
+    const d = await r.json();
+    const arr = d && d.data;
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    const latest = arr[arr.length - 1];
+    const rank = parseFloat(latest.iv_rank_1y);
+    const iv = parseFloat(latest.volatility);
+    return {
+      ivr: isFinite(rank) ? parseFloat(rank.toFixed(1)) : null,
+      iv: isFinite(iv) ? parseFloat((iv * 100).toFixed(1)) : null,  // implied vol % annualized
+      asOf: latest.date,
+    };
+  } catch (_) { return null; }
+}
+
+async function fetchEarnings(ticker) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t) return null;
+  try {
+    const r = await fetch(WORKER_URL + '/api/uw/api/earnings/' + encodeURIComponent(t));
+    if (!r.ok) return null;
+    const d = await r.json();
+    const arr = d && d.data;
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    // Find next future earnings (sort ascending and grab first one >= today)
+    const today = new Date().toISOString().slice(0, 10);
+    const future = arr
+      .filter((e) => e.report_date && e.report_date >= today)
+      .sort((a, b) => (a.report_date < b.report_date ? -1 : 1));
+    if (future.length === 0) return null;
+    const next = future[0];
+    const movePct = parseFloat(next.expected_move_perc);
+    return {
+      date: next.report_date,
+      time: next.report_time || null,
+      expectedMovePct: isFinite(movePct) ? parseFloat((movePct * 100).toFixed(2)) : null,
+      expectedMove: parseFloat(next.expected_move) || null,
+      streetEst: parseFloat(next.street_mean_est) || null,
+    };
+  } catch (_) { return null; }
+}
+
+async function fetchGEX(ticker) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t) return null;
+  try {
+    const r = await fetch(WORKER_URL + '/api/uw/api/stock/' + encodeURIComponent(t) + '/greek-exposure?timeframe=1M');
+    if (!r.ok) return null;
+    const d = await r.json();
+    const arr = d && d.data;
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    const latest = arr[arr.length - 1];
+    const callGamma = parseFloat(latest.call_gamma);
+    const putGamma = parseFloat(latest.put_gamma);  // typically negative
+    if (!isFinite(callGamma) || !isFinite(putGamma)) return null;
+    return {
+      callGamma,
+      putGamma,
+      netGamma: callGamma + putGamma,  // dealers' net gamma exposure
+      callDelta: parseFloat(latest.call_delta) || null,
+      putDelta: parseFloat(latest.put_delta) || null,
+      asOf: latest.date,
+    };
+  } catch (_) { return null; }
+}
+
 // Phase 4g: module-level β seeding for common holdings via setTimeout.
 // Each ticker fetches independently with its own .catch — one failure
 // doesn't affect the others. Page renders first; cache populates async.
 // Uncommon tickers fall back to STOCK_BETA static table in getBeta().
 if (typeof window !== 'undefined') {
+  // Initialize all UW caches up-front so getter consumers always find a {}
+  if (!window.__IVR_CACHE) window.__IVR_CACHE = {};
+  if (!window.__EARNINGS_CACHE) window.__EARNINGS_CACHE = {};
+  if (!window.__GEX_CACHE) window.__GEX_CACHE = {};
+
   setTimeout(() => {
-    const seedTickers = ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'TSLA', 'AMZN', 'AVGO', 'QQQ'];
+    const seedTickers = ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'TSLA', 'AMZN', 'AVGO', 'QQQ', 'SPY'];
     seedTickers.forEach((t) => {
       computeBeta(t).then((b) => {
         if (b != null && isFinite(b) && Math.abs(b) < 5) {
@@ -3669,6 +3763,23 @@ if (typeof window !== 'undefined') {
         window.__TICKER_PROFILES[t] = classifyTickerProfile(details);
         window.__QQQ_WEIGHTS[t] = approxQQQWeight(details);
       }).catch((e) => { try { console.warn('[Profile seed ' + t + '] failed:', e.message); } catch (_) {} });
+
+      // UW: IVR (option premium expensiveness) — only relevant for tickers user might trade options on
+      fetchIVR(t).then((d) => {
+        if (d && d.ivr != null) window.__IVR_CACHE[t] = d;
+      }).catch((e) => { try { console.warn('[IVR seed ' + t + '] failed:', e.message); } catch (_) {} });
+
+      // UW: next earnings — for event-risk warning on positions
+      fetchEarnings(t).then((d) => {
+        if (d && d.date) window.__EARNINGS_CACHE[t] = d;
+      }).catch((e) => { try { console.warn('[Earnings seed ' + t + '] failed:', e.message); } catch (_) {} });
+    });
+
+    // GEX: only for the indices/proxies that matter for portfolio-level positioning
+    ['SPY', 'QQQ', 'NVDA'].forEach((t) => {
+      fetchGEX(t).then((d) => {
+        if (d) window.__GEX_CACHE[t] = d;
+      }).catch((e) => { try { console.warn('[GEX seed ' + t + '] failed:', e.message); } catch (_) {} });
     });
   }, 2000);
 }
@@ -5812,10 +5923,30 @@ function App() {
     setAiSummaryLoading(true);
     setAiSummaryError(null);
     try {
-      const positionsText = positionsArr.map(p =>
-        '- ' + p.ticker + (p.option_type ? ' ' + p.option_type : '') + ' qty=' + p.qty + (p.strike ? ' strike=' + p.strike : '') + (p.expiry ? ' expiry=' + p.expiry : '')
-      ).join('\n');
+      // Pull UW context per held ticker so the AI can talk about IV expensiveness + earnings risk
+      const ivrCache = (typeof window !== 'undefined' && window.__IVR_CACHE) ? window.__IVR_CACHE : {};
+      const earningsCache = (typeof window !== 'undefined' && window.__EARNINGS_CACHE) ? window.__EARNINGS_CACHE : {};
+      const positionsText = positionsArr.map(p => {
+        const t = (p.ticker || '').toUpperCase();
+        const ivr = ivrCache[t];
+        const earn = earningsCache[t];
+        let extras = '';
+        if (ivr && ivr.ivr != null) extras += ' IVR=' + ivr.ivr.toFixed(0);
+        if (earn && earn.date) {
+          const days = Math.round((new Date(earn.date).getTime() - Date.now()) / 86400000);
+          if (days >= 0 && days <= 30) {
+            extras += ' Earnings=' + earn.date + '(D-' + days + (earn.expectedMovePct != null ? ',±' + earn.expectedMovePct.toFixed(1) + '%' : '') + ')';
+          }
+        }
+        return '- ' + p.ticker + (p.option_type ? ' ' + p.option_type : '') + ' qty=' + p.qty + (p.strike ? ' strike=' + p.strike : '') + (p.expiry ? ' expiry=' + p.expiry : '') + extras;
+      }).join('\n');
       const macroText = macroSnapshot ? ('Macro Score: ' + macroSnapshot.score + '/100, Band: ' + macroSnapshot.band + ', Alerts: ' + ((macroSnapshot.redAlerts || []).length)) : 'no macro data';
+      // SPY GEX context
+      const gexCache = (typeof window !== 'undefined' && window.__GEX_CACHE) ? window.__GEX_CACHE : {};
+      const spyGex = gexCache['SPY'];
+      const gexText = (spyGex && isFinite(spyGex.netGamma))
+        ? '\nSPY 經銷商 Net Gamma: ' + (spyGex.netGamma / 1e9).toFixed(2) + 'B (' + (spyGex.netGamma > 0 ? '正 → 區間震盪' : '負 → 趨勢加速') + ')'
+        : '';
       // Filter reports relevant to this portfolio: ticker matches a held ticker, OR ticker is null (general macro)
       const heldTickers = new Set(positionsArr.map(p => (p.ticker || '').toUpperCase()));
       const relevantReports = (reportsArr || [])
@@ -5828,12 +5959,13 @@ function App() {
           const body = (r.content || '').slice(0, 600);
           return head + '\n' + body;
         }).join('\n\n');
-      const prompt = '以下是我目前的美股期權持倉與當前 macro 狀態：\n\n持倉:\n' + positionsText + '\n\n' + macroText + reportsText
+      const prompt = '以下是我目前的美股期權持倉與當前 macro 狀態：\n\n持倉:\n' + positionsText + '\n\n' + macroText + gexText + reportsText
+        + '\n\n持倉中標記 IVR (0-100) 越高 = 期權權利金越貴；Earnings D-N 表示 N 天內財報，±X% 為預期波動。'
         + '\n\n請用 4-6 行繁體中文評估：'
         + '\n(1) 整體曝險方向 — 多頭/空頭/中性，beta-weighted 大致 size'
-        + '\n(2) 最大單一風險點 — 具體說明哪個部位、什麼觸發條件'
-        + '\n(3) 建議行動 — 加碼/減碼/hedge/觀望，給可執行的判準'
-        + '\n(4) 若分析師備忘與 macro/持倉有衝突或加成，明確指出（例如：「GS 目標價 $260 與當前 OTM 220 CALL 同向，但 MS 認為降息延後，需要關注 6/14 CPI」）'
+        + '\n(2) 最大單一風險點 — 具體說明哪個部位、什麼觸發條件 (含 IVR / earnings event / SPY gamma 結構)'
+        + '\n(3) 建議行動 — 加碼/減碼/hedge/觀望，給可執行的判準 (例：IVR 70+ 應賣 premium、GEX 負應買 hedge)'
+        + '\n(4) 若分析師備忘與 macro/持倉有衝突或加成，明確指出'
         + '\n\n要求：每點一行；引用備忘時用【】標出標題；不要使用 markdown；不要客套。';
       const r = await fetch('https://solitary-wood-898d.justest521.workers.dev/api/ai', {
         method: 'POST',
@@ -7082,9 +7214,24 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                 const plDollarStr = plDollar == null ? '—'
                   : (plDollar >= 0 ? '+$' : '-$') + Math.abs(plDollar).toLocaleString(undefined, { maximumFractionDigits: 0 });
                 const gk = isOpt ? greeksMap[p.id] : null;
+                const tickerUpper = (p.ticker || '').toUpperCase();
+                const ivrInfo = (typeof window !== 'undefined' && window.__IVR_CACHE) ? window.__IVR_CACHE[tickerUpper] : null;
+                const earnings = (typeof window !== 'undefined' && window.__EARNINGS_CACHE) ? window.__EARNINGS_CACHE[tickerUpper] : null;
+                let earningsDays = null;
+                if (earnings && earnings.date) {
+                  const ed = new Date(earnings.date);
+                  earningsDays = Math.round((ed.getTime() - Date.now()) / 86400000);
+                }
                 return (
                   <tr key={p.id} style={{ borderBottom: '1px solid #1a1a1a', color: '#d4d4d4' }}>
-                    <td style={{ padding: '8px', fontWeight: 600, color: '#f4f4f4' }}>{p.ticker}</td>
+                    <td style={{ padding: '8px', fontWeight: 600, color: '#f4f4f4', lineHeight: 1.2 }}>
+                      <div>{p.ticker}</div>
+                      {ivrInfo && ivrInfo.ivr != null && (
+                        <div style={{ fontSize: '9px', color: ivrInfo.ivr >= 70 ? '#ef4444' : ivrInfo.ivr >= 40 ? '#EAB308' : '#10b981', marginTop: '2px', fontFamily: 'DM Mono', fontWeight: 400 }}>
+                          IVR {ivrInfo.ivr.toFixed(0)}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '8px', color: p.option_type === 'CALL' ? '#10b981' : p.option_type === 'PUT' ? '#ef4444' : '#888', lineHeight: 1.2 }}>
                       <div>{p.option_type || '股票'}</div>
                       {gk && (gk.delta != null || gk.theta != null) && (
@@ -7107,6 +7254,12 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                       <div>{p.expiry || '—'}</div>
                       {gk && gk.iv != null && (
                         <div style={{ fontSize: '9px', color: '#666', marginTop: '2px' }}>IV {(gk.iv * 100).toFixed(0)}%</div>
+                      )}
+                      {earningsDays != null && earningsDays >= 0 && earningsDays <= 21 && (
+                        <div style={{ fontSize: '9px', color: earningsDays <= 7 ? '#ef4444' : '#EAB308', marginTop: '2px', fontFamily: 'DM Mono' }}>
+                          ⚠ Earnings {earnings.date.slice(5)} (D-{earningsDays})
+                          {earnings.expectedMovePct != null && ' · ±' + earnings.expectedMovePct.toFixed(1) + '%'}
+                        </div>
                       )}
                     </td>
                     <td style={{ padding: '8px', textAlign: 'right', color: '#EAB308' }}>${(p.value || 0).toLocaleString()}</td>
