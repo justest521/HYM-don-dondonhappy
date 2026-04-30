@@ -287,9 +287,23 @@ const getBeta = (ticker) => {
   if (t in STOCK_BETA) return STOCK_BETA[t];
   return 1.10; // unknown ticker → assume average growth tilt
 };
-const getQQQWeight = (ticker) => QQQ_WEIGHT[(ticker || '').toUpperCase()] ?? 0;
+// Both consult window caches first (populated by App.jsx from Polygon ticker-details)
+// before falling back to the static lookup tables.
+const getQQQWeight = (ticker) => {
+  const t = (ticker || '').toUpperCase();
+  if (typeof window !== 'undefined' && window.__QQQ_WEIGHTS && window.__QQQ_WEIGHTS[t] != null) {
+    return window.__QQQ_WEIGHTS[t];
+  }
+  return QQQ_WEIGHT[t] ?? 0;
+};
 const getContagion = (ticker) => {
-  const profile = TICKER_PROFILE[(ticker || '').toUpperCase()];
+  const t = (ticker || '').toUpperCase();
+  let profile;
+  if (typeof window !== 'undefined' && window.__TICKER_PROFILES && window.__TICKER_PROFILES[t]) {
+    profile = window.__TICKER_PROFILES[t];
+  } else {
+    profile = TICKER_PROFILE[t];
+  }
   return CONTAGION_PROFILES[profile] ?? CONTAGION_PROFILES.STANDALONE;
 };
 

@@ -249,11 +249,15 @@ export default function App() {
     return () => window.removeEventListener('open-l1-calculator', handler);
   }, []);
 
-  // Auto-compute β for each unique ticker in Supabase positions and store in
-  // window.__BETA_CACHE. getBeta() reads from this first, so cross-layer beta
-  // calculations use 60-day historical correlation with SPY instead of the
-  // hardcoded STOCK_BETA fallback table.
-  const [betaVersion, setBetaVersion] = useState(0);
+  // Auto-compute β + ticker profile + approx QQQ weight for each unique ticker
+  // in Supabase positions. Populates three window caches:
+  //   __BETA_CACHE           — getBeta() reads from this first
+  //   __TICKER_PROFILES      — getContagion() reads from this first
+  //   __QQQ_WEIGHTS          — getQQQWeight() reads from this first
+  // β uses 60-day SPY correlation; profile + weight use Polygon ticker-details
+  // (market_cap + sector). Both endpoints cached server-side, so per-position
+  // refreshes are cheap.
+  const [tickerCacheVersion, setTickerCacheVersion] = useState(0);
   useEffect(() => {
     const tickers = Array.from(new Set(
       (positions || [])
@@ -262,19 +266,27 @@ export default function App() {
     ));
     if (tickers.length === 0) return;
     let cancelled = false;
-    Promise.all(tickers.map((t) => computeBeta(t))).then((betas) => {
-      if (cancelled) return;
-      if (typeof window === 'undefined') return;
+    Promise.all(tickers.map(async (t) => {
+      const [beta, details] = await Promise.all([computeBeta(t), fetchTickerDetails(t)]);
+      return { t, beta, details };
+    })).then((results) => {
+      if (cancelled || typeof window === 'undefined') return;
       window.__BETA_CACHE = window.__BETA_CACHE || {};
+      window.__TICKER_PROFILES = window.__TICKER_PROFILES || {};
+      window.__QQQ_WEIGHTS = window.__QQQ_WEIGHTS || {};
       let updated = false;
-      tickers.forEach((t, i) => {
-        const b = betas[i];
-        if (b != null && isFinite(b) && Math.abs(b) < 5) {
-          window.__BETA_CACHE[t] = parseFloat(b.toFixed(3));
+      for (const { t, beta, details } of results) {
+        if (beta != null && isFinite(beta) && Math.abs(beta) < 5) {
+          window.__BETA_CACHE[t] = parseFloat(beta.toFixed(3));
           updated = true;
         }
-      });
-      if (updated) setBetaVersion((v) => v + 1);
+        if (details) {
+          window.__TICKER_PROFILES[t] = classifyTickerProfile(details);
+          window.__QQQ_WEIGHTS[t] = approxQQQWeight(details);
+          updated = true;
+        }
+      }
+      if (updated) setTickerCacheVersion((v) => v + 1);
     });
     return () => { cancelled = true; };
   }, [positions]);
@@ -1007,6 +1019,47 @@ async function fetchAggregates(ticker, days = 70) {
   if (!r.ok) return null;
   const d = await r.json();
   return Array.isArray(d.bars) ? d.bars : null;
+}
+
+// Fetch market cap + sector for a ticker via worker (cached 24h server-side).
+async function fetchTickerDetails(ticker) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t || t === 'CASH') return null;
+  try {
+    const r = await fetch(WORKER_URL_APP + '/api/polygon/ticker-details?ticker=' + encodeURIComponent(t));
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d && d.ticker ? d : null;
+  } catch { return null; }
+}
+
+// Auto-classify TICKER_PROFILE from Polygon details. The contagion multipliers in
+// CONTAGION_PROFILES are still subjective, but at least the bucket is data-driven.
+function classifyTickerProfile(details) {
+  if (!details) return 'STANDALONE';
+  const mc = details.market_cap;
+  const sic = (details.sic_description || '').toUpperCase();
+  const ticker = (details.ticker || '').toUpperCase();
+  // AI leaders that drag the whole AI sector when they move
+  if (['NVDA', 'AVGO', 'TSM', 'AMD'].includes(ticker)) return 'AI_LEADER';
+  // Mega-cap tech ($1.5T+)
+  if (mc != null && mc >= 1.5e12) return 'MEGA_CAP';
+  // AI beneficiaries: semiconductors / software with $50B+ cap
+  if ((sic.includes('SEMICONDUCTOR') || sic.includes('PREPACKAGED SOFTWARE') || sic.includes('COMPUTER'))
+      && mc != null && mc >= 5e10) {
+    return 'AI_BENEFICIARY';
+  }
+  // META ripples to the AR/social-AI complex
+  if (ticker === 'META') return 'RIPPLE';
+  return 'STANDALONE';
+}
+
+// Approximate QQQ weight ≈ ticker_market_cap / Nasdaq-100 total (~ $30T baseline).
+// Capped at 10% to mirror QQQ's modified-weight per-stock cap.
+function approxQQQWeight(details) {
+  if (!details || !isFinite(details.market_cap)) return 0;
+  const N100_TOTAL = 30e12; // ballpark; updates as mega-caps move together
+  return Math.min(0.10, parseFloat((details.market_cap / N100_TOTAL).toFixed(4)));
 }
 
 // Compute β = cov(ticker, SPY) / var(SPY) using last N daily log returns.
