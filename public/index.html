@@ -3557,9 +3557,11 @@ const DEFAULT_POSITIONS = [
 // ────────────────────────────────────────────────────────────
 // Lookup helpers
 // Dynamic beta cache — populated externally by App-level code (Phase 4b).
-// Initialized to {} so getBeta's lookup always succeeds; until populated, it
-// falls through to STOCK_BETA static table.
-if (typeof window !== 'undefined' && !window.__BETA_CACHE) window.__BETA_CACHE = {};
+// Phase 4e probe: pre-seed NVDA with a realistic live beta to test whether
+// downstream cross-layer math handles the value range.
+if (typeof window !== 'undefined' && !window.__BETA_CACHE) {
+  window.__BETA_CACHE = { NVDA: 1.85 };
+}
 const getBeta = (ticker) => {
   const t = (ticker || '').toUpperCase().trim();
   if (typeof window !== 'undefined' && window.__BETA_CACHE && window.__BETA_CACHE[t] != null) {
