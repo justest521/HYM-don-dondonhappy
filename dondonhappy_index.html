@@ -1014,6 +1014,59 @@ function inferYieldCurveHistory(t10y2yObs) {
 // POLYGON HELPERS
 // ============================================================
 
+// ────────────────────────────────────────────────────────────
+// Real-data helpers (Phase 1: function definitions only — not yet wired
+// into React state. Adding these alone shouldn't change runtime behavior.)
+// ────────────────────────────────────────────────────────────
+const RRG_ETFS = ['XLK', 'XLY', 'XLC', 'XLI', 'XLB', 'XLE', 'XLF', 'XLV', 'XLP', 'XLU', 'XLRE'];
+
+async function fetchAggregates(ticker, days = 70) {
+  const r = await fetch(WORKER_URL + '/api/polygon/aggregates?ticker=' + encodeURIComponent(ticker) + '&days=' + days);
+  if (!r.ok) return null;
+  const d = await r.json();
+  return Array.isArray(d.bars) ? d.bars : null;
+}
+
+async function fetchSectorRotation() {
+  const days = 70;
+  const all = await Promise.all([
+    fetchAggregates('SPY', days),
+    ...RRG_ETFS.map((t) => fetchAggregates(t, days)),
+  ]);
+  const spyBars = all[0];
+  if (!spyBars || spyBars.length < 28) return null;
+  const spy = spyBars.map((b) => b.c);
+  const spyN = spy.length;
+  const spyLatest = spy[spyN - 1];
+  const spyMid = spy[spyN - 14];
+  const spyOld = spy[Math.max(0, spyN - 28)];
+  const spyRecent = spyLatest / spyMid - 1;
+  const spyOlder = spyMid / spyOld - 1;
+  const placement = {};
+  for (let i = 0; i < RRG_ETFS.length; i++) {
+    const ticker = RRG_ETFS[i];
+    const bars = all[i + 1];
+    if (!bars || bars.length < 28) continue;
+    const c = bars.map((b) => b.c);
+    const n = c.length;
+    const latest = c[n - 1];
+    const mid = c[n - 14];
+    const old = c[Math.max(0, n - 28)];
+    const recent = latest / mid - 1;
+    const older = mid / old - 1;
+    const rs = recent - spyRecent;
+    const rsOld = older - spyOlder;
+    const momentum = rs - rsOld;
+    let quadrant;
+    if (rs > 0 && momentum > 0) quadrant = 'leading';
+    else if (rs > 0 && momentum <= 0) quadrant = 'weakening';
+    else if (rs <= 0 && momentum > 0) quadrant = 'improving';
+    else quadrant = 'lagging';
+    placement[ticker] = quadrant;
+  }
+  return { placement };
+}
+
 // 抓 SPX 20-week MA 判斷，用於 紅色警報「SPX 站上 20MA」
 async function fetchSPX20MA() {
   const url = WORKER_URL + '/api/polygon/sma?ticker=I:SPX&window=20&timespan=week';

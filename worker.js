@@ -334,6 +334,12 @@ async function handlePolygon(request, env, path) {
     if (subPath === '/sma') {
       return await polygonSMA(url, env);
     }
+    if (subPath === '/aggregates') {
+      return await polygonAggregates(url, env);
+    }
+    if (subPath === '/ticker-details') {
+      return await polygonTickerDetails(url, env);
+    }
     if (subPath === '/option-chain') {
       return await polygonOptionChain(url, env);
     }
@@ -499,6 +505,76 @@ async function polygonSMA(url, env) {
         ? ((latestClose - sma.value) / sma.value) * 100
         : null,
       source: 'polygon-sma',
+    });
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// /api/polygon/aggregates?ticker=SPY&days=70
+// Returns the last N daily closes — used for RRG relative-strength math
+// against SPY (sector rotation) and rolling beta computation.
+// ────────────────────────────────────────────────────────────
+async function polygonAggregates(url, env) {
+  const ticker = url.searchParams.get('ticker');
+  const days = Math.max(5, Math.min(400, parseInt(url.searchParams.get('days') || '70', 10)));
+  if (!ticker) return jsonResponse({ error: 'Missing ticker' }, 400);
+
+  const cacheKey = 'aggs-' + ticker + '-' + days;
+  return polygonCachedFetch(cacheKey, 900, async () => {
+    const to = new Date();
+    const from = new Date(Date.now() - days * 2 * 86400000);
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    const polyUrl = 'https://api.polygon.io/v2/aggs/ticker/' + encodeURIComponent(ticker)
+      + '/range/1/day/' + fmt(from) + '/' + fmt(to)
+      + '?adjusted=true&sort=asc&limit=' + (days * 2)
+      + '&apiKey=' + env.POLYGON_API_KEY;
+    const r = await fetch(polyUrl);
+    const d = await r.json();
+    if (!r.ok) {
+      return jsonResponse({
+        error: 'Aggregates fetch failed',
+        status: r.status,
+        polygonError: d.error || d.message || null,
+        ticker,
+      }, r.status);
+    }
+    const bars = (d.results || []).slice(-days).map(b => ({ t: b.t, c: b.c }));
+    return jsonResponse({ ticker, count: bars.length, bars });
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// /api/polygon/ticker-details?ticker=NVDA
+// Returns market cap + sector + share count — used to auto-classify TICKER_PROFILE
+// (AI_LEADER / MEGA_CAP / etc.) and approximate QQQ_WEIGHT.
+// ────────────────────────────────────────────────────────────
+async function polygonTickerDetails(url, env) {
+  const ticker = url.searchParams.get('ticker');
+  if (!ticker) return jsonResponse({ error: 'Missing ticker' }, 400);
+  const cacheKey = 'tdetails-' + ticker.toUpperCase();
+  return polygonCachedFetch(cacheKey, 86400, async () => {
+    const polyUrl = 'https://api.polygon.io/v3/reference/tickers/' + encodeURIComponent(ticker.toUpperCase())
+      + '?apiKey=' + env.POLYGON_API_KEY;
+    const r = await fetch(polyUrl);
+    const d = await r.json();
+    if (!r.ok || !d.results) {
+      return jsonResponse({
+        error: 'Ticker details fetch failed',
+        status: r.status,
+        polygonError: d.error || d.message || null,
+        ticker,
+      }, r.status);
+    }
+    const res = d.results;
+    return jsonResponse({
+      ticker: res.ticker,
+      name: res.name || null,
+      market_cap: isFinite(res.market_cap) ? res.market_cap : null,
+      share_class_shares_outstanding: isFinite(res.share_class_shares_outstanding) ? res.share_class_shares_outstanding : null,
+      weighted_shares_outstanding: isFinite(res.weighted_shares_outstanding) ? res.weighted_shares_outstanding : null,
+      sic_code: res.sic_code || null,
+      sic_description: res.sic_description || null,
+      primary_exchange: res.primary_exchange || null,
     });
   });
 }
