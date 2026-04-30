@@ -3610,6 +3610,42 @@ async function computeBeta(ticker, days = 60) {
   return cov / varS;
 }
 
+// Fetch market cap + sector for a ticker via worker (cached 24h server-side).
+async function fetchTickerDetails(ticker) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t || t === 'CASH') return null;
+  try {
+    const r = await fetch(WORKER_URL + '/api/polygon/ticker-details?ticker=' + encodeURIComponent(t));
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d && d.ticker ? d : null;
+  } catch (_) { return null; }
+}
+
+// Classify TICKER_PROFILE bucket from market cap + SIC sector. Multipliers in
+// CONTAGION_PROFILES are still subjective; this just picks the bucket.
+function classifyTickerProfile(details) {
+  if (!details) return 'STANDALONE';
+  const mc = details.market_cap;
+  const sic = (details.sic_description || '').toUpperCase();
+  const ticker = (details.ticker || '').toUpperCase();
+  if (['NVDA', 'AVGO', 'TSM', 'AMD'].includes(ticker)) return 'AI_LEADER';
+  if (mc != null && mc >= 1.5e12) return 'MEGA_CAP';
+  if ((sic.includes('SEMICONDUCTOR') || sic.includes('PREPACKAGED SOFTWARE') || sic.includes('COMPUTER'))
+      && mc != null && mc >= 5e10) {
+    return 'AI_BENEFICIARY';
+  }
+  if (ticker === 'META') return 'RIPPLE';
+  return 'STANDALONE';
+}
+
+// Approximate QQQ weight ≈ ticker_market_cap / Nasdaq-100 total (~ $30T baseline),
+// capped at 10% to mirror QQQ's modified-weight per-stock cap.
+function approxQQQWeight(details) {
+  if (!details || !isFinite(details.market_cap)) return 0;
+  return Math.min(0.10, parseFloat((details.market_cap / 30e12).toFixed(4)));
+}
+
 // Phase 4g: module-level β seeding for common holdings via setTimeout.
 // Each ticker fetches independently with its own .catch — one failure
 // doesn't affect the others. Page renders first; cache populates async.
@@ -3624,13 +3660,40 @@ if (typeof window !== 'undefined') {
           window.__BETA_CACHE[t] = parseFloat(b.toFixed(3));
         }
       }).catch((e) => { try { console.warn('[Beta seed ' + t + '] failed:', e.message); } catch (_) {} });
+
+      // Phase 5: ticker-details for QQQ_WEIGHT + TICKER_PROFILE
+      fetchTickerDetails(t).then((details) => {
+        if (!details) return;
+        window.__TICKER_PROFILES = window.__TICKER_PROFILES || {};
+        window.__QQQ_WEIGHTS = window.__QQQ_WEIGHTS || {};
+        window.__TICKER_PROFILES[t] = classifyTickerProfile(details);
+        window.__QQQ_WEIGHTS[t] = approxQQQWeight(details);
+      }).catch((e) => { try { console.warn('[Profile seed ' + t + '] failed:', e.message); } catch (_) {} });
     });
   }, 2000);
 }
 
-const getQQQWeight = (ticker) => QQQ_WEIGHT[(ticker || '').toUpperCase()] ?? 0;
+// Both consult window caches first (populated by setTimeout below from Polygon)
+// before falling back to the static lookup tables.
+if (typeof window !== 'undefined') {
+  if (!window.__QQQ_WEIGHTS) window.__QQQ_WEIGHTS = {};
+  if (!window.__TICKER_PROFILES) window.__TICKER_PROFILES = {};
+}
+const getQQQWeight = (ticker) => {
+  const t = (ticker || '').toUpperCase();
+  if (typeof window !== 'undefined' && window.__QQQ_WEIGHTS && window.__QQQ_WEIGHTS[t] != null) {
+    return window.__QQQ_WEIGHTS[t];
+  }
+  return QQQ_WEIGHT[t] ?? 0;
+};
 const getContagion = (ticker) => {
-  const profile = TICKER_PROFILE[(ticker || '').toUpperCase()];
+  const t = (ticker || '').toUpperCase();
+  let profile;
+  if (typeof window !== 'undefined' && window.__TICKER_PROFILES && window.__TICKER_PROFILES[t]) {
+    profile = window.__TICKER_PROFILES[t];
+  } else {
+    profile = TICKER_PROFILE[t];
+  }
   return CONTAGION_PROFILES[profile] ?? CONTAGION_PROFILES.STANDALONE;
 };
 
