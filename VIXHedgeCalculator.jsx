@@ -276,8 +276,14 @@ const DEFAULT_POSITIONS = [
 
 // ────────────────────────────────────────────────────────────
 // Lookup helpers
+// Dynamic beta cache — populated by App.jsx on positions change. Keys are uppercase tickers.
+// Falls back to STOCK_BETA static table, then 1.10 default.
+if (typeof window !== 'undefined' && !window.__BETA_CACHE) window.__BETA_CACHE = {};
 const getBeta = (ticker) => {
   const t = (ticker || '').toUpperCase().trim();
+  if (typeof window !== 'undefined' && window.__BETA_CACHE && window.__BETA_CACHE[t] != null) {
+    return window.__BETA_CACHE[t];
+  }
   if (t in STOCK_BETA) return STOCK_BETA[t];
   return 1.10; // unknown ticker → assume average growth tilt
 };

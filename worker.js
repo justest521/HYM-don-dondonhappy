@@ -135,7 +135,7 @@ async function handleFred(url, env) {
     + '&sort_order=desc'
     + '&limit=' + limit;
 
-  const fredRes = await fetch(fredUrl);
+  const fredRes = await fetch(fredUrl, { headers: { 'User-Agent': 'curl/8.0' } });
   if (!fredRes.ok) {
     const errText = await fredRes.text();
     return jsonResponse({
@@ -185,7 +185,7 @@ async function handleFredBatch(url, env) {
           + '&file_type=json'
           + '&sort_order=desc'
           + '&limit=' + limit;
-        const r = await fetch(fredUrl);
+        const r = await fetch(fredUrl, { headers: { 'User-Agent': 'curl/8.0' } });
         if (!r.ok) return { series: s, error: 'FRED returned ' + r.status };
         const d = await r.json();
         return {

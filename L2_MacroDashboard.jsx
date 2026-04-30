@@ -638,6 +638,7 @@ const FRED_SERIES = {
   T10Y2Y: 'T10Y2Y',        // 10Y-2Y Spread (daily)
   UNRATE: 'UNRATE',        // Unemployment Rate (monthly)
   CPI: 'CPIAUCSL',         // CPI All Urban (monthly)
+  CFNAI: 'CFNAIMA3',       // Chicago Fed Activity Index (3mo MA) — used as ISM PMI proxy
 };
 
 // Batch fetch all series in one request
@@ -725,6 +726,18 @@ function inferCpiTrend(cpiObs) {
   else trend = 'stable';
 
   return { trend, latestYoY: latest, delta };
+}
+
+// Map Chicago Fed CFNAI-MA3 to a PMI-equivalent (FRED stopped publishing ISM in 2014).
+// CFNAI 0 = trend growth → PMI 50, +1 = strong expansion → PMI ~60, -1 = contraction → PMI ~40.
+// Clipped to [30, 70] so a single noisy month doesn't push it to absurd values.
+function inferPMIFromCFNAI(cfnaiObs) {
+  const data = (cfnaiObs || []).filter((o) => o.value != null);
+  if (data.length === 0) return { pmi: null, cfnai: null };
+  const latest = Number(data[0].value);
+  if (!isFinite(latest)) return { pmi: null, cfnai: null };
+  const pmi = Math.max(30, Math.min(70, 50 + latest * 10));
+  return { pmi: parseFloat(pmi.toFixed(1)), cfnai: latest };
 }
 
 // Unemployment rising? Compare last 3 months avg vs prior 3 months
@@ -1050,6 +1063,8 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
       const cpi = inferCpiTrend(data[FRED_SERIES.CPI]);
       // Unemployment trend
       const unemp = inferUnemploymentRising(data[FRED_SERIES.UNRATE]);
+      // PMI proxy from Chicago Fed CFNAI-MA3 (FRED stopped publishing ISM in 2014)
+      const pmiProxy = inferPMIFromCFNAI(data[FRED_SERIES.CFNAI]);
 
       // Apply auto-derived values to state
       if (netLiq) {
@@ -1065,8 +1080,11 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
       if (unemp.latest != null) {
         setUnemploymentRising(unemp.rising);
       }
+      if (pmiProxy.pmi != null) {
+        setPmiValue(pmiProxy.pmi);
+      }
 
-      setFredDetails({ netLiq, yieldCurve, cpi, unemp });
+      setFredDetails({ netLiq, yieldCurve, cpi, unemp, pmiProxy });
       setFredSyncTime(new Date());
       setFredStatus('synced');
     } catch (e) {
@@ -1552,7 +1570,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
 
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-primary font-tc">ISM PMI{MANUAL_BADGE}</label>
+                <label className="text-xs text-primary font-tc">ISM PMI{AUTO_BADGE}<span style={{ marginLeft: '4px', fontSize: '8.5px', color: '#666', fontFamily: 'DM Mono' }}>(CFNAI 代理)</span></label>
                 <span className="font-mono-dm tabular" style={{
                   fontSize: '11px',
                   color: pmiValue >= 50 ? '#10b981' : '#ef4444',

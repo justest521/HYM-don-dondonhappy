@@ -249,6 +249,36 @@ export default function App() {
     return () => window.removeEventListener('open-l1-calculator', handler);
   }, []);
 
+  // Auto-compute β for each unique ticker in Supabase positions and store in
+  // window.__BETA_CACHE. getBeta() reads from this first, so cross-layer beta
+  // calculations use 60-day historical correlation with SPY instead of the
+  // hardcoded STOCK_BETA fallback table.
+  const [betaVersion, setBetaVersion] = useState(0);
+  useEffect(() => {
+    const tickers = Array.from(new Set(
+      (positions || [])
+        .map((p) => (p.ticker || '').toUpperCase().trim())
+        .filter((t) => t && t !== 'CASH' && t !== 'SPY' && !t.startsWith('MOCK-'))
+    ));
+    if (tickers.length === 0) return;
+    let cancelled = false;
+    Promise.all(tickers.map((t) => computeBeta(t))).then((betas) => {
+      if (cancelled) return;
+      if (typeof window === 'undefined') return;
+      window.__BETA_CACHE = window.__BETA_CACHE || {};
+      let updated = false;
+      tickers.forEach((t, i) => {
+        const b = betas[i];
+        if (b != null && isFinite(b) && Math.abs(b) < 5) {
+          window.__BETA_CACHE[t] = parseFloat(b.toFixed(3));
+          updated = true;
+        }
+      });
+      if (updated) setBetaVersion((v) => v + 1);
+    });
+    return () => { cancelled = true; };
+  }, [positions]);
+
   // ──────────────────────────────────────────────────────────
   // Handlers
   // ──────────────────────────────────────────────────────────
@@ -969,6 +999,54 @@ function BridgeArrow() {
 // PositionsManager — CRUD for Supabase positions table
 // ────────────────────────────────────────────────────────────
 const WORKER_URL_APP = 'https://solitary-wood-898d.justest521.workers.dev';
+
+// Fetch the last N daily closes for any ticker via worker (cached 15min server-side).
+// Used by computeBeta and the L2 RRG calculation.
+async function fetchAggregates(ticker, days = 70) {
+  const r = await fetch(WORKER_URL_APP + '/api/polygon/aggregates?ticker=' + encodeURIComponent(ticker) + '&days=' + days);
+  if (!r.ok) return null;
+  const d = await r.json();
+  return Array.isArray(d.bars) ? d.bars : null;
+}
+
+// Compute β = cov(ticker, SPY) / var(SPY) using last N daily log returns.
+async function computeBeta(ticker, days = 60) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t || t === 'CASH') return null;
+  if (t === 'SPY') return 1.0;
+  const [tBars, sBars] = await Promise.all([
+    fetchAggregates(t, days + 5),
+    fetchAggregates('SPY', days + 5),
+  ]);
+  if (!tBars || !sBars) return null;
+  const tByTs = new Map(tBars.map((b) => [b.t, b.c]));
+  const sByTs = new Map(sBars.map((b) => [b.t, b.c]));
+  const commonTs = [...sByTs.keys()].filter((ts) => tByTs.has(ts)).sort((a, b) => a - b);
+  if (commonTs.length < 30) return null;
+  const tRets = [];
+  const sRets = [];
+  for (let i = 1; i < commonTs.length; i++) {
+    const tCur = tByTs.get(commonTs[i]);
+    const tPrev = tByTs.get(commonTs[i - 1]);
+    const sCur = sByTs.get(commonTs[i]);
+    const sPrev = sByTs.get(commonTs[i - 1]);
+    if (tPrev > 0 && sPrev > 0 && tCur > 0 && sCur > 0) {
+      tRets.push(Math.log(tCur / tPrev));
+      sRets.push(Math.log(sCur / sPrev));
+    }
+  }
+  if (tRets.length < 20) return null;
+  const meanT = tRets.reduce((a, x) => a + x, 0) / tRets.length;
+  const meanS = sRets.reduce((a, x) => a + x, 0) / sRets.length;
+  let cov = 0;
+  let varS = 0;
+  for (let i = 0; i < tRets.length; i++) {
+    cov += (tRets[i] - meanT) * (sRets[i] - meanS);
+    varS += (sRets[i] - meanS) ** 2;
+  }
+  if (varS <= 0) return null;
+  return cov / varS;
+}
 
 // Fetch current price for a ticker from Polygon via worker (returns null on fail)
 async function fetchCurrentPrice(ticker) {
