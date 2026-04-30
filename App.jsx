@@ -386,7 +386,7 @@ export default function App() {
           setCollapsed={setCollapseL2}
           icon={Globe}
         >
-          <L2MacroDashboard onScoreChange={handleMacroChange} />
+          <L2MacroDashboard onScoreChange={handleMacroChange} portfolioTotal={portfolioTotal} />
         </CollapsibleSection>
 
         {/* Positions CRUD UI — directly above macro context for easy editing */}

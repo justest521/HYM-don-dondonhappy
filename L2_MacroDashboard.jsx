@@ -898,7 +898,7 @@ async function expandScenarioWithAI({ eventType, eventLabel, score, bandLabel, e
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
-export default function L2MacroDashboard({ onScoreChange = null }) {
+export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
   // ──────────────────────────────────────────────────────────
   // STATE: 4 主要評分指標
   // ──────────────────────────────────────────────────────────
@@ -931,7 +931,14 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
   const [scenarioMode, setScenarioMode] = useState('bullish'); // 'bullish' | 'bearish'
 
   // STATE: 組合資訊 (用於計算 hedge dollar amount)
+  // Auto-synced from App's portfolioTotal prop (Supabase positions). User can still type
+  // to override for what-if scenarios; the next portfolioTotal change will overwrite.
   const [portfolioValue, setPortfolioValue] = useState(500000);
+  useEffect(() => {
+    if (portfolioTotal != null && portfolioTotal > 0) {
+      setPortfolioValue(Math.round(portfolioTotal));
+    }
+  }, [portfolioTotal]);
 
   // STATE: FRED auto-sync
   const [fredStatus, setFredStatus] = useState('idle'); // 'idle' | 'fetching' | 'synced' | 'error'
@@ -1518,7 +1525,14 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
               <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>PORTFOLIO</span>
             </div>
             <div className="mb-3">
-              <label className="text-xs text-primary font-tc block mb-1">總價值 (USD)</label>
+              <label className="text-xs text-primary font-tc block mb-1">
+                總價值 (USD)
+                {portfolioTotal != null && portfolioTotal > 0 && (
+                  <span style={{ marginLeft: '6px', fontSize: '9px', color: '#10b981', fontFamily: 'DM Mono', letterSpacing: '0.05em' }}>
+                    ⟲ AUTO
+                  </span>
+                )}
+              </label>
               <input
                 type="number"
                 value={portfolioValue}
@@ -1526,7 +1540,9 @@ export default function L2MacroDashboard({ onScoreChange = null }) {
                 className="num-input"
               />
               <div className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '9px', marginTop: '3px' }}>
-                用於計算 L1 hedge 預算 USD 金額
+                {portfolioTotal != null && portfolioTotal > 0
+                  ? '已自動同步 Supabase 持倉總值；可手動覆寫做 what-if'
+                  : '用於計算 L1 hedge 預算 USD 金額'}
               </div>
             </div>
           </div>
