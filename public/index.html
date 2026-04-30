@@ -893,7 +893,6 @@ const FRED_SERIES = {
   T10Y2Y: 'T10Y2Y',        // 10Y-2Y Spread (daily)
   UNRATE: 'UNRATE',        // Unemployment Rate (monthly)
   CPI: 'CPIAUCSL',         // CPI All Urban (monthly)
-  CFNAI: 'CFNAIMA3',       // Chicago Fed Activity Index (3mo MA) — used as ISM PMI proxy
 };
 
 // Batch fetch all series in one request
@@ -983,18 +982,6 @@ function inferCpiTrend(cpiObs) {
   return { trend, latestYoY: latest, delta };
 }
 
-// Map Chicago Fed CFNAI-MA3 to a PMI-equivalent (FRED stopped publishing ISM in 2014).
-// CFNAI 0 = trend growth → PMI 50, +1 = strong expansion → PMI ~60, -1 = contraction → PMI ~40.
-// Clipped to [30, 70] so a single noisy month doesn't push it to absurd values.
-function inferPMIFromCFNAI(cfnaiObs) {
-  const data = (cfnaiObs || []).filter((o) => o.value != null);
-  if (data.length === 0) return { pmi: null, cfnai: null };
-  const latest = Number(data[0].value);
-  if (!isFinite(latest)) return { pmi: null, cfnai: null };
-  const pmi = Math.max(30, Math.min(70, 50 + latest * 10));
-  return { pmi: parseFloat(pmi.toFixed(1)), cfnai: latest };
-}
-
 // Unemployment rising? Compare last 3 months avg vs prior 3 months
 function inferUnemploymentRising(unrateObs) {
   const data = (unrateObs || []).filter(o => o.value != null);
@@ -1026,64 +1013,6 @@ function inferYieldCurveHistory(t10y2yObs) {
 // ============================================================
 // POLYGON HELPERS
 // ============================================================
-
-// ────────────────────────────────────────────────────────────
-// RRG: relative-rotation classification of 11 sector ETFs vs SPY
-// Pulls daily closes via the worker /aggregates endpoint (cached 15min server-side),
-// then computes simplified JdK RS-Ratio / RS-Momentum and bins each ETF into
-// leading / weakening / lagging / improving.
-// ────────────────────────────────────────────────────────────
-const RRG_ETFS = ['XLK', 'XLY', 'XLC', 'XLI', 'XLB', 'XLE', 'XLF', 'XLV', 'XLP', 'XLU', 'XLRE'];
-
-async function fetchAggregates(ticker, days = 70) {
-  const r = await fetch(WORKER_URL + '/api/polygon/aggregates?ticker=' + encodeURIComponent(ticker) + '&days=' + days);
-  if (!r.ok) return null;
-  const d = await r.json();
-  return Array.isArray(d.bars) ? d.bars : null;
-}
-
-async function fetchSectorRotation() {
-  const days = 70;
-  const all = await Promise.all([
-    fetchAggregates('SPY', days),
-    ...RRG_ETFS.map((t) => fetchAggregates(t, days)),
-  ]);
-  const spyBars = all[0];
-  if (!spyBars || spyBars.length < 28) return null;
-  const spy = spyBars.map((b) => b.c);
-  const spyN = spy.length;
-  const spyLatest = spy[spyN - 1];
-  const spyMid = spy[spyN - 14];
-  const spyOld = spy[Math.max(0, spyN - 28)];
-  const spyRecent = spyLatest / spyMid - 1;
-  const spyOlder = spyMid / spyOld - 1;
-
-  const placement = {};
-  const detail = {};
-  for (let i = 0; i < RRG_ETFS.length; i++) {
-    const ticker = RRG_ETFS[i];
-    const bars = all[i + 1];
-    if (!bars || bars.length < 28) continue;
-    const c = bars.map((b) => b.c);
-    const n = c.length;
-    const latest = c[n - 1];
-    const mid = c[n - 14];
-    const old = c[Math.max(0, n - 28)];
-    const recent = latest / mid - 1;
-    const older = mid / old - 1;
-    const rs = recent - spyRecent;        // outperforming SPY now? (>0)
-    const rsOld = older - spyOlder;       // outperforming SPY 14d ago?
-    const momentum = rs - rsOld;          // accelerating vs SPY?
-    let quadrant;
-    if (rs > 0 && momentum > 0) quadrant = 'leading';
-    else if (rs > 0 && momentum <= 0) quadrant = 'weakening';
-    else if (rs <= 0 && momentum > 0) quadrant = 'improving';
-    else quadrant = 'lagging';
-    placement[ticker] = quadrant;
-    detail[ticker] = { rs, momentum, quadrant };
-  }
-  return { placement, detail };
-}
 
 // 抓 SPX 20-week MA 判斷，用於 紅色警報「SPX 站上 20MA」
 async function fetchSPX20MA() {
@@ -1318,8 +1247,6 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
       const cpi = inferCpiTrend(data[FRED_SERIES.CPI]);
       // Unemployment trend
       const unemp = inferUnemploymentRising(data[FRED_SERIES.UNRATE]);
-      // PMI proxy from Chicago Fed CFNAI-MA3 (FRED stopped publishing ISM in 2014)
-      const pmiProxy = inferPMIFromCFNAI(data[FRED_SERIES.CFNAI]);
 
       // Apply auto-derived values to state
       if (netLiq) {
@@ -1335,11 +1262,8 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
       if (unemp.latest != null) {
         setUnemploymentRising(unemp.rising);
       }
-      if (pmiProxy.pmi != null) {
-        setPmiValue(pmiProxy.pmi);
-      }
 
-      setFredDetails({ netLiq, yieldCurve, cpi, unemp, pmiProxy });
+      setFredDetails({ netLiq, yieldCurve, cpi, unemp });
       setFredSyncTime(new Date());
       setFredStatus('synced');
     } catch (e) {
@@ -1356,13 +1280,12 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
     setPolygonStatus('fetching');
     setPolygonError(null);
     try {
-      // 平行抓 4 個（SPX SMA / VIX spot / SPY quote / RRG sector rotation）
-      // 任一個失敗就 partial result，不阻塞其他
-      const [spxSMA, vix, spy, rrg] = await Promise.allSettled([
+      // 平行抓 3 個（SPX SMA / VIX spot / SPY quote）
+      // 任一個失敗就 partial result，不阻塞其他兩個
+      const [spxSMA, vix, spy] = await Promise.allSettled([
         fetchSPX20MA(),
         fetchVIXSpot(),
         fetchSPYQuote(),
-        fetchSectorRotation(),
       ]);
 
       const result = {
@@ -1372,17 +1295,11 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
         vixError: vix.status === 'rejected' ? vix.reason?.message : null,
         spy: spy.status === 'fulfilled' ? spy.value : null,
         spyError: spy.status === 'rejected' ? spy.reason?.message : null,
-        rrg: rrg.status === 'fulfilled' ? rrg.value : null,
-        rrgError: rrg.status === 'rejected' ? rrg.reason?.message : null,
       };
 
       // Apply: SPX 20MA → setSpxAboveMA（L2 own state）
       if (result.spxSMA && result.spxSMA.aboveMA != null) {
         setSpxAboveMA(result.spxSMA.aboveMA);
-      }
-      // RRG → auto-classify all 11 sector ETFs into 4 quadrants based on real momentum
-      if (result.rrg && result.rrg.placement && Object.keys(result.rrg.placement).length > 0) {
-        setSectorPlacement((prev) => ({ ...prev, ...result.rrg.placement }));
       }
       // VIX spot 在 L1，不在 L2 的 own state。透過 onScoreChange 一起 emit 到 parent，App 再轉給 L1。
 
@@ -1825,7 +1742,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
 
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-primary font-tc">ISM PMI{AUTO_BADGE}<span style={{ marginLeft: '4px', fontSize: '8.5px', color: '#666', fontFamily: 'DM Mono' }}>(CFNAI 代理)</span></label>
+                <label className="text-xs text-primary font-tc">ISM PMI{MANUAL_BADGE}</label>
                 <span className="font-mono-dm tabular" style={{
                   fontSize: '11px',
                   color: pmiValue >= 50 ? '#10b981' : '#ef4444',
@@ -3561,111 +3478,14 @@ const DEFAULT_POSITIONS = [
 
 // ────────────────────────────────────────────────────────────
 // Lookup helpers
-// Dynamic beta cache — populated by App.jsx on positions change. Keys are uppercase tickers.
-// Falls back to STOCK_BETA static table, then 1.10 default.
-if (typeof window !== 'undefined' && !window.__BETA_CACHE) window.__BETA_CACHE = {};
 const getBeta = (ticker) => {
   const t = (ticker || '').toUpperCase().trim();
-  if (typeof window !== 'undefined' && window.__BETA_CACHE && window.__BETA_CACHE[t] != null) {
-    return window.__BETA_CACHE[t];
-  }
   if (t in STOCK_BETA) return STOCK_BETA[t];
   return 1.10; // unknown ticker → assume average growth tilt
 };
-
-// Fetch market cap + sector for a ticker via worker (cached 24h server-side).
-async function fetchTickerDetails(ticker) {
-  const t = (ticker || '').toUpperCase().trim();
-  if (!t || t === 'CASH') return null;
-  try {
-    const r = await fetch(WORKER_URL + '/api/polygon/ticker-details?ticker=' + encodeURIComponent(t));
-    if (!r.ok) return null;
-    const d = await r.json();
-    return d && d.ticker ? d : null;
-  } catch { return null; }
-}
-
-// Auto-classify TICKER_PROFILE from Polygon details. The contagion multipliers in
-// CONTAGION_PROFILES are still subjective, but at least the bucket is data-driven.
-function classifyTickerProfile(details) {
-  if (!details) return 'STANDALONE';
-  const mc = details.market_cap;
-  const sic = (details.sic_description || '').toUpperCase();
-  const ticker = (details.ticker || '').toUpperCase();
-  if (['NVDA', 'AVGO', 'TSM', 'AMD'].includes(ticker)) return 'AI_LEADER';
-  if (mc != null && mc >= 1.5e12) return 'MEGA_CAP';
-  if ((sic.includes('SEMICONDUCTOR') || sic.includes('PREPACKAGED SOFTWARE') || sic.includes('COMPUTER'))
-      && mc != null && mc >= 5e10) {
-    return 'AI_BENEFICIARY';
-  }
-  if (ticker === 'META') return 'RIPPLE';
-  return 'STANDALONE';
-}
-
-// Approximate QQQ weight ≈ ticker_market_cap / Nasdaq-100 total (~ $30T baseline).
-// Capped at 10% to mirror QQQ's modified-weight per-stock cap.
-function approxQQQWeight(details) {
-  if (!details || !isFinite(details.market_cap)) return 0;
-  const N100_TOTAL = 30e12;
-  return Math.min(0.10, parseFloat((details.market_cap / N100_TOTAL).toFixed(4)));
-}
-
-// Compute β = cov(ticker, SPY) / var(SPY) using last N daily log returns from /aggregates.
-// Uses fetchAggregates which is cached server-side 15min.
-async function computeBeta(ticker, days = 60) {
-  const t = (ticker || '').toUpperCase().trim();
-  if (!t || t === 'CASH') return null;
-  if (t === 'SPY') return 1.0;
-  const [tBars, sBars] = await Promise.all([
-    fetchAggregates(t, days + 5),
-    fetchAggregates('SPY', days + 5),
-  ]);
-  if (!tBars || !sBars) return null;
-  const tByTs = new Map(tBars.map((b) => [b.t, b.c]));
-  const sByTs = new Map(sBars.map((b) => [b.t, b.c]));
-  const commonTs = [...sByTs.keys()].filter((ts) => tByTs.has(ts)).sort((a, b) => a - b);
-  if (commonTs.length < 30) return null;
-  const tRets = [];
-  const sRets = [];
-  for (let i = 1; i < commonTs.length; i++) {
-    const tCur = tByTs.get(commonTs[i]);
-    const tPrev = tByTs.get(commonTs[i - 1]);
-    const sCur = sByTs.get(commonTs[i]);
-    const sPrev = sByTs.get(commonTs[i - 1]);
-    if (tPrev > 0 && sPrev > 0 && tCur > 0 && sCur > 0) {
-      tRets.push(Math.log(tCur / tPrev));
-      sRets.push(Math.log(sCur / sPrev));
-    }
-  }
-  if (tRets.length < 20) return null;
-  const meanT = tRets.reduce((a, x) => a + x, 0) / tRets.length;
-  const meanS = sRets.reduce((a, x) => a + x, 0) / sRets.length;
-  let cov = 0;
-  let varS = 0;
-  for (let i = 0; i < tRets.length; i++) {
-    cov += (tRets[i] - meanT) * (sRets[i] - meanS);
-    varS += (sRets[i] - meanS) ** 2;
-  }
-  if (varS <= 0) return null;
-  return cov / varS;
-}
-// Both consult window caches first (populated by App.jsx from Polygon ticker-details)
-// before falling back to the static lookup tables.
-const getQQQWeight = (ticker) => {
-  const t = (ticker || '').toUpperCase();
-  if (typeof window !== 'undefined' && window.__QQQ_WEIGHTS && window.__QQQ_WEIGHTS[t] != null) {
-    return window.__QQQ_WEIGHTS[t];
-  }
-  return QQQ_WEIGHT[t] ?? 0;
-};
+const getQQQWeight = (ticker) => QQQ_WEIGHT[(ticker || '').toUpperCase()] ?? 0;
 const getContagion = (ticker) => {
-  const t = (ticker || '').toUpperCase();
-  let profile;
-  if (typeof window !== 'undefined' && window.__TICKER_PROFILES && window.__TICKER_PROFILES[t]) {
-    profile = window.__TICKER_PROFILES[t];
-  } else {
-    profile = TICKER_PROFILE[t];
-  }
+  const profile = TICKER_PROFILE[(ticker || '').toUpperCase()];
   return CONTAGION_PROFILES[profile] ?? CONTAGION_PROFILES.STANDALONE;
 };
 
@@ -5856,48 +5676,6 @@ function App() {
     window.addEventListener('open-l1-calculator', handler);
     return () => window.removeEventListener('open-l1-calculator', handler);
   }, []);
-
-  // Auto-compute β + ticker profile + approx QQQ weight for each unique ticker
-  // in Supabase positions. Populates three window caches:
-  //   __BETA_CACHE           — getBeta() reads from this first
-  //   __TICKER_PROFILES      — getContagion() reads from this first
-  //   __QQQ_WEIGHTS          — getQQQWeight() reads from this first
-  // β uses 60-day SPY correlation; profile + weight use Polygon ticker-details
-  // (market_cap + sector). Both endpoints cached server-side, so per-position
-  // refreshes are cheap.
-  const [tickerCacheVersion, setTickerCacheVersion] = useState(0);
-  useEffect(() => {
-    const tickers = Array.from(new Set(
-      (positions || [])
-        .map((p) => (p.ticker || '').toUpperCase().trim())
-        .filter((t) => t && t !== 'CASH' && t !== 'SPY' && !t.startsWith('MOCK-'))
-    ));
-    if (tickers.length === 0) return;
-    let cancelled = false;
-    Promise.all(tickers.map(async (t) => {
-      const [beta, details] = await Promise.all([computeBeta(t), fetchTickerDetails(t)]);
-      return { t, beta, details };
-    })).then((results) => {
-      if (cancelled || typeof window === 'undefined') return;
-      window.__BETA_CACHE = window.__BETA_CACHE || {};
-      window.__TICKER_PROFILES = window.__TICKER_PROFILES || {};
-      window.__QQQ_WEIGHTS = window.__QQQ_WEIGHTS || {};
-      let updated = false;
-      for (const { t, beta, details } of results) {
-        if (beta != null && isFinite(beta) && Math.abs(beta) < 5) {
-          window.__BETA_CACHE[t] = parseFloat(beta.toFixed(3));
-          updated = true;
-        }
-        if (details) {
-          window.__TICKER_PROFILES[t] = classifyTickerProfile(details);
-          window.__QQQ_WEIGHTS[t] = approxQQQWeight(details);
-          updated = true;
-        }
-      }
-      if (updated) setTickerCacheVersion((v) => v + 1);
-    });
-    return () => { cancelled = true; };
-  }, [positions]);
 
   // ──────────────────────────────────────────────────────────
   // Handlers

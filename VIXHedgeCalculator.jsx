@@ -276,34 +276,14 @@ const DEFAULT_POSITIONS = [
 
 // ────────────────────────────────────────────────────────────
 // Lookup helpers
-// Dynamic beta cache — populated by App.jsx on positions change. Keys are uppercase tickers.
-// Falls back to STOCK_BETA static table, then 1.10 default.
-if (typeof window !== 'undefined' && !window.__BETA_CACHE) window.__BETA_CACHE = {};
 const getBeta = (ticker) => {
   const t = (ticker || '').toUpperCase().trim();
-  if (typeof window !== 'undefined' && window.__BETA_CACHE && window.__BETA_CACHE[t] != null) {
-    return window.__BETA_CACHE[t];
-  }
   if (t in STOCK_BETA) return STOCK_BETA[t];
   return 1.10; // unknown ticker → assume average growth tilt
 };
-// Both consult window caches first (populated by App.jsx from Polygon ticker-details)
-// before falling back to the static lookup tables.
-const getQQQWeight = (ticker) => {
-  const t = (ticker || '').toUpperCase();
-  if (typeof window !== 'undefined' && window.__QQQ_WEIGHTS && window.__QQQ_WEIGHTS[t] != null) {
-    return window.__QQQ_WEIGHTS[t];
-  }
-  return QQQ_WEIGHT[t] ?? 0;
-};
+const getQQQWeight = (ticker) => QQQ_WEIGHT[(ticker || '').toUpperCase()] ?? 0;
 const getContagion = (ticker) => {
-  const t = (ticker || '').toUpperCase();
-  let profile;
-  if (typeof window !== 'undefined' && window.__TICKER_PROFILES && window.__TICKER_PROFILES[t]) {
-    profile = window.__TICKER_PROFILES[t];
-  } else {
-    profile = TICKER_PROFILE[t];
-  }
+  const profile = TICKER_PROFILE[(ticker || '').toUpperCase()];
   return CONTAGION_PROFILES[profile] ?? CONTAGION_PROFILES.STANDALONE;
 };
 
