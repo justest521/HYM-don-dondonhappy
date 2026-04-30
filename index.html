@@ -2770,8 +2770,10 @@ function L1IntegrationSection({ weightedTotal, positionBand, redAlerts, l1HedgeB
               padding: '6px 12px',
             }}
             onClick={() => {
-              // Placeholder: in real integration, this would emit an event or navigate
-              alert('在 dondonhappy 或 VIX Hedge Calculator 元件中設定:\nhedgeBudgetBps = ' + l1HedgeBudgetBps);
+              // L1 Calculator already receives hedgeBudgetBps via props (externalBudgetBps).
+              // This button just navigates the user's view to that section. App listens
+              // for 'open-l1-calculator' to expand the section if collapsed and scroll.
+              try { window.dispatchEvent(new CustomEvent('open-l1-calculator')); } catch (e) {}
             }}
           >
             送至 L1 Calculator <MoveRight size={10} />
@@ -5627,6 +5629,20 @@ function App() {
     return () => clearInterval(i);
   }, []);
 
+  // L2 dashboard's "送至 L1 Calculator" button fires this event — expand the L1 section
+  // (if collapsed) and smooth-scroll the user there. Replaces an old debug alert().
+  useEffect(() => {
+    const handler = () => {
+      setCollapseL1(false);
+      requestAnimationFrame(() => {
+        const el = document.getElementById('l1-vix-calculator');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+    window.addEventListener('open-l1-calculator', handler);
+    return () => window.removeEventListener('open-l1-calculator', handler);
+  }, []);
+
   // ──────────────────────────────────────────────────────────
   // Handlers
   // ──────────────────────────────────────────────────────────
@@ -5823,16 +5839,18 @@ function App() {
           portfolioTotal={portfolioTotal}
         />
 
-        {/* L1 VIX Hedge Calculator */}
-        <CollapsibleSection
-          title="L1 — VIX Hedge Calculator v2"
-          subtitle="Portfolio hedge · IV-aware · Stress test"
-          collapsed={collapseL1}
-          setCollapsed={setCollapseL1}
-          icon={Shield}
-        >
-          <VIXHedgeCalculator {...l1Props} />
-        </CollapsibleSection>
+        {/* L1 VIX Hedge Calculator — id used by L2 "送至 L1 Calculator" button (smooth-scroll target) */}
+        <div id="l1-vix-calculator" style={{ scrollMarginTop: '24px' }}>
+          <CollapsibleSection
+            title="L1 — VIX Hedge Calculator v2"
+            subtitle="Portfolio hedge · IV-aware · Stress test"
+            collapsed={collapseL1}
+            setCollapsed={setCollapseL1}
+            icon={Shield}
+          >
+            <VIXHedgeCalculator {...l1Props} />
+          </CollapsibleSection>
+        </div>
 
         {/* Footer */}
         <div style={{

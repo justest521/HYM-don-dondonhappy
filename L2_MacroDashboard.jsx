@@ -2521,8 +2521,10 @@ function L1IntegrationSection({ weightedTotal, positionBand, redAlerts, l1HedgeB
               padding: '6px 12px',
             }}
             onClick={() => {
-              // Placeholder: in real integration, this would emit an event or navigate
-              alert('在 dondonhappy 或 VIX Hedge Calculator 元件中設定:\nhedgeBudgetBps = ' + l1HedgeBudgetBps);
+              // L1 Calculator already receives hedgeBudgetBps via props (externalBudgetBps).
+              // This button just navigates the user's view to that section. App listens
+              // for 'open-l1-calculator' to expand the section if collapsed and scroll.
+              try { window.dispatchEvent(new CustomEvent('open-l1-calculator')); } catch (e) {}
             }}
           >
             送至 L1 Calculator <MoveRight size={10} />
