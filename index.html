@@ -5784,6 +5784,9 @@ function App() {
   const [errorMsg, setErrorMsg] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
+  // Supabase analyst_reports — research excerpts that feed into the AI summary as context
+  const [analystReports, setAnalystReports] = useState([]);
+
   // UI state
   const [showSetup, setShowSetup] = useState(!SUPABASE_ANON_KEY);
   const [collapseL2, setCollapseL2] = useState(false);
@@ -5796,10 +5799,11 @@ function App() {
   const [aiSummaryError, setAiSummaryError] = useState(null);
   const lastAiPositionsRef = useRef('');
 
-  const generateAiSummary = useCallback(async (positionsArr, macroSnapshot, opts = {}) => {
+  const generateAiSummary = useCallback(async (positionsArr, macroSnapshot, reportsArr, opts = {}) => {
     if (!positionsArr || positionsArr.length === 0) return;
-    // De-dup: if positions haven't materially changed and within 30 min, skip
-    const fingerprint = JSON.stringify(positionsArr.map(p => ({ t: p.ticker, q: p.qty, s: p.strike })));
+    // De-dup: if positions + reports fingerprint hasn't changed and within 30 min, skip
+    const reportsFingerprint = (reportsArr || []).map(r => r.id + ':' + (r.updated_at || r.created_at || '')).join('|');
+    const fingerprint = JSON.stringify(positionsArr.map(p => ({ t: p.ticker, q: p.qty, s: p.strike }))) + '||' + reportsFingerprint;
     const now = Date.now();
     if (!opts.force && fingerprint === lastAiPositionsRef.current && aiSummaryTime && (now - aiSummaryTime.getTime()) < 30 * 60 * 1000) {
       return;
@@ -5812,7 +5816,21 @@ function App() {
         '- ' + p.ticker + (p.option_type ? ' ' + p.option_type : '') + ' qty=' + p.qty + (p.strike ? ' strike=' + p.strike : '') + (p.expiry ? ' expiry=' + p.expiry : '')
       ).join('\n');
       const macroText = macroSnapshot ? ('Macro Score: ' + macroSnapshot.score + '/100, Band: ' + macroSnapshot.band + ', Alerts: ' + ((macroSnapshot.redAlerts || []).length)) : 'no macro data';
-      const prompt = '以下是我目前的美股期權持倉與當前 macro 狀態：\n\n持倉:\n' + positionsText + '\n\n' + macroText + '\n\n請用 3-5 行簡短中文評估：(1) 整體曝險方向 (2) 最大單一風險點 (3) 建議行動。每點一行，不要使用 markdown。';
+      // Filter reports relevant to this portfolio: ticker matches a held ticker, OR ticker is null (general macro)
+      const heldTickers = new Set(positionsArr.map(p => (p.ticker || '').toUpperCase()));
+      const relevantReports = (reportsArr || [])
+        .filter(r => !r.ticker || heldTickers.has(r.ticker.toUpperCase()))
+        .slice(0, 8);  // cap to avoid prompt bloat
+      const reportsText = relevantReports.length === 0 ? '' :
+        '\n\n分析師備忘 (近期 ' + relevantReports.length + ' 份):\n' + relevantReports.map(r => {
+          const head = '【' + r.title + (r.ticker ? ' · ' + r.ticker : '') + (r.source ? ' · ' + r.source : '') + '】';
+          // Trim each report to ~600 chars to keep prompt focused
+          const body = (r.content || '').slice(0, 600);
+          return head + '\n' + body;
+        }).join('\n\n');
+      const prompt = '以下是我目前的美股期權持倉與當前 macro 狀態：\n\n持倉:\n' + positionsText + '\n\n' + macroText + reportsText
+        + '\n\n請用 3-5 行簡短中文評估：(1) 整體曝險方向 (2) 最大單一風險點 (3) 建議行動。'
+        + '若有分析師備忘，請整合其觀點 (例如目標價、催化劑、風險警示) 進入評估。每點一行，不要使用 markdown。';
       const r = await fetch('https://solitary-wood-898d.justest521.workers.dev/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5835,12 +5853,12 @@ function App() {
     }
   }, [aiSummaryTime]);
 
-  // Trigger AI summary when positions OR macro state change (debounced 8s to batch updates)
+  // Trigger AI summary when positions, macro, OR analyst reports change (debounced 8s to batch updates)
   useEffect(() => {
     if (!positions || positions.length === 0) return;
-    const t = setTimeout(() => generateAiSummary(positions, macroState), 8000);
+    const t = setTimeout(() => generateAiSummary(positions, macroState, analystReports), 8000);
     return () => clearTimeout(t);
-  }, [positions, macroState, generateAiSummary]);
+  }, [positions, macroState, analystReports, generateAiSummary]);
 
   // Tick for relative time refresh
   const [, setNowTick] = useState(0);
@@ -5938,6 +5956,32 @@ function App() {
   const handleMacroChange = useCallback((state) => {
     setMacroState(state);
   }, []);
+
+  const fetchAnalystReports = useCallback(async () => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    try {
+      const { data, error } = await client
+        .from('analyst_reports')
+        .select('id, ticker, title, source, content, created_at, updated_at')
+        .eq('user_name', USER_NAME)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setAnalystReports(data || []);
+    } catch (e) {
+      console.warn('[analyst_reports] fetch failed:', e.message);
+    }
+  }, []);
+
+  // Initial load + reload after positions auto-refresh cycle (every 60s is plenty
+  // since reports change rarely)
+  useEffect(() => {
+    if (!SUPABASE_ANON_KEY) return;
+    fetchAnalystReports();
+    const i = setInterval(fetchAnalystReports, 5 * 60 * 1000);
+    return () => clearInterval(i);
+  }, [fetchAnalystReports]);
 
   // ──────────────────────────────────────────────────────────
   // Derived
@@ -6043,6 +6087,13 @@ function App() {
           onChange={fetchPositions}
         />
 
+        {/* Analyst research notes — feeds into AI summary as context */}
+        <AnalystReportsManager
+          reports={analystReports}
+          supabaseStatus={supabaseStatus}
+          onChange={fetchAnalystReports}
+        />
+
         {/* AI Portfolio Summary — auto-generated when positions/macro change (debounced 30 min) */}
         {(aiSummary || aiSummaryLoading || aiSummaryError) && (
           <div style={{
@@ -6064,7 +6115,7 @@ function App() {
                 )}
               </div>
               <button
-                onClick={() => generateAiSummary(positions, macroState, { force: true })}
+                onClick={() => generateAiSummary(positions, macroState, analystReports, { force: true })}
                 disabled={aiSummaryLoading}
                 style={{
                   background: 'transparent', border: '1px solid rgba(167,139,250,0.35)',
@@ -7100,6 +7151,206 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
               })()}
             </tfoot>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// AnalystReportsManager — CRUD for Supabase analyst_reports table.
+// Pasted excerpts (Goldman/MS/etc.) feed into the AI portfolio summary
+// as additional context alongside positions + macro state.
+// ────────────────────────────────────────────────────────────
+function AnalystReportsManager({ reports, supabaseStatus, onChange }) {
+  const [editing, setEditing] = useState(null);  // null | 'new' | id
+  const [form, setForm] = useState({ title: '', ticker: '', source: '', content: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [expanded, setExpanded] = useState({});  // { [id]: true }
+
+  const startNew = () => {
+    setEditing('new');
+    setForm({ title: '', ticker: '', source: '', content: '' });
+    setError(null);
+  };
+  const startEdit = (r) => {
+    setEditing(r.id);
+    setForm({
+      title: r.title || '',
+      ticker: r.ticker || '',
+      source: r.source || '',
+      content: r.content || '',
+    });
+    setError(null);
+  };
+  const cancel = () => { setEditing(null); setError(null); };
+
+  const submit = async () => {
+    if (!form.title.trim()) { setError('標題必填'); return; }
+    if (!form.content.trim()) { setError('內容必填'); return; }
+    setBusy(true); setError(null);
+    try {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Supabase 未連線');
+      const payload = {
+        title: form.title.trim(),
+        ticker: form.ticker.trim() ? form.ticker.trim().toUpperCase() : null,
+        source: form.source.trim() || null,
+        content: form.content.trim(),
+        user_name: 'toywu',
+      };
+      if (editing === 'new') {
+        const { error } = await client.from('analyst_reports').insert(payload);
+        if (error) throw error;
+      } else {
+        const { error } = await client.from('analyst_reports').update(payload).eq('id', editing);
+        if (error) throw error;
+      }
+      setEditing(null);
+      onChange();
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id, title) => {
+    if (!confirm('確定刪除「' + title + '」？')) return;
+    setBusy(true);
+    try {
+      const client = getSupabaseClient();
+      if (!client) throw new Error('Supabase 未連線');
+      const { error } = await client.from('analyst_reports').delete().eq('id', id);
+      if (error) throw error;
+      onChange();
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isReadOnly = supabaseStatus !== 'connected' && supabaseStatus !== 'mock';
+  const items = (reports || []).slice().sort((a, b) =>
+    new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+  );
+
+  return (
+    <div style={{ background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: '6px', padding: '16px 20px', margin: '12px 24px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <BookOpen size={14} className="text-accent" />
+          <span style={{ fontFamily: 'Noto Sans TC', fontSize: '13px', fontWeight: 700, color: '#f4f4f4' }}>分析師備忘</span>
+          <span style={{ fontFamily: 'DM Mono', fontSize: '10px', color: '#666', letterSpacing: '0.1em', marginLeft: '4px' }}>
+            {items.length} REPORTS · 自動納入 AI 摘要 context
+          </span>
+        </div>
+        {!editing && (
+          <button
+            onClick={startNew}
+            disabled={isReadOnly || busy}
+            style={{
+              background: isReadOnly ? '#1a1a1a' : 'rgba(167,139,250,0.12)',
+              border: '1px solid rgba(167,139,250,0.4)',
+              color: isReadOnly ? '#555' : '#a78bfa',
+              padding: '5px 12px', borderRadius: '3px',
+              fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 600,
+              cursor: isReadOnly ? 'not-allowed' : 'pointer',
+            }}
+          >+ 新增備忘</button>
+        )}
+      </div>
+
+      {editing && (
+        <div style={{ background: '#1a1a1a', border: '1px solid rgba(167,139,250,0.4)', borderRadius: '4px', padding: '14px', marginBottom: '12px' }}>
+          <div style={{ fontSize: '11px', fontFamily: 'DM Mono', color: '#a78bfa', letterSpacing: '0.1em', marginBottom: '10px' }}>
+            {editing === 'new' ? '+ 新增備忘' : '✎ 編輯備忘'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <FormField label="標題 *" value={form.title} onChange={(v) => setForm({ ...form, title: v })} placeholder="NVDA 26Q1 財報前展望" />
+            <FormField label="Ticker (選填)" value={form.ticker} onChange={(v) => setForm({ ...form, ticker: v.toUpperCase() })} placeholder="NVDA" />
+            <FormField label="來源" value={form.source} onChange={(v) => setForm({ ...form, source: v })} placeholder="Goldman Sachs" />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+            <label style={{ fontSize: '10px', color: '#888', fontFamily: 'DM Mono', letterSpacing: '0.05em' }}>內容 * (貼上報告重點 / 摘要)</label>
+            <textarea
+              value={form.content}
+              onChange={(e) => setForm({ ...form, content: e.target.value })}
+              placeholder="貼上分析師結論、目標價、風險點、催化劑..."
+              rows={8}
+              style={{
+                background: '#0a0a0a', border: '1px solid #2a2a2a', color: '#f4f4f4',
+                padding: '8px 10px', borderRadius: '3px', fontSize: '12px',
+                fontFamily: 'Noto Sans TC, DM Mono', resize: 'vertical', lineHeight: 1.5,
+              }}
+            />
+          </div>
+          {error && (
+            <div style={{ fontSize: '11px', color: '#ef4444', fontFamily: 'Noto Sans TC', marginTop: '6px', padding: '6px 10px', background: 'rgba(239,68,68,0.08)', borderRadius: '3px' }}>{error}</div>
+          )}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+            <button onClick={submit} disabled={busy} style={{
+              background: '#a78bfa', color: '#000', padding: '6px 14px', borderRadius: '3px',
+              border: 'none', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer',
+            }}>{busy ? '⋯' : (editing === 'new' ? '✓ 新增' : '✓ 儲存')}</button>
+            <button onClick={cancel} disabled={busy} style={{
+              background: 'transparent', color: '#888', padding: '6px 14px', borderRadius: '3px',
+              border: '1px solid #2a2a2a', fontFamily: 'DM Mono', fontSize: '11px', cursor: busy ? 'wait' : 'pointer',
+            }}>取消</button>
+          </div>
+        </div>
+      )}
+
+      {items.length === 0 && !editing && (
+        <div style={{ fontSize: '11px', color: '#666', fontFamily: 'Noto Sans TC', padding: '12px 0', textAlign: 'center' }}>
+          還沒有分析師備忘。按「+ 新增備忘」貼上報告重點，AI 摘要會自動參考這些內容。
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {items.map((r) => {
+            const isExp = !!expanded[r.id];
+            const created = r.created_at ? new Date(r.created_at) : null;
+            const ago = created ? Math.round((Date.now() - created.getTime()) / 60000) : null;
+            const agoStr = ago == null ? '' : (ago < 60 ? ago + 'm ago' : ago < 1440 ? Math.round(ago/60) + 'h ago' : Math.round(ago/1440) + 'd ago');
+            const preview = (r.content || '').replace(/\s+/g, ' ').slice(0, 140);
+            return (
+              <div key={r.id} style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '4px', padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                    <span style={{ fontFamily: 'Noto Sans TC', fontSize: '12px', fontWeight: 600, color: '#f4f4f4' }}>{r.title}</span>
+                    {r.ticker && (
+                      <span style={{ fontFamily: 'DM Mono', fontSize: '10px', color: '#a78bfa', padding: '1px 5px', background: 'rgba(167,139,250,0.12)', borderRadius: '2px' }}>{r.ticker}</span>
+                    )}
+                    {r.source && (
+                      <span style={{ fontFamily: 'DM Mono', fontSize: '10px', color: '#888' }}>· {r.source}</span>
+                    )}
+                    <span style={{ fontFamily: 'DM Mono', fontSize: '10px', color: '#555', marginLeft: 'auto' }}>{agoStr}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button onClick={() => setExpanded({ ...expanded, [r.id]: !isExp })} disabled={busy} style={{
+                      background: 'transparent', border: '1px solid #2a2a2a', color: '#888',
+                      padding: '2px 7px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer', fontFamily: 'DM Mono',
+                    }}>{isExp ? '▲' : '▼'}</button>
+                    <button onClick={() => startEdit(r)} disabled={isReadOnly || busy || editing} style={{
+                      background: 'transparent', border: '1px solid #2a2a2a', color: '#888',
+                      padding: '2px 7px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer',
+                    }}>✎</button>
+                    <button onClick={() => remove(r.id, r.title)} disabled={isReadOnly || busy || editing} style={{
+                      background: 'transparent', border: '1px solid #ef444450', color: '#ef4444',
+                      padding: '2px 7px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer',
+                    }}>✕</button>
+                  </div>
+                </div>
+                <div style={{ fontFamily: 'Noto Sans TC', fontSize: '11.5px', color: '#bbb', lineHeight: 1.55, whiteSpace: isExp ? 'pre-wrap' : 'nowrap', overflow: isExp ? 'visible' : 'hidden', textOverflow: 'ellipsis' }}>
+                  {isExp ? r.content : preview + ((r.content || '').length > 140 ? ' ...' : '')}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
