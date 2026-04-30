@@ -1333,12 +1333,13 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
     setPolygonStatus('fetching');
     setPolygonError(null);
     try {
-      // 平行抓 3 個（SPX SMA / VIX spot / SPY quote）
-      // 任一個失敗就 partial result，不阻塞其他兩個
-      const [spxSMA, vix, spy] = await Promise.allSettled([
+      // 平行抓 4 個（SPX SMA / VIX spot / SPY quote / RRG sector rotation）
+      // 任一個失敗就 partial result，不阻塞其他
+      const [spxSMA, vix, spy, rrg] = await Promise.allSettled([
         fetchSPX20MA(),
         fetchVIXSpot(),
         fetchSPYQuote(),
+        fetchSectorRotation(),
       ]);
 
       const result = {
@@ -1348,11 +1349,17 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
         vixError: vix.status === 'rejected' ? vix.reason?.message : null,
         spy: spy.status === 'fulfilled' ? spy.value : null,
         spyError: spy.status === 'rejected' ? spy.reason?.message : null,
+        rrg: rrg.status === 'fulfilled' ? rrg.value : null,
+        rrgError: rrg.status === 'rejected' ? rrg.reason?.message : null,
       };
 
       // Apply: SPX 20MA → setSpxAboveMA（L2 own state）
       if (result.spxSMA && result.spxSMA.aboveMA != null) {
         setSpxAboveMA(result.spxSMA.aboveMA);
+      }
+      // RRG → auto-classify all 11 sector ETFs into 4 quadrants based on real momentum
+      if (result.rrg && result.rrg.placement && Object.keys(result.rrg.placement).length > 0) {
+        setSectorPlacement((prev) => ({ ...prev, ...result.rrg.placement }));
       }
       // VIX spot 在 L1，不在 L2 的 own state。透過 onScoreChange 一起 emit 到 parent，App 再轉給 L1。
 
