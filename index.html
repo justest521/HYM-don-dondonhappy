@@ -5807,6 +5807,12 @@ function App() {
   // window.__BETA_CACHE from real Polygon /aggregates data.
   const [betaVersion, setBetaVersion] = useState(0);
 
+  // Phase 4c probe: empty useEffect with [positions] dep. If this breaks,
+  // the issue is the dep change cycle, not the fetch logic.
+  useEffect(() => {
+    // intentionally empty — diagnostic probe
+  }, [positions]);
+
   // ──────────────────────────────────────────────────────────
   // Handlers
   // ──────────────────────────────────────────────────────────
