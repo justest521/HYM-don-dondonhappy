@@ -1001,8 +1001,8 @@ function buildOCCSymbol(ticker, type, strike, expiry) {
   return 'O:' + ticker.toUpperCase() + yymmdd + cp + strikeStr;
 }
 
-// Fetch option premium (mid of bid/ask, fallback last trade) via worker
-async function fetchOptionPrice(ticker, type, strike, expiry) {
+// Fetch full option snapshot (price + greeks + IV) via worker — single source for option data
+async function fetchOptionData(ticker, type, strike, expiry) {
   const contract = buildOCCSymbol(ticker, type, strike, expiry);
   if (!contract) return null;
   try {
@@ -1016,11 +1016,25 @@ async function fetchOptionPrice(ticker, type, strike, expiry) {
     const res = d.results || d;
     const q = res.last_quote || {};
     const t = res.last_trade || {};
+    const g = res.greeks || {};
     let p = null;
     if (isFinite(q.bid) && isFinite(q.ask) && q.bid > 0 && q.ask > 0) p = (q.bid + q.ask) / 2;
     else if (isFinite(t.price) && t.price > 0) p = t.price;
-    return (p && isFinite(p) && p > 0) ? parseFloat(p.toFixed(2)) : null;
+    return {
+      price: (p && isFinite(p) && p > 0) ? parseFloat(p.toFixed(2)) : null,
+      delta: isFinite(g.delta) ? g.delta : null,
+      gamma: isFinite(g.gamma) ? g.gamma : null,
+      theta: isFinite(g.theta) ? g.theta : null,
+      vega: isFinite(g.vega) ? g.vega : null,
+      iv: isFinite(res.implied_volatility) ? res.implied_volatility : null,
+    };
   } catch { return null; }
+}
+
+// Thin wrapper kept for callers that only need price
+async function fetchOptionPrice(ticker, type, strike, expiry) {
+  const d = await fetchOptionData(ticker, type, strike, expiry);
+  return d ? d.price : null;
 }
 
 // Dispatch: option premium for CALL/PUT (needs strike+expiry); stock price otherwise
@@ -1186,6 +1200,29 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positions, supabaseStatus]);
 
+  // Greeks cache: id → { delta, gamma, theta, vega, iv }
+  // Re-fetched whenever positions change (auto-refresh, add/edit, manual price update).
+  // Worker caches option-snapshot for 60s so duplicate hits with the price refresh are cheap.
+  const [greeksMap, setGreeksMap] = useState({});
+  useEffect(() => {
+    const optPos = positions.filter(p => {
+      const isOpt = p.option_type && ['CALL', 'PUT'].includes(String(p.option_type).toUpperCase());
+      return isOpt && p.strike && p.expiry && !String(p.id || '').startsWith('mock-');
+    });
+    if (optPos.length === 0) { setGreeksMap({}); return; }
+    let cancelled = false;
+    Promise.all(optPos.map(async (p) => {
+      const d = await fetchOptionData(p.ticker, p.option_type, p.strike, p.expiry);
+      return d ? [p.id, { delta: d.delta, gamma: d.gamma, theta: d.theta, vega: d.vega, iv: d.iv }] : null;
+    })).then((results) => {
+      if (cancelled) return;
+      const map = {};
+      for (const r of results) if (r) map[r[0]] = r[1];
+      setGreeksMap(map);
+    });
+    return () => { cancelled = true; };
+  }, [positions]);
+
   const remove = async (id, ticker) => {
     if (!window.confirm('確定刪除 ' + ticker + ' 這筆持倉？')) return;
     setBusy(true);
@@ -1326,10 +1363,20 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                 const plColor = plPct == null ? '#666' : plPct >= 0 ? '#10b981' : '#ef4444';
                 const plDollarStr = plDollar == null ? '—'
                   : (plDollar >= 0 ? '+$' : '-$') + Math.abs(plDollar).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                const gk = isOpt ? greeksMap[p.id] : null;
                 return (
                   <tr key={p.id} style={{ borderBottom: '1px solid #1a1a1a', color: '#d4d4d4' }}>
                     <td style={{ padding: '8px', fontWeight: 600, color: '#f4f4f4' }}>{p.ticker}</td>
-                    <td style={{ padding: '8px', color: p.option_type === 'CALL' ? '#10b981' : p.option_type === 'PUT' ? '#ef4444' : '#888' }}>{p.option_type || '股票'}</td>
+                    <td style={{ padding: '8px', color: p.option_type === 'CALL' ? '#10b981' : p.option_type === 'PUT' ? '#ef4444' : '#888', lineHeight: 1.2 }}>
+                      <div>{p.option_type || '股票'}</div>
+                      {gk && (gk.delta != null || gk.theta != null) && (
+                        <div style={{ fontSize: '9px', color: '#666', marginTop: '2px', fontWeight: 400 }}>
+                          {gk.delta != null ? 'Δ ' + gk.delta.toFixed(2) : ''}
+                          {gk.delta != null && gk.theta != null ? ' · ' : ''}
+                          {gk.theta != null ? 'Θ ' + gk.theta.toFixed(2) : ''}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.qty}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.current_price != null ? '$' + Number(p.current_price).toFixed(2) : '—'}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.cost != null ? '$' + Number(p.cost).toFixed(2) : '—'}</td>
@@ -1338,7 +1385,12 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                       <div style={{ fontSize: '10px', opacity: 0.75 }}>{plDollarStr}</div>
                     </td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{p.strike != null ? '$' + Number(p.strike).toFixed(0) : '—'}</td>
-                    <td style={{ padding: '8px' }}>{p.expiry || '—'}</td>
+                    <td style={{ padding: '8px', lineHeight: 1.2 }}>
+                      <div>{p.expiry || '—'}</div>
+                      {gk && gk.iv != null && (
+                        <div style={{ fontSize: '9px', color: '#666', marginTop: '2px' }}>IV {(gk.iv * 100).toFixed(0)}%</div>
+                      )}
+                    </td>
                     <td style={{ padding: '8px', textAlign: 'right', color: '#EAB308' }}>${(p.value || 0).toLocaleString()}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>
                       <button onClick={() => startEdit(p)} disabled={busy || editing} style={{
