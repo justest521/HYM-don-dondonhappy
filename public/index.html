@@ -1559,7 +1559,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
             {/* Section: 核心 4 指標 */}
             <div className="section-title">
               <Gauge size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>CORE INDICATORS</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>核心指標</span>
             </div>
 
             {/* Indicator 1: Net Liquidity */}
@@ -1580,14 +1580,14 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
                   onClick={() => setLiquidityAboveMA(true)}
                   style={{ flex: 1 }}
                 >
-                  ✓ ABOVE
+                  ✓ 上方
                 </button>
                 <button
                   className={!liquidityAboveMA ? 'active' : ''}
                   onClick={() => setLiquidityAboveMA(false)}
                   style={{ flex: 1 }}
                 >
-                  ✗ BELOW
+                  ✗ 下方
                 </button>
               </div>
               <div className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '9px', marginTop: '3px' }}>
@@ -1633,7 +1633,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
               </div>
               {/* Quick-set buttons (MOVE 沒有公開免費 API，提供常用值快速設定) */}
               <div className="flex items-center gap-1 mt-2">
-                <span className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '8.5px', letterSpacing: '0.08em' }}>QUICK:</span>
+                <span className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '8.5px', letterSpacing: '0.08em' }}>快選：</span>
                 {[70, 95, 110, 130, 145].map(v => (
                   <button
                     key={v}
@@ -1707,7 +1707,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
             {/* Section: 紅色警報補充 */}
             <div className="section-title" style={{ marginTop: '20px' }}>
               <Bell size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>RED ALERT INPUTS</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>紅色警報</span>
             </div>
 
             <div className="mb-3">
@@ -1737,7 +1737,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
             {/* Section: 經濟週期 */}
             <div className="section-title" style={{ marginTop: '20px' }}>
               <Compass size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>ECONOMIC CYCLE</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>經濟週期</span>
             </div>
 
             <div className="mb-3">
@@ -1747,7 +1747,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
                   fontSize: '11px',
                   color: pmiValue >= 50 ? '#10b981' : '#ef4444',
                 }}>
-                  {pmiValue >= 50 ? 'EXPANSION' : 'CONTRACTION'}
+                  {pmiValue >= 50 ? '擴張' : '收縮'}
                 </span>
               </div>
               <input
@@ -1782,7 +1782,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
               borderColor: '#EAB30830',
             }}>
               <div className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '9px', letterSpacing: '0.08em' }}>
-                CURRENT QUADRANT
+                當前象限
               </div>
               <div className="font-tc" style={{ fontSize: '13px', fontWeight: 700, color: '#EAB308' }}>
                 {economicQuadrant.label}
@@ -1795,7 +1795,7 @@ function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
             {/* Section: Portfolio */}
             <div className="section-title" style={{ marginTop: '20px' }}>
               <DollarSign size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>PORTFOLIO</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>投資組合</span>
             </div>
             <div className="mb-3">
               <label className="text-xs text-primary font-tc block mb-1">
@@ -1941,7 +1941,7 @@ function TodayCallHero({ score, band, redAlerts, l1HedgeBudgetBps, l1HedgeBudget
         {/* Left: Score */}
         <div style={{ flex: '1 1 280px' }}>
           <div className="font-mono-dm text-xs text-muted-2" style={{ letterSpacing: '0.15em', marginBottom: '6px' }}>
-            TODAY'S MACRO SCORE
+            今日 Macro 評分
           </div>
           <div className="flex items-baseline gap-3">
             <span
@@ -1972,7 +1972,7 @@ function TodayCallHero({ score, band, redAlerts, l1HedgeBudgetBps, l1HedgeBudget
         {/* Middle: Position Allocation */}
         <div className="hair-border-l" style={{ flex: '1 1 200px', paddingLeft: '24px' }}>
           <div className="font-mono-dm text-xs text-muted-2 mb-2" style={{ letterSpacing: '0.12em' }}>
-            POSITION ALLOCATION
+            倉位配置
           </div>
           <div className="flex flex-col gap-2">
             <AllocationBar label="股票部位" pct={100 - band.cashPct} color={band.color} />
@@ -2103,7 +2103,7 @@ function ScorecardBreakdown({ indicatorScores, moveValue, t10y2yValue, effective
       <div className="mt-4 hair-border-t" style={{ paddingTop: '16px' }}>
         <div className="flex items-center justify-between mb-2">
           <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>
-            WEIGHTED TOTAL
+            加權總分
           </span>
           <span className="font-mono-dm tabular text-accent" style={{ fontSize: '20px', fontWeight: 600 }}>
             {weightedTotal.toFixed(1)}
@@ -2818,7 +2818,7 @@ function L1IntegrationSection({ weightedTotal, positionBand, redAlerts, l1HedgeB
       {/* Calculation breakdown */}
       <div className="mt-4 hair-border-t" style={{ paddingTop: '14px' }}>
         <div className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em', marginBottom: '10px', fontSize: '10px' }}>
-          CALCULATION BREAKDOWN
+          計算明細
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2980,7 +2980,7 @@ function FREDSyncBar({ status, syncTime, error, details, onSync }) {
     idle:     { color: '#888',    label: 'IDLE' },
     fetching: { color: '#EAB308', label: 'FETCHING' },
     synced:   { color: '#10b981', label: 'SYNCED' },
-    error:    { color: '#ef4444', label: 'ERROR' },
+    error:    { color: '#ef4444', label: '錯誤' },
   };
   const cfg = colorMap[status] || colorMap.idle;
 
@@ -3085,7 +3085,7 @@ function PolygonSyncBar({ status, syncTime, error, details, onSync }) {
     idle:     { color: '#888',    label: 'IDLE' },
     fetching: { color: '#a78bfa', label: 'FETCHING' },
     synced:   { color: '#10b981', label: 'SYNCED' },
-    error:    { color: '#ef4444', label: 'ERROR' },
+    error:    { color: '#ef4444', label: '錯誤' },
   };
   const cfg = colorMap[status] || colorMap.idle;
 
@@ -4110,7 +4110,7 @@ function VIXHedgeCalculator({
                   VIX Hedge Calculator <span className="text-accent" style={{ fontSize: '13px' }}>v2</span>
                 </div>
                 <div className="text-xs text-muted font-mono-dm" style={{ letterSpacing: '0.05em' }}>
-                  L1 PORTFOLIO HEDGE · IV-AWARE · STRESS TEST · BETA-SCALED
+                  L1 組合對沖 · IV 感知 · 壓力測試 · Beta 縮放
                 </div>
               </div>
             </div>
@@ -4147,7 +4147,7 @@ function VIXHedgeCalculator({
             {/* Section: Portfolio */}
             <div className="section-title">
               <DollarSign size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>PORTFOLIO</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>投資組合</span>
             </div>
 
             <div className="mb-4">
@@ -5536,11 +5536,11 @@ function mapSupabasePosition(row) {
 
 // 連線狀態的 visual mapping
 const STATUS_CONFIG = {
-  connecting: { label: 'CONNECTING', color: '#EAB308', icon: RefreshCw, animate: 'spin' },
-  connected:  { label: 'CONNECTED',  color: '#10b981', icon: Wifi,      animate: null   },
-  error:      { label: 'ERROR',      color: '#ef4444', icon: AlertCircle, animate: null },
-  no_key:     { label: 'NO API KEY', color: '#fb923c', icon: WifiOff,   animate: null   },
-  mock:       { label: 'MOCK DATA',  color: '#888',    icon: Database,  animate: null   },
+  connecting: { label: '連線中', color: '#EAB308', icon: RefreshCw, animate: 'spin' },
+  connected:  { label: '已連線',  color: '#10b981', icon: Wifi,      animate: null   },
+  error:      { label: '錯誤',      color: '#ef4444', icon: AlertCircle, animate: null },
+  no_key:     { label: '缺 API KEY', color: '#fb923c', icon: WifiOff,   animate: null   },
+  mock:       { label: '示範資料',  color: '#888',    icon: Database,  animate: null   },
 };
 
 const formatTimestamp = (date) => {
@@ -5836,7 +5836,7 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: aiSummary ? '8px' : '0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '11px', fontFamily: 'DM Mono', color: '#a78bfa', letterSpacing: '0.1em', fontWeight: 600 }}>
-                  ✨ AI PORTFOLIO RISK SUMMARY
+                  ✨ AI 投資組合風險摘要
                 </span>
                 {aiSummaryTime && !aiSummaryLoading && (
                   <span style={{ fontSize: '10px', color: '#666', fontFamily: 'DM Mono' }}>
@@ -5966,7 +5966,7 @@ function AppHeader({
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         {/* Portfolio summary */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>PORTFOLIO</span>
+          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>投資組合</span>
           <span style={{ color: '#f4f4f4', fontSize: '14px', fontFamily: 'DM Mono', fontWeight: 500 }}>
             {formatMoney(portfolioTotal)}
           </span>
@@ -5989,7 +5989,7 @@ function AppHeader({
 
         {/* Auto-refresh toggle */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>AUTO-SYNC</span>
+          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>自動同步</span>
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             style={{
@@ -6235,7 +6235,7 @@ function CrossLayerBridge({ macroState, positions, portfolioTotal }) {
           letterSpacing: '0.15em',
           fontWeight: 600,
         }}>
-          CROSS-LAYER BRIDGE · L2 → L1 PIPELINE
+          跨層橋接 · L2 → L1 流水線
         </span>
       </div>
 
@@ -6783,15 +6783,15 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'DM Mono' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #2a2a2a', color: '#666', fontSize: '10px', letterSpacing: '0.08em' }}>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>TICKER</th>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>TYPE</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>QTY</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>PRICE</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>COST</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>標的</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>類型</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>數量</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>現價</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>成本</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>P/L</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>STRIKE</th>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>EXPIRY</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>VALUE</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>行權價</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>到期日</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>市值</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px', width: '90px' }}>動作</th>
               </tr>
             </thead>
@@ -6868,7 +6868,7 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                 const fmt = (n) => (n >= 0 ? '+$' : '-$') + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
                 return (
                   <tr style={{ borderTop: '2px solid #2a2a2a', color: '#f4f4f4', fontWeight: 600 }}>
-                    <td style={{ padding: '10px 8px', fontSize: '10px', letterSpacing: '0.08em', color: '#666' }} colSpan={5}>TOTAL · {realPositions.length} positions</td>
+                    <td style={{ padding: '10px 8px', fontSize: '10px', letterSpacing: '0.08em', color: '#666' }} colSpan={5}>合計 · {realPositions.length} 筆持倉</td>
                     <td style={{ padding: '10px 8px', textAlign: 'right', color: plColor, lineHeight: 1.2 }}>
                       <div>{(plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%'}</div>
                       <div style={{ fontSize: '10px', opacity: 0.75 }}>{fmt(tot.pl)}</div>

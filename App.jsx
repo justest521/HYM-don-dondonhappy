@@ -108,11 +108,11 @@ function mapSupabasePosition(row) {
 
 // 連線狀態的 visual mapping
 const STATUS_CONFIG = {
-  connecting: { label: 'CONNECTING', color: '#EAB308', icon: RefreshCw, animate: 'spin' },
-  connected:  { label: 'CONNECTED',  color: '#10b981', icon: Wifi,      animate: null   },
-  error:      { label: 'ERROR',      color: '#ef4444', icon: AlertCircle, animate: null },
-  no_key:     { label: 'NO API KEY', color: '#fb923c', icon: WifiOff,   animate: null   },
-  mock:       { label: 'MOCK DATA',  color: '#888',    icon: Database,  animate: null   },
+  connecting: { label: '連線中', color: '#EAB308', icon: RefreshCw, animate: 'spin' },
+  connected:  { label: '已連線',  color: '#10b981', icon: Wifi,      animate: null   },
+  error:      { label: '錯誤',      color: '#ef4444', icon: AlertCircle, animate: null },
+  no_key:     { label: '缺 API KEY', color: '#fb923c', icon: WifiOff,   animate: null   },
+  mock:       { label: '示範資料',  color: '#888',    icon: Database,  animate: null   },
 };
 
 const formatTimestamp = (date) => {
@@ -408,7 +408,7 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: aiSummary ? '8px' : '0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '11px', fontFamily: 'DM Mono', color: '#a78bfa', letterSpacing: '0.1em', fontWeight: 600 }}>
-                  ✨ AI PORTFOLIO RISK SUMMARY
+                  ✨ AI 投資組合風險摘要
                 </span>
                 {aiSummaryTime && !aiSummaryLoading && (
                   <span style={{ fontSize: '10px', color: '#666', fontFamily: 'DM Mono' }}>
@@ -538,7 +538,7 @@ function AppHeader({
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         {/* Portfolio summary */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>PORTFOLIO</span>
+          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>投資組合</span>
           <span style={{ color: '#f4f4f4', fontSize: '14px', fontFamily: 'DM Mono', fontWeight: 500 }}>
             {formatMoney(portfolioTotal)}
           </span>
@@ -561,7 +561,7 @@ function AppHeader({
 
         {/* Auto-refresh toggle */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>AUTO-SYNC</span>
+          <span style={{ color: '#555', fontSize: '9px', letterSpacing: '0.1em', fontFamily: 'DM Mono' }}>自動同步</span>
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             style={{
@@ -807,7 +807,7 @@ function CrossLayerBridge({ macroState, positions, portfolioTotal }) {
           letterSpacing: '0.15em',
           fontWeight: 600,
         }}>
-          CROSS-LAYER BRIDGE · L2 → L1 PIPELINE
+          跨層橋接 · L2 → L1 流水線
         </span>
       </div>
 
@@ -1355,15 +1355,15 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: 'DM Mono' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #2a2a2a', color: '#666', fontSize: '10px', letterSpacing: '0.08em' }}>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>TICKER</th>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>TYPE</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>QTY</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>PRICE</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>COST</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>標的</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>類型</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>數量</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>現價</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>成本</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px' }}>P/L</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>STRIKE</th>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>EXPIRY</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>VALUE</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>行權價</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>到期日</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>市值</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px', width: '90px' }}>動作</th>
               </tr>
             </thead>
@@ -1440,7 +1440,7 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
                 const fmt = (n) => (n >= 0 ? '+$' : '-$') + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
                 return (
                   <tr style={{ borderTop: '2px solid #2a2a2a', color: '#f4f4f4', fontWeight: 600 }}>
-                    <td style={{ padding: '10px 8px', fontSize: '10px', letterSpacing: '0.08em', color: '#666' }} colSpan={5}>TOTAL · {realPositions.length} positions</td>
+                    <td style={{ padding: '10px 8px', fontSize: '10px', letterSpacing: '0.08em', color: '#666' }} colSpan={5}>合計 · {realPositions.length} 筆持倉</td>
                     <td style={{ padding: '10px 8px', textAlign: 'right', color: plColor, lineHeight: 1.2 }}>
                       <div>{(plPct >= 0 ? '+' : '') + plPct.toFixed(1) + '%'}</div>
                       <div style={{ fontSize: '10px', opacity: 0.75 }}>{fmt(tot.pl)}</div>

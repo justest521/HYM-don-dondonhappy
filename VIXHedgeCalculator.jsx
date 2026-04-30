@@ -908,7 +908,7 @@ export default function VIXHedgeCalculator({
                   VIX Hedge Calculator <span className="text-accent" style={{ fontSize: '13px' }}>v2</span>
                 </div>
                 <div className="text-xs text-muted font-mono-dm" style={{ letterSpacing: '0.05em' }}>
-                  L1 PORTFOLIO HEDGE · IV-AWARE · STRESS TEST · BETA-SCALED
+                  L1 組合對沖 · IV 感知 · 壓力測試 · Beta 縮放
                 </div>
               </div>
             </div>
@@ -945,7 +945,7 @@ export default function VIXHedgeCalculator({
             {/* Section: Portfolio */}
             <div className="section-title">
               <DollarSign size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>PORTFOLIO</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>投資組合</span>
             </div>
 
             <div className="mb-4">

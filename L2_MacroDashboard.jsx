@@ -1304,7 +1304,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             {/* Section: 核心 4 指標 */}
             <div className="section-title">
               <Gauge size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>CORE INDICATORS</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>核心指標</span>
             </div>
 
             {/* Indicator 1: Net Liquidity */}
@@ -1325,14 +1325,14 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
                   onClick={() => setLiquidityAboveMA(true)}
                   style={{ flex: 1 }}
                 >
-                  ✓ ABOVE
+                  ✓ 上方
                 </button>
                 <button
                   className={!liquidityAboveMA ? 'active' : ''}
                   onClick={() => setLiquidityAboveMA(false)}
                   style={{ flex: 1 }}
                 >
-                  ✗ BELOW
+                  ✗ 下方
                 </button>
               </div>
               <div className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '9px', marginTop: '3px' }}>
@@ -1378,7 +1378,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
               </div>
               {/* Quick-set buttons (MOVE 沒有公開免費 API，提供常用值快速設定) */}
               <div className="flex items-center gap-1 mt-2">
-                <span className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '8.5px', letterSpacing: '0.08em' }}>QUICK:</span>
+                <span className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '8.5px', letterSpacing: '0.08em' }}>快選：</span>
                 {[70, 95, 110, 130, 145].map(v => (
                   <button
                     key={v}
@@ -1452,7 +1452,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             {/* Section: 紅色警報補充 */}
             <div className="section-title" style={{ marginTop: '20px' }}>
               <Bell size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>RED ALERT INPUTS</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>紅色警報</span>
             </div>
 
             <div className="mb-3">
@@ -1482,7 +1482,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             {/* Section: 經濟週期 */}
             <div className="section-title" style={{ marginTop: '20px' }}>
               <Compass size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>ECONOMIC CYCLE</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>經濟週期</span>
             </div>
 
             <div className="mb-3">
@@ -1492,7 +1492,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
                   fontSize: '11px',
                   color: pmiValue >= 50 ? '#10b981' : '#ef4444',
                 }}>
-                  {pmiValue >= 50 ? 'EXPANSION' : 'CONTRACTION'}
+                  {pmiValue >= 50 ? '擴張' : '收縮'}
                 </span>
               </div>
               <input
@@ -1527,7 +1527,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
               borderColor: '#EAB30830',
             }}>
               <div className="text-xs text-muted-2 font-mono-dm" style={{ fontSize: '9px', letterSpacing: '0.08em' }}>
-                CURRENT QUADRANT
+                當前象限
               </div>
               <div className="font-tc" style={{ fontSize: '13px', fontWeight: 700, color: '#EAB308' }}>
                 {economicQuadrant.label}
@@ -1540,7 +1540,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             {/* Section: Portfolio */}
             <div className="section-title" style={{ marginTop: '20px' }}>
               <DollarSign size={13} className="text-accent" />
-              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>PORTFOLIO</span>
+              <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>投資組合</span>
             </div>
             <div className="mb-3">
               <label className="text-xs text-primary font-tc block mb-1">
@@ -1692,7 +1692,7 @@ function TodayCallHero({ score, band, redAlerts, l1HedgeBudgetBps, l1HedgeBudget
         {/* Left: Score */}
         <div style={{ flex: '1 1 280px' }}>
           <div className="font-mono-dm text-xs text-muted-2" style={{ letterSpacing: '0.15em', marginBottom: '6px' }}>
-            TODAY'S MACRO SCORE
+            今日 Macro 評分
           </div>
           <div className="flex items-baseline gap-3">
             <span
@@ -1723,7 +1723,7 @@ function TodayCallHero({ score, band, redAlerts, l1HedgeBudgetBps, l1HedgeBudget
         {/* Middle: Position Allocation */}
         <div className="hair-border-l" style={{ flex: '1 1 200px', paddingLeft: '24px' }}>
           <div className="font-mono-dm text-xs text-muted-2 mb-2" style={{ letterSpacing: '0.12em' }}>
-            POSITION ALLOCATION
+            倉位配置
           </div>
           <div className="flex flex-col gap-2">
             <AllocationBar label="股票部位" pct={100 - band.cashPct} color={band.color} />
@@ -1854,7 +1854,7 @@ function ScorecardBreakdown({ indicatorScores, moveValue, t10y2yValue, effective
       <div className="mt-4 hair-border-t" style={{ paddingTop: '16px' }}>
         <div className="flex items-center justify-between mb-2">
           <span className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em' }}>
-            WEIGHTED TOTAL
+            加權總分
           </span>
           <span className="font-mono-dm tabular text-accent" style={{ fontSize: '20px', fontWeight: 600 }}>
             {weightedTotal.toFixed(1)}
@@ -2569,7 +2569,7 @@ function L1IntegrationSection({ weightedTotal, positionBand, redAlerts, l1HedgeB
       {/* Calculation breakdown */}
       <div className="mt-4 hair-border-t" style={{ paddingTop: '14px' }}>
         <div className="font-mono-dm text-xs text-muted" style={{ letterSpacing: '0.1em', marginBottom: '10px', fontSize: '10px' }}>
-          CALCULATION BREAKDOWN
+          計算明細
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2731,7 +2731,7 @@ function FREDSyncBar({ status, syncTime, error, details, onSync }) {
     idle:     { color: '#888',    label: 'IDLE' },
     fetching: { color: '#EAB308', label: 'FETCHING' },
     synced:   { color: '#10b981', label: 'SYNCED' },
-    error:    { color: '#ef4444', label: 'ERROR' },
+    error:    { color: '#ef4444', label: '錯誤' },
   };
   const cfg = colorMap[status] || colorMap.idle;
 
@@ -2836,7 +2836,7 @@ function PolygonSyncBar({ status, syncTime, error, details, onSync }) {
     idle:     { color: '#888',    label: 'IDLE' },
     fetching: { color: '#a78bfa', label: 'FETCHING' },
     synced:   { color: '#10b981', label: 'SYNCED' },
-    error:    { color: '#ef4444', label: 'ERROR' },
+    error:    { color: '#ef4444', label: '錯誤' },
   };
   const cfg = colorMap[status] || colorMap.idle;
 
