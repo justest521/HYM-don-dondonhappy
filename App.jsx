@@ -1113,7 +1113,8 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
     }
   };
 
-  const isReadOnly = supabaseStatus !== 'connected';
+  // 'mock' = 連線通了但 positions 表是空的 — 仍然要能新增第一筆，否則進不去
+  const isReadOnly = supabaseStatus !== 'connected' && supabaseStatus !== 'mock';
   const realPositions = positions.filter(p => !String(p.id || '').startsWith('mock-'));
 
   return (
@@ -1165,6 +1166,11 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
       {isReadOnly && (
         <div style={{ fontSize: '11px', color: '#fb923c', fontFamily: 'Noto Sans TC', padding: '8px 12px', background: 'rgba(251,146,60,0.06)', borderRadius: '3px', marginBottom: '10px' }}>
           ⚠️ Supabase 未連線（目前 mock 資料），無法新增/編輯。請先設定 anon key。
+        </div>
+      )}
+      {!isReadOnly && supabaseStatus === 'mock' && realPositions.length === 0 && (
+        <div style={{ fontSize: '11px', color: '#EAB308', fontFamily: 'Noto Sans TC', padding: '8px 12px', background: 'rgba(234,179,8,0.06)', borderRadius: '3px', marginBottom: '10px' }}>
+          ✓ Supabase 連線成功，但 toywu 還沒有任何持倉。點擊「+ 新增持倉」加入你的第一筆，dashboard 將切換為實際資料。
         </div>
       )}
 

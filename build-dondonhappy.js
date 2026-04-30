@@ -191,22 +191,37 @@ const HTML = `<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Configuration: 在這裡填你的 Supabase anon key -->
+  <!-- Configuration: Supabase anon key
+       Hardcoded JWT lives in <head>. localStorage is opt-in override only — must look like a JWT
+       (starts with "eyJ" and >100 chars), otherwise it's ignored to prevent stale/invalid values
+       from breaking auth. -->
   <script>
-    // localStorage 優先（讓 console setSupabaseKey() 可覆寫），fallback 到 head 裡 hardcoded 的值
-    window.__SUPABASE_ANON_KEY = localStorage.getItem('SUPABASE_ANON_KEY') || window.__SUPABASE_ANON_KEY || '';
-    // 也可以直接 hardcode（不建議 commit 進 git）：
-    // window.__SUPABASE_ANON_KEY = 'eyJhbGc...';
+    (function() {
+      var lsKey = null;
+      try { lsKey = localStorage.getItem('SUPABASE_ANON_KEY'); } catch (e) {}
+      var validLs = typeof lsKey === 'string' && lsKey.length > 100 && lsKey.indexOf('eyJ') === 0;
+      if (validLs) {
+        window.__SUPABASE_ANON_KEY = lsKey;
+      } else if (lsKey) {
+        // stale/invalid value — purge so it doesn't keep breaking
+        try { localStorage.removeItem('SUPABASE_ANON_KEY'); } catch (e) {}
+        console.warn('[Supabase] Removed invalid localStorage anon key (len=' + lsKey.length + '); using hardcoded.');
+      }
+      // window.__SUPABASE_ANON_KEY already set in <head> with hardcoded JWT — leave it
 
-    // 提供小工具：在 console 跑 setSupabaseKey('eyJ...') 設定 key
-    window.setSupabaseKey = function(key) {
-      localStorage.setItem('SUPABASE_ANON_KEY', key);
-      location.reload();
-    };
-    window.clearSupabaseKey = function() {
-      localStorage.removeItem('SUPABASE_ANON_KEY');
-      location.reload();
-    };
+      window.setSupabaseKey = function(key) {
+        if (typeof key !== 'string' || key.length < 100 || key.indexOf('eyJ') !== 0) {
+          console.error('[Supabase] setSupabaseKey: not a JWT (must start with "eyJ" and be >100 chars).');
+          return;
+        }
+        localStorage.setItem('SUPABASE_ANON_KEY', key);
+        location.reload();
+      };
+      window.clearSupabaseKey = function() {
+        try { localStorage.removeItem('SUPABASE_ANON_KEY'); } catch (e) {}
+        location.reload();
+      };
+    })();
   </script>
 
   <!-- Main app, transpiled by Babel Standalone -->
