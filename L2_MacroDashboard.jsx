@@ -898,6 +898,20 @@ async function expandScenarioWithAI({ eventType, eventLabel, score, bandLabel, e
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
+// Tiny visual tags so the user can tell which inputs are auto-driven (FRED/Polygon/Yahoo)
+// vs the few that still require manual entry (currently only ISM PMI — FRED stopped
+// publishing the ISM series in 2014).
+const AUTO_BADGE = (
+  <span style={{ marginLeft: '6px', fontSize: '8.5px', color: '#10b981', fontFamily: 'DM Mono', letterSpacing: '0.05em' }}>
+    ⟲ AUTO
+  </span>
+);
+const MANUAL_BADGE = (
+  <span style={{ marginLeft: '6px', fontSize: '8.5px', color: '#888', fontFamily: 'DM Mono', letterSpacing: '0.05em' }}>
+    ✎ MANUAL
+  </span>
+);
+
 export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal = null }) {
   // ──────────────────────────────────────────────────────────
   // STATE: 4 主要評分指標
@@ -1299,6 +1313,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
                 <label className="text-xs text-primary font-tc">
                   淨流動性 站上 20MA
                   <span className="text-muted-2 font-mono-dm" style={{ fontSize: '9px', marginLeft: '4px' }}>×0.40</span>
+                  {AUTO_BADGE}
                 </label>
                 <span style={{ fontSize: '10px', color: indicatorScores.net_liquidity > 0 ? '#10b981' : '#ef4444' }}>
                   {indicatorScores.net_liquidity}/100
@@ -1331,6 +1346,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
                 <label className="text-xs text-primary font-tc">
                   MOVE Index
                   <span className="text-muted-2 font-mono-dm" style={{ fontSize: '9px', marginLeft: '4px' }}>×0.30</span>
+                  {AUTO_BADGE}
                 </label>
                 <span style={{ fontSize: '10px', color: indicatorScores.move >= 100 ? '#10b981' : indicatorScores.move >= 50 ? '#EAB308' : '#ef4444' }}>
                   {indicatorScores.move}/100
@@ -1393,6 +1409,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
                 <label className="text-xs text-primary font-tc">
                   T10Y2Y 利差 (%)
                   <span className="text-muted-2 font-mono-dm" style={{ fontSize: '9px', marginLeft: '4px' }}>×0.20</span>
+                  {AUTO_BADGE}
                 </label>
                 <span style={{ fontSize: '10px', color: indicatorScores.t10y2y >= 100 ? '#10b981' : indicatorScores.t10y2y >= 50 ? '#EAB308' : '#ef4444' }}>
                   {indicatorScores.t10y2y}/100
@@ -1416,6 +1433,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
                 <label className="text-xs text-primary font-tc">
                   RRG 進攻板塊在 Leading
                   <span className="text-muted-2 font-mono-dm" style={{ fontSize: '9px', marginLeft: '4px' }}>×0.10</span>
+                  {AUTO_BADGE}
                 </label>
                 <span style={{ fontSize: '10px', color: indicatorScores.rrg > 0 ? '#10b981' : '#ef4444' }}>
                   {indicatorScores.rrg}/100
@@ -1438,7 +1456,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             </div>
 
             <div className="mb-3">
-              <label className="text-xs text-primary font-tc block mb-1">SPX 站上 20MA</label>
+              <label className="text-xs text-primary font-tc block mb-1">SPX 站上 20MA{AUTO_BADGE}</label>
               <div className="toggle-pill" style={{ width: '100%' }}>
                 <button className={spxAboveMA ? 'active' : ''} onClick={() => setSpxAboveMA(true)} style={{ flex: 1 }}>是</button>
                 <button className={!spxAboveMA ? 'active' : ''} onClick={() => setSpxAboveMA(false)} style={{ flex: 1 }}>否</button>
@@ -1446,7 +1464,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             </div>
 
             <div className="mb-3">
-              <label className="text-xs text-primary font-tc block mb-1">T10Y2Y 曾倒掛（過去 6 月）</label>
+              <label className="text-xs text-primary font-tc block mb-1">T10Y2Y 曾倒掛（過去 6 月）{AUTO_BADGE}</label>
               <div className="toggle-pill" style={{ width: '100%' }}>
                 <button className={t10y2yWasNegative ? 'active' : ''} onClick={() => setT10y2yWasNegative(true)} style={{ flex: 1 }}>是</button>
                 <button className={!t10y2yWasNegative ? 'active' : ''} onClick={() => setT10y2yWasNegative(false)} style={{ flex: 1 }}>否</button>
@@ -1454,7 +1472,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             </div>
 
             <div className="mb-4">
-              <label className="text-xs text-primary font-tc block mb-1">失業率上升中</label>
+              <label className="text-xs text-primary font-tc block mb-1">失業率上升中{AUTO_BADGE}</label>
               <div className="toggle-pill" style={{ width: '100%' }}>
                 <button className={unemploymentRising ? 'active' : ''} onClick={() => setUnemploymentRising(true)} style={{ flex: 1 }}>是</button>
                 <button className={!unemploymentRising ? 'active' : ''} onClick={() => setUnemploymentRising(false)} style={{ flex: 1 }}>否</button>
@@ -1469,7 +1487,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
 
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-primary font-tc">ISM PMI</label>
+                <label className="text-xs text-primary font-tc">ISM PMI{MANUAL_BADGE}</label>
                 <span className="font-mono-dm tabular" style={{
                   fontSize: '11px',
                   color: pmiValue >= 50 ? '#10b981' : '#ef4444',
@@ -1490,7 +1508,7 @@ export default function L2MacroDashboard({ onScoreChange = null, portfolioTotal 
             </div>
 
             <div className="mb-3">
-              <label className="text-xs text-primary font-tc block mb-1">CPI 趨勢</label>
+              <label className="text-xs text-primary font-tc block mb-1">CPI 趨勢{AUTO_BADGE}</label>
               <select
                 value={cpiTrend}
                 onChange={(e) => setCpiTrend(e.target.value)}
