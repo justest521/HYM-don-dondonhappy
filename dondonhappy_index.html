@@ -3610,18 +3610,21 @@ async function computeBeta(ticker, days = 60) {
   return cov / varS;
 }
 
-// Phase 4f: module-level beta seed via setTimeout (no React involvement).
-// Fetches β for one common ticker after page settles, writes to window cache.
-// If page breaks with this, the issue is fetchAggregates being called from
-// the App scope — orthogonal to React effects.
+// Phase 4g: module-level β seeding for common holdings via setTimeout.
+// Each ticker fetches independently with its own .catch — one failure
+// doesn't affect the others. Page renders first; cache populates async.
+// Uncommon tickers fall back to STOCK_BETA static table in getBeta().
 if (typeof window !== 'undefined') {
   setTimeout(() => {
-    computeBeta('NVDA').then((b) => {
-      if (b != null && isFinite(b) && Math.abs(b) < 5) {
-        window.__BETA_CACHE = window.__BETA_CACHE || {};
-        window.__BETA_CACHE['NVDA'] = parseFloat(b.toFixed(3));
-      }
-    }).catch((e) => { try { console.warn('[Beta seed] failed:', e.message); } catch (_) {} });
+    const seedTickers = ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'TSLA', 'AMZN', 'AVGO', 'QQQ'];
+    seedTickers.forEach((t) => {
+      computeBeta(t).then((b) => {
+        if (b != null && isFinite(b) && Math.abs(b) < 5) {
+          window.__BETA_CACHE = window.__BETA_CACHE || {};
+          window.__BETA_CACHE[t] = parseFloat(b.toFixed(3));
+        }
+      }).catch((e) => { try { console.warn('[Beta seed ' + t + '] failed:', e.message); } catch (_) {} });
+    });
   }, 2000);
 }
 
