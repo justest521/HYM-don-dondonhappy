@@ -5807,10 +5807,19 @@ function App() {
   // window.__BETA_CACHE from real Polygon /aggregates data.
   const [betaVersion, setBetaVersion] = useState(0);
 
-  // Phase 4c probe: empty useEffect with [positions] dep. If this breaks,
-  // the issue is the dep change cycle, not the fetch logic.
+  // Phase 4c+4d: useEffect that fetches β for ONE ticker only and writes to
+  // window.__BETA_CACHE. No setState — purely cache write. Tests whether a
+  // single fetch + cache write is enough to break render.
   useEffect(() => {
-    // intentionally empty — diagnostic probe
+    let cancelled = false;
+    computeBeta('NVDA').then((b) => {
+      if (cancelled) return;
+      if (b != null && isFinite(b) && Math.abs(b) < 5 && typeof window !== 'undefined') {
+        window.__BETA_CACHE = window.__BETA_CACHE || {};
+        window.__BETA_CACHE['NVDA'] = parseFloat(b.toFixed(3));
+      }
+    });
+    return () => { cancelled = true; };
   }, [positions]);
 
   // ──────────────────────────────────────────────────────────
