@@ -3556,11 +3556,58 @@ const DEFAULT_POSITIONS = [
 
 // ────────────────────────────────────────────────────────────
 // Lookup helpers
+// Dynamic beta cache — populated externally by App-level code (Phase 4b).
+// Initialized to {} so getBeta's lookup always succeeds; until populated, it
+// falls through to STOCK_BETA static table.
+if (typeof window !== 'undefined' && !window.__BETA_CACHE) window.__BETA_CACHE = {};
 const getBeta = (ticker) => {
   const t = (ticker || '').toUpperCase().trim();
+  if (typeof window !== 'undefined' && window.__BETA_CACHE && window.__BETA_CACHE[t] != null) {
+    return window.__BETA_CACHE[t];
+  }
   if (t in STOCK_BETA) return STOCK_BETA[t];
   return 1.10; // unknown ticker → assume average growth tilt
 };
+
+// Compute β = cov(ticker, SPY) / var(SPY) using last N daily log returns from /aggregates.
+// Defined here for Phase 4b consumption; not invoked yet.
+async function computeBeta(ticker, days = 60) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t || t === 'CASH') return null;
+  if (t === 'SPY') return 1.0;
+  const [tBars, sBars] = await Promise.all([
+    fetchAggregates(t, days + 5),
+    fetchAggregates('SPY', days + 5),
+  ]);
+  if (!tBars || !sBars) return null;
+  const tByTs = new Map(tBars.map((b) => [b.t, b.c]));
+  const sByTs = new Map(sBars.map((b) => [b.t, b.c]));
+  const commonTs = [...sByTs.keys()].filter((ts) => tByTs.has(ts)).sort((a, b) => a - b);
+  if (commonTs.length < 30) return null;
+  const tRets = [];
+  const sRets = [];
+  for (let i = 1; i < commonTs.length; i++) {
+    const tCur = tByTs.get(commonTs[i]);
+    const tPrev = tByTs.get(commonTs[i - 1]);
+    const sCur = sByTs.get(commonTs[i]);
+    const sPrev = sByTs.get(commonTs[i - 1]);
+    if (tPrev > 0 && sPrev > 0 && tCur > 0 && sCur > 0) {
+      tRets.push(Math.log(tCur / tPrev));
+      sRets.push(Math.log(sCur / sPrev));
+    }
+  }
+  if (tRets.length < 20) return null;
+  const meanT = tRets.reduce((a, x) => a + x, 0) / tRets.length;
+  const meanS = sRets.reduce((a, x) => a + x, 0) / sRets.length;
+  let cov = 0;
+  let varS = 0;
+  for (let i = 0; i < tRets.length; i++) {
+    cov += (tRets[i] - meanT) * (sRets[i] - meanS);
+    varS += (sRets[i] - meanS) ** 2;
+  }
+  if (varS <= 0) return null;
+  return cov / varS;
+}
 const getQQQWeight = (ticker) => QQQ_WEIGHT[(ticker || '').toUpperCase()] ?? 0;
 const getContagion = (ticker) => {
   const profile = TICKER_PROFILE[(ticker || '').toUpperCase()];
