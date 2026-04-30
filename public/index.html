@@ -3556,11 +3556,10 @@ const DEFAULT_POSITIONS = [
 
 // ────────────────────────────────────────────────────────────
 // Lookup helpers
-// Dynamic beta cache — populated externally by App-level code (Phase 4b).
-// Phase 4e probe: pre-seed NVDA with a realistic live beta to test whether
-// downstream cross-layer math handles the value range.
+// Dynamic beta cache — populated outside React via a module-level setTimeout
+// (Phase 4f). Avoids any useEffect interaction. getBeta reads from this map first.
 if (typeof window !== 'undefined' && !window.__BETA_CACHE) {
-  window.__BETA_CACHE = { NVDA: 1.85 };
+  window.__BETA_CACHE = {};
 }
 const getBeta = (ticker) => {
   const t = (ticker || '').toUpperCase().trim();
@@ -3610,6 +3609,22 @@ async function computeBeta(ticker, days = 60) {
   if (varS <= 0) return null;
   return cov / varS;
 }
+
+// Phase 4f: module-level beta seed via setTimeout (no React involvement).
+// Fetches β for one common ticker after page settles, writes to window cache.
+// If page breaks with this, the issue is fetchAggregates being called from
+// the App scope — orthogonal to React effects.
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    computeBeta('NVDA').then((b) => {
+      if (b != null && isFinite(b) && Math.abs(b) < 5) {
+        window.__BETA_CACHE = window.__BETA_CACHE || {};
+        window.__BETA_CACHE['NVDA'] = parseFloat(b.toFixed(3));
+      }
+    }).catch((e) => { try { console.warn('[Beta seed] failed:', e.message); } catch (_) {} });
+  }, 2000);
+}
+
 const getQQQWeight = (ticker) => QQQ_WEIGHT[(ticker || '').toUpperCase()] ?? 0;
 const getContagion = (ticker) => {
   const profile = TICKER_PROFILE[(ticker || '').toUpperCase()];
