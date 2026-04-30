@@ -5829,14 +5829,18 @@ function App() {
           return head + '\n' + body;
         }).join('\n\n');
       const prompt = '以下是我目前的美股期權持倉與當前 macro 狀態：\n\n持倉:\n' + positionsText + '\n\n' + macroText + reportsText
-        + '\n\n請用 3-5 行簡短中文評估：(1) 整體曝險方向 (2) 最大單一風險點 (3) 建議行動。'
-        + '若有分析師備忘，請整合其觀點 (例如目標價、催化劑、風險警示) 進入評估。每點一行，不要使用 markdown。';
+        + '\n\n請用 4-6 行繁體中文評估：'
+        + '\n(1) 整體曝險方向 — 多頭/空頭/中性，beta-weighted 大致 size'
+        + '\n(2) 最大單一風險點 — 具體說明哪個部位、什麼觸發條件'
+        + '\n(3) 建議行動 — 加碼/減碼/hedge/觀望，給可執行的判準'
+        + '\n(4) 若分析師備忘與 macro/持倉有衝突或加成，明確指出（例如：「GS 目標價 $260 與當前 OTM 220 CALL 同向，但 MS 認為降息延後，需要關注 6/14 CPI」）'
+        + '\n\n要求：每點一行；引用備忘時用【】標出標題；不要使用 markdown；不要客套。';
       const r = await fetch('https://solitary-wood-898d.justest521.workers.dev/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
+          model: 'claude-sonnet-4-6',
+          max_tokens: 800,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
