@@ -966,6 +966,74 @@ async function fetchCurrentPrice(ticker) {
   } catch { return null; }
 }
 
+// Parse expiry string ("MM/DD/YY", "MM/DD/YYYY", or "YYYY-MM-DD") → "YYMMDD"
+function parseExpiryToYYMMDD(expiry) {
+  if (!expiry) return null;
+  let yy, mm, dd;
+  if (expiry.indexOf('/') >= 0) {
+    const [m, d, y] = expiry.split('/');
+    if (!m || !d || !y) return null;
+    yy = y.length === 4 ? y.slice(2) : y.padStart(2, '0');
+    mm = m.padStart(2, '0');
+    dd = d.padStart(2, '0');
+  } else if (expiry.indexOf('-') >= 0) {
+    const [y, m, d] = expiry.split('-');
+    if (!y || !m || !d) return null;
+    yy = y.length === 4 ? y.slice(2) : y.padStart(2, '0');
+    mm = m.padStart(2, '0');
+    dd = d.padStart(2, '0');
+  } else return null;
+  if (yy.length !== 2 || mm.length !== 2 || dd.length !== 2) return null;
+  return yy + mm + dd;
+}
+
+// Build OCC option symbol: O:NVDA260321C00190000
+function buildOCCSymbol(ticker, type, strike, expiry) {
+  if (!ticker || !type || strike == null || strike === '' || !expiry) return null;
+  const yymmdd = parseExpiryToYYMMDD(expiry);
+  if (!yymmdd) return null;
+  const upper = type.toUpperCase();
+  const cp = upper.indexOf('P') === 0 ? 'P' : (upper.indexOf('C') === 0 ? 'C' : null);
+  if (!cp) return null;
+  const strikeNum = parseFloat(strike);
+  if (!isFinite(strikeNum) || strikeNum <= 0) return null;
+  const strikeStr = String(Math.round(strikeNum * 1000)).padStart(8, '0');
+  return 'O:' + ticker.toUpperCase() + yymmdd + cp + strikeStr;
+}
+
+// Fetch option premium (mid of bid/ask, fallback last trade) via worker
+async function fetchOptionPrice(ticker, type, strike, expiry) {
+  const contract = buildOCCSymbol(ticker, type, strike, expiry);
+  if (!contract) return null;
+  try {
+    const r = await fetch(
+      WORKER_URL_APP + '/api/polygon/option-snapshot'
+      + '?underlying=' + encodeURIComponent(ticker.toUpperCase())
+      + '&contract=' + encodeURIComponent(contract)
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    const res = d.results || d;
+    const q = res.last_quote || {};
+    const t = res.last_trade || {};
+    let p = null;
+    if (isFinite(q.bid) && isFinite(q.ask) && q.bid > 0 && q.ask > 0) p = (q.bid + q.ask) / 2;
+    else if (isFinite(t.price) && t.price > 0) p = t.price;
+    return (p && isFinite(p) && p > 0) ? parseFloat(p.toFixed(2)) : null;
+  } catch { return null; }
+}
+
+// Dispatch: option premium for CALL/PUT (needs strike+expiry); stock price otherwise
+async function fetchPriceForPosition(p) {
+  if (!p || !p.ticker) return null;
+  const isOpt = p.option_type && ['CALL', 'PUT'].includes(String(p.option_type).toUpperCase());
+  if (isOpt) {
+    if (!p.strike || !p.expiry) return null;
+    return await fetchOptionPrice(p.ticker, p.option_type, p.strike, p.expiry);
+  }
+  return await fetchCurrentPrice(p.ticker);
+}
+
 function PositionsManager({ positions, supabaseStatus, onChange }) {
   const [editing, setEditing] = useState(null);  // null | 'new' | id
   const [form, setForm] = useState({ ticker: '', option_type: 'CALL', qty: '1', current_price: '', cost: '', strike: '', expiry: '', note: '' });
@@ -1036,15 +1104,29 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
     }
   };
 
-  // Auto-fetch current price when ticker changes in form (debounced 600ms)
+  // Ticker input — uppercase only; price fetch happens in the unified effect below
   const onTickerChange = (v) => {
-    const upper = v.toUpperCase();
-    setForm(f => ({ ...f, ticker: upper }));
+    setForm(f => ({ ...f, ticker: v.toUpperCase() }));
+  };
+
+  // Auto-fetch price when ticker / option_type / strike / expiry change (debounced 600ms).
+  // For options (CALL/PUT) we wait until strike+expiry are filled, then fetch the option
+  // premium via Polygon /v3/snapshot/options. For stocks we fetch the underlying quote.
+  useEffect(() => {
+    if (!editing) return;
+    if (!form.ticker) return;
+    const isOpt = form.option_type && ['CALL', 'PUT'].includes(String(form.option_type).toUpperCase());
+    if (isOpt && (!form.strike || !form.expiry)) return; // need both for OCC contract symbol
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!upper || upper.length < 1) return;
     debounceRef.current = setTimeout(async () => {
       setTickerLookup(true);
-      const p = await fetchCurrentPrice(upper);
+      const p = await fetchPriceForPosition({
+        ticker: form.ticker,
+        option_type: form.option_type,
+        strike: form.strike,
+        expiry: form.expiry,
+      });
       setTickerLookup(false);
       if (p != null) {
         setForm(f => ({
@@ -1054,7 +1136,9 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
         }));
       }
     }, 600);
-  };
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, form.ticker, form.option_type, form.strike, form.expiry]);
 
   // Bulk-refresh current_price for all positions via Polygon
   const refreshAllPrices = async () => {
@@ -1065,7 +1149,13 @@ function PositionsManager({ positions, supabaseStatus, onChange }) {
       if (!client) throw new Error('Supabase 未連線');
       const realPos = positions.filter(p => !String(p.id || '').startsWith('mock-'));
       const updates = await Promise.all(realPos.map(async (p) => {
-        const fresh = await fetchCurrentPrice(p.ticker);
+        // Options need their own quote (premium ≠ stock price); stocks use ticker quote
+        const fresh = await fetchPriceForPosition({
+          ticker: p.ticker,
+          option_type: p.option_type,
+          strike: p.strike,
+          expiry: p.expiry,
+        });
         if (fresh == null || fresh === Number(p.current_price)) return null;
         return { id: p.id, ticker: p.ticker, newPrice: fresh };
       }));
